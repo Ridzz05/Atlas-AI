@@ -63,7 +63,7 @@
 
 ## Current execution checkpoint
 
-Completed in the current pass: durable runtime composition, startup migrations and agent seeding, BullMQ production queue, PostgreSQL event outbox, API bearer auth and strict CORS, artifact path hardening, fail-closed QA and approval verification, durable approval decisions, Telegram polling/delivery, and live dashboard task/approval pages. Remaining checkboxes retain the broader release requirements.
+Completed in the current pass through `83c2a9c`: durable runtime composition, startup migrations and agent seeding, BullMQ production queue, PostgreSQL event outbox, idempotent worker shutdown, API bearer auth and strict CORS, artifact path hardening, fail-closed QA and approval verification, durable approval decisions, Telegram polling/delivery, live dashboard task/approval pages, and blueprint/runbook alignment. `pnpm typecheck`, `pnpm test`, and `pnpm build` pass; Docker-backed boot/recovery remains unverified. Remaining checkboxes retain the broader release requirements.
 
 ## Final release checkpoint
 

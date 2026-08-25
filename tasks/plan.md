@@ -149,9 +149,9 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `111ffb4`. Full gates pass: `pnpm typecheck` (26/26), `pnpm test` (26/26), and `pnpm build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
+Execution is committed through `83c2a9c`. Full local gates pass: `pnpm typecheck` (26/26), `pnpm test` (26/26), and `pnpm build` (15/15). `pnpm lint` exits successfully but has no configured lint tasks. Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
 
-Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, PostgreSQL event outbox with `LISTEN/NOTIFY`, production API auth and strict CORS, artifact containment, fail-closed approval/QA paths, durable approval decisions, Telegram polling transport, and authenticated dashboard task/approval flows.
+Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY`, production API auth and strict CORS, artifact containment, fail-closed approval/QA paths, durable approval decisions, Telegram polling transport, authenticated dashboard task/approval flows, and blueprint/runbook alignment.
 
 Remaining release blockers: approval decisions do not yet mint/persist executable tokens or invoke a real outbound connector; research/enrichment tools remain mock; Telegram deduplication and emergency-stop state are process-local; dashboard pages outside tasks/approvals still use sample data; no authenticated realtime event endpoint or rate limiter exists; Compose boot and recovery drills require a Docker host.
 
