@@ -14,7 +14,8 @@
     { "path": "../../packages/database" },
     { "path": "../../packages/providers" },
     { "path": "../../packages/agents" },
-    { "path": "../../packages/orchestration" }
+    { "path": "../../packages/orchestration" },
+    { "path": "../../packages/runtime" }
   ],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

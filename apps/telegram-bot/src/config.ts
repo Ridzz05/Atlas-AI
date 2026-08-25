@@ -13,8 +13,16 @@ export function parseTelegramConfig(env: EnvConfig): TelegramBotConfig {
     .map(id => id.trim())
     .filter(Boolean);
 
+  const botToken = env.TELEGRAM_BOT_TOKEN || '';
+  if (env.NODE_ENV === 'production' && !botToken) {
+    throw new Error('TELEGRAM_BOT_TOKEN is required in production.');
+  }
+  if (env.NODE_ENV === 'production' && allowed.length === 0) {
+    throw new Error('TELEGRAM_ALLOWED_USER_IDS must contain at least one owner ID in production.');
+  }
+
   return {
-    botToken: env.TELEGRAM_BOT_TOKEN || '',
+    botToken,
     allowedUserIds: new Set(allowed),
     webhookSecret: env.TELEGRAM_WEBHOOK_SECRET,
     isPolling: !env.TELEGRAM_WEBHOOK_SECRET

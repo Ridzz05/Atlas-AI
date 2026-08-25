@@ -157,6 +157,9 @@ importers:
       '@atlas/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@atlas/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@atlas/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -19,7 +19,8 @@
     "@atlas/database": "workspace:*",
     "@atlas/providers": "workspace:*",
     "@atlas/agents": "workspace:*",
-    "@atlas/orchestration": "workspace:*"
+    "@atlas/orchestration": "workspace:*",
+    "@atlas/runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.13.9",

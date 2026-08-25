@@ -3,6 +3,7 @@ import { AtlasTelegramBot } from '../src/bot.js';
 import { ApprovalCardRenderer } from '../src/cards/approval-card.js';
 import { defaultAgentRegistry } from '@atlas/agents';
 import { ApprovalRequest } from '@atlas/shared';
+import { TelegramApiClient } from '../src/bot.js';
 
 describe('@atlas/telegram-bot tests', () => {
   const allowedUser = 12345678;
@@ -146,5 +147,79 @@ describe('@atlas/telegram-bot tests', () => {
     expect(card.replyMarkup.inline_keyboard[0]?.length).toBe(3);
     expect(card.replyMarkup.inline_keyboard[0]?.[0]?.text).toContain('Approve');
     expect(card.replyMarkup.inline_keyboard[0]?.[1]?.text).toContain('Reject');
+  });
+
+  it('polls Telegram, sends responses, acknowledges callbacks, and stops cleanly', async () => {
+    const update = {
+      update_id: 200,
+      message: {
+        message_id: 10,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/help',
+        date: Math.floor(Date.now() / 1000)
+      }
+    };
+    const sentMessages: Array<{ chatId: number; text: string }> = [];
+    const acknowledged: string[] = [];
+    let polls = 0;
+    const api: TelegramApiClient = {
+      async getUpdates(_offset, _timeoutSeconds, signal) {
+        polls += 1;
+        if (polls === 1) return [update];
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(resolve, 25);
+          signal.addEventListener('abort', () => {
+            clearTimeout(timer);
+            reject(new Error('aborted'));
+          }, { once: true });
+        });
+        return [];
+      },
+      async sendMessage(chatId, text) {
+        sentMessages.push({ chatId, text });
+      },
+      async answerCallbackQuery(callbackQueryId) {
+        acknowledged.push(callbackQueryId);
+      }
+    };
+
+    const transportBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      apiClient: api,
+      pollTimeoutSeconds: 1
+    });
+
+    await transportBot.start();
+    await new Promise(resolve => setTimeout(resolve, 10));
+    await transportBot.stop();
+
+    expect(polls).toBeGreaterThan(0);
+    expect(sentMessages[0]?.chatId).toBe(allowedUser);
+    expect(sentMessages[0]?.text).toContain('ATLAS AI OS');
+    expect(acknowledged).toEqual([]);
+  });
+
+  it('fails to start polling without a bot token', async () => {
+    const invalidBot = new AtlasTelegramBot({
+      config: {
+        botToken: '',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      apiClient: {
+        getUpdates: async () => [],
+        sendMessage: async () => undefined,
+        answerCallbackQuery: async () => undefined
+      }
+    });
+
+    await expect(invalidBot.start()).rejects.toThrow('TELEGRAM_BOT_TOKEN');
   });
 });
