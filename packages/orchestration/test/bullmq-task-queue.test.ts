@@ -43,6 +43,7 @@ describe('BullMqTaskQueue', () => {
     expect(workerOn).toHaveBeenCalledWith('failed', expect.any(Function));
 
     await queue.close();
+    await queue.close();
     expect(workerClose).toHaveBeenCalledOnce();
     expect(queueClose).toHaveBeenCalledOnce();
   });

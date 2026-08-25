@@ -22,7 +22,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     rootLogger.info(`Received ${signal}, shutting down worker...`);
     await runner.stop();
-    await runtime.db.close();
+    await runtime.close();
     process.exit(0);
   };
 
