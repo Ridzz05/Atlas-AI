@@ -4,12 +4,14 @@
 
 | Metadata | Nilai |
 |---|---|
-| Status | Draft siap implementasi |
+| Status | Core MVP wired; production release gate pending |
 | Versi | 0.1.0 |
 | Tanggal | 26 Agustus 2026 |
 | Target awal | Single-user, self-hosted, production-aware MVP |
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
+
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS, fail-closed QA/approval paths, Telegram polling, durable approval decisions, and live dashboard task/approval views are implemented. External writes remain disabled: a real outbound connector, persisted execute-once token service, real research adapters, durable Telegram deduplication, realtime dashboard stream, and Docker recovery drill are still required before production release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -1248,4 +1250,3 @@ Langkah berikutnya adalah menjalankan **Phase 0 — Repository Foundation**:
 7. verifikasi clean boot dari dokumentasi.
 
 Jangan menghubungkan model berbayar atau external integrations sebelum foundation dan test harness siap.
-
