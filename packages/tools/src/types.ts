@@ -14,6 +14,23 @@ export interface CommunicationSendResult {
   timestamp: string;
 }
 
+export interface ResearchProvider {
+  search(query: string, limit: number): Promise<Array<{
+    title: string;
+    url: string;
+    snippet: string;
+    confidence: number;
+  }>>;
+  lookupCompany(companyName: string, location: string): Promise<{
+    found: boolean;
+    companyName: string;
+    address: string;
+    phone?: string;
+    instagram?: string;
+    estimatedMembers?: number;
+  }>;
+}
+
 export type CommunicationSender = (
   input: CommunicationSendInput,
   context: ToolContext
@@ -37,6 +54,7 @@ export interface ToolContext {
   approvalSecretKey?: string;
   approvalExecutionStore?: ApprovalExecutionStore;
   communicationSender?: CommunicationSender;
+  researchProvider?: ResearchProvider;
   signal?: AbortSignal;
 }
 

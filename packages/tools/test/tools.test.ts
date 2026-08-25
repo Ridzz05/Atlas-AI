@@ -26,7 +26,18 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     });
 
     expect(searchRes.success).toBe(true);
-    expect((searchRes.output as any).results.length).toBeGreaterThan(0);
+    expect((searchRes.output as any).configured).toBe(false);
+    expect((searchRes.output as any).results).toEqual([]);
+    expect((searchRes.output as any).warning).toContain('No verified research provider');
+
+    const companyRes = await registry.execute('company.lookup', { companyName: 'Unknown Gym' }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned'
+    });
+    expect(companyRes.success).toBe(true);
+    expect((companyRes.output as any).found).toBe(false);
+    expect((companyRes.output as any).configured).toBe(false);
   });
 
   it('blocks communication.send_approved if approval token is missing', async () => {
