@@ -117,7 +117,7 @@ describe('@atlas/telegram-bot tests', () => {
     };
 
     const result = await bot.processUpdate(callbackUpdate);
-    expect(result.responseText).toContain('approved');
+    expect(result.responseText).toContain('Approval control plane is not configured');
     expect(result.responseText).toContain('req-12345');
   });
 
@@ -221,5 +221,39 @@ describe('@atlas/telegram-bot tests', () => {
     });
 
     await expect(invalidBot.start()).rejects.toThrow('TELEGRAM_BOT_TOKEN');
+  });
+
+  it('records approval decisions through the durable repository', async () => {
+    const approvalRepo = {
+      decide: vi.fn(async (id: string, status: string, decidedBy: string, note?: string) => ({
+        id,
+        status,
+        decidedBy,
+        decisionNote: note || null
+      }))
+    } as any;
+    const approvalBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      approvalRepo
+    });
+
+    const result = await approvalBot.processUpdate({
+      update_id: 201,
+      message: {
+        message_id: 11,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/approve approval-1',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('recorded as APPROVED');
+    expect(approvalRepo.decide).toHaveBeenCalledWith('approval-1', 'approved', '12345678');
   });
 });

@@ -1,10 +1,11 @@
-import { TaskRepository } from '@atlas/database';
+import { ApprovalRepository, TaskRepository } from '@atlas/database';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 
 export interface CommandContext {
   taskRepo?: TaskRepository;
+  approvalRepo?: ApprovalRepository;
   registry: AgentRegistry;
   taskQueue?: TaskQueue;
   runner?: AgentRunner;
@@ -15,7 +16,7 @@ export interface CommandContext {
 export class CommandRouter {
   constructor(private ctx: CommandContext) {}
 
-  public async handle(command: string, args: string[]): Promise<string> {
+  public async handle(command: string, args: string[], actorId = 'telegram-owner'): Promise<string> {
     const cmd = command.toLowerCase().replace(/^\//, '');
 
     switch (cmd) {
@@ -53,13 +54,13 @@ export class CommandRouter {
         return this.handleCost();
 
       case 'approve':
-        return this.handleApprove(args[0]);
+        return this.handleApproveDurable(args[0], actorId);
 
       case 'reject':
-        return this.handleReject(args[0]);
+        return this.handleRejectDurable(args[0], actorId);
 
       case 'revise':
-        return this.handleRevise(args[0], args.slice(1).join(' '));
+        return this.handleReviseDurable(args[0], args.slice(1).join(' '), actorId);
 
       default:
         return `Unknown command: \`/${cmd}\`. Use \`/help\` to see available commands.`;
@@ -223,6 +224,30 @@ Use \`/resume\` to unfreeze the system when ready.`;
 • *Estimated Usage Today:* $0.12 USD
 • *Remaining Allowance:* $4.88 USD
 • *Active Runs Cost Ceiling:* $1.00 USD / run max`;
+  }
+
+  private async handleApproveDurable(requestId: string | undefined, actorId: string): Promise<string> {
+    if (!requestId) return 'Please specify an approval request ID: `/approve <id>`';
+    if (!this.ctx.approvalRepo) return `Approval control plane is not configured for \`${requestId}\`; no decision was recorded.`;
+    const approval = await this.ctx.approvalRepo.decide(requestId, 'approved', actorId);
+    if (!approval) return `Approval \`${requestId}\` was not changed. It may be missing, expired, or already decided.`;
+    return `Approval \`${requestId}\` recorded as APPROVED. No outbound side effect was executed by this command.`;
+  }
+
+  private async handleRejectDurable(requestId: string | undefined, actorId: string): Promise<string> {
+    if (!requestId) return 'Please specify an approval request ID: `/reject <id>`';
+    if (!this.ctx.approvalRepo) return `Approval control plane is not configured for \`${requestId}\`; no decision was recorded.`;
+    const approval = await this.ctx.approvalRepo.decide(requestId, 'rejected', actorId);
+    if (!approval) return `Approval \`${requestId}\` was not changed. It may be missing, expired, or already decided.`;
+    return `Approval \`${requestId}\` recorded as REJECTED. No side effect was executed.`;
+  }
+
+  private async handleReviseDurable(requestId: string | undefined, notes: string, actorId: string): Promise<string> {
+    if (!requestId) return 'Please specify an approval request ID: `/revise <id> <notes>`';
+    if (!this.ctx.approvalRepo) return `Approval control plane is not configured for \`${requestId}\`; no decision was recorded.`;
+    const approval = await this.ctx.approvalRepo.decide(requestId, 'revision_requested', actorId, notes || 'Please adjust parameters.');
+    if (!approval) return `Approval \`${requestId}\` was not changed. It may be missing, expired, or already decided.`;
+    return `Revision requested for \`${requestId}\`: "${notes || 'Please adjust parameters.'}"`;
   }
 
   private handleApprove(requestId?: string): string {

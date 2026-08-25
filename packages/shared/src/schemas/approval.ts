@@ -4,6 +4,7 @@ export const ApprovalStatusSchema = z.enum([
   'pending',
   'approved',
   'rejected',
+  'revision_requested',
   'expired',
   'executed',
   'revoked'

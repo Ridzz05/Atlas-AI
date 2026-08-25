@@ -3,6 +3,7 @@ import { AgentRegistry, defaultAgentRegistry } from '@atlas/agents';
 import {
   DatabaseClient,
   Migrator,
+  ApprovalRepository,
   RunRepository,
   seedAgents,
   TaskRepository
@@ -16,6 +17,7 @@ export interface AtlasRuntime {
   db: DatabaseClient;
   taskRepo: TaskRepository;
   runRepo: RunRepository;
+  approvalRepo: ApprovalRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -59,11 +61,13 @@ export async function createAtlasRuntime(
 
   const taskRepo = new TaskRepository(db);
   const runRepo = new RunRepository(db);
+  const approvalRepo = new ApprovalRepository(db);
 
   return {
     db,
     taskRepo,
     runRepo,
+    approvalRepo,
     taskQueue,
     eventBus,
     provider,

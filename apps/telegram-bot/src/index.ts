@@ -12,6 +12,7 @@ async function main() {
   const bot = new AtlasTelegramBot({
     config,
     taskRepo: runtime.taskRepo,
+    approvalRepo: runtime.approvalRepo,
     registry: runtime.registry,
     taskQueue: runtime.taskQueue
   });

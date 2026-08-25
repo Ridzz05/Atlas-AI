@@ -1,7 +1,7 @@
 import { TelegramBotConfig } from './config.js';
 import { TelegramSecurityGuard } from './security/guard.js';
 import { CommandRouter } from './handlers/commands.js';
-import { TaskRepository } from '@atlas/database';
+import { ApprovalRepository, TaskRepository } from '@atlas/database';
 import { AgentRegistry, defaultAgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
@@ -97,6 +97,7 @@ export class FetchTelegramApiClient implements TelegramApiClient {
 export interface AtlasTelegramBotOptions {
   config: TelegramBotConfig;
   taskRepo?: TaskRepository;
+  approvalRepo?: ApprovalRepository;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
   runner?: AgentRunner;
@@ -120,6 +121,7 @@ export class AtlasTelegramBot {
 
     this.router = new CommandRouter({
       taskRepo: options.taskRepo,
+      approvalRepo: options.approvalRepo,
       registry: options.registry || defaultAgentRegistry,
       taskQueue: options.taskQueue,
       runner: options.runner,
@@ -147,7 +149,7 @@ export class AtlasTelegramBot {
       const data = update.callback_query.data;
       const [action, requestId] = data.split(':');
       if (action && requestId) {
-        const responseText = await this.router.handle(action, [requestId]);
+        const responseText = await this.router.handle(action, [requestId], String(fromId));
         return { responseText };
       }
       return { responseText: 'Unknown action.' };
@@ -171,11 +173,11 @@ export class AtlasTelegramBot {
       const parts = text.split(' ');
       const command = parts[0] || '/help';
       const args = parts.slice(1);
-      const responseText = await this.router.handle(command, args);
+      const responseText = await this.router.handle(command, args, String(fromId));
       return { responseText };
     } else {
       // Natural language treated as a new task for Chief
-      const responseText = await this.router.handle('new', [text]);
+      const responseText = await this.router.handle('new', [text], String(fromId));
       return { responseText };
     }
   }

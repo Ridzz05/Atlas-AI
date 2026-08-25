@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
+import { ApprovalRepository, DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -15,12 +15,14 @@ import {
 } from '@atlas/orchestration';
 import { registerTaskRoutes } from './routes/tasks.js';
 import { registerRunRoutes } from './routes/runs.js';
+import { registerApprovalRoutes } from './routes/approvals.js';
 
 export interface ServerOptions {
   config: EnvConfig;
   db?: DatabaseClient;
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
+  approvalRepo?: ApprovalRepository;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -150,6 +152,10 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     runner,
     runRepo: options.runRepo
   });
+
+  if (options.approvalRepo) {
+    registerApprovalRoutes(app, { approvalRepo: options.approvalRepo });
+  }
 
   return app;
 }

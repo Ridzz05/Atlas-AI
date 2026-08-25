@@ -73,13 +73,35 @@ describe('agent-service Task and Multi-Agent APIs', () => {
   });
 
   const taskQueue = new InMemoryTaskQueue();
+  const approvalRepo: any = {
+    list: vi.fn(async () => []),
+    decide: vi.fn(async (id, status, decidedBy, decisionNote) => ({
+      id,
+      taskId: '123e4567-e89b-12d3-a456-426614174001',
+      runId: '123e4567-e89b-12d3-a456-426614174002',
+      agentId: 'hermes',
+      action: 'communication.send_approved',
+      target: '+628123456789',
+      payload: { content: 'Hello' },
+      payloadHash: 'hash',
+      reason: 'Test approval',
+      riskLevel: 'high',
+      status,
+      requestedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+      decidedAt: new Date().toISOString(),
+      decidedBy,
+      decisionNote: decisionNote || null
+    }))
+  };
 
   const server = buildServer({
     config,
     taskRepo: fakeTaskRepo,
     provider,
     taskQueue,
-    registry: defaultAgentRegistry
+    registry: defaultAgentRegistry,
+    approvalRepo
   });
 
   it('GET /api/v1/agents returns list of all registered agents', async () => {
@@ -117,5 +139,28 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     // Wait briefly for queue execution
     await new Promise(r => setTimeout(r, 60));
     expect(fakeTaskRepo.create).toHaveBeenCalled();
+  });
+
+  it('lists pending approvals and records a durable decision', async () => {
+    const approvals = await server.inject({
+      method: 'GET',
+      url: '/api/v1/approvals?status=pending'
+    });
+    expect(approvals.statusCode).toBe(200);
+    expect(JSON.parse(approvals.body).data).toEqual([]);
+
+    const decision = await server.inject({
+      method: 'POST',
+      url: '/api/v1/approvals/123e4567-e89b-12d3-a456-426614174000/decision',
+      payload: { status: 'approved', decisionNote: 'Looks good' }
+    });
+    expect(decision.statusCode).toBe(200);
+    expect(JSON.parse(decision.body).approval.status).toBe('approved');
+    expect(approvalRepo.decide).toHaveBeenCalledWith(
+      '123e4567-e89b-12d3-a456-426614174000',
+      'approved',
+      'api-owner',
+      'Looks good'
+    );
   });
 });
