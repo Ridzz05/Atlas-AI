@@ -61,7 +61,7 @@ export async function createAtlasRuntime(
 
   const taskRepo = new TaskRepository(db);
   const runRepo = new RunRepository(db);
-  const approvalRepo = new ApprovalRepository(db);
+  const approvalRepo = new ApprovalRepository(db, config.ENCRYPTION_KEY);
 
   return {
     db,

@@ -14,8 +14,18 @@ export class TokenVerifier {
     secretKey: string,
     ttlSeconds = 3600
   ): ApprovalToken {
-    const payloadHash = this.hashPayload(payload);
     const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
+    return this.generateTokenForExpiry(requestId, action, payload, secretKey, expiresAt);
+  }
+
+  public static generateTokenForExpiry(
+    requestId: string,
+    action: string,
+    payload: unknown,
+    secretKey: string,
+    expiresAt: number
+  ): ApprovalToken {
+    const payloadHash = this.hashPayload(payload);
 
     const dataToSign = `${requestId}:${action}:${payloadHash}:${expiresAt}`;
     const signature = crypto

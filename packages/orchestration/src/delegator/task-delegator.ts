@@ -10,7 +10,7 @@ import { rootLogger } from '@atlas/observability';
 import { DepthGuard } from '@atlas/policy';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskRepository, RunRepository } from '@atlas/database';
-import { AgentRunner } from '../engine/agent-runner.js';
+import { AgentRunner, ToolExecutor } from '../engine/agent-runner.js';
 import { TaskPlanner } from '../planner/task-planner.js';
 import { TaskSynthesizer } from '../synthesizer/task-synthesizer.js';
 import { QAGate, QAResult } from '../qa/qa-gate.js';
@@ -22,6 +22,7 @@ export interface MultiAgentDelegatorOptions {
   eventBus: EventBus;
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
+  toolExecutor?: ToolExecutor;
   maxConcurrency?: number;
 }
 
@@ -47,7 +48,8 @@ export class TaskDelegator {
       provider: options.provider,
       eventBus: options.eventBus,
       taskRepo: options.taskRepo,
-      runRepo: options.runRepo
+      runRepo: options.runRepo,
+      toolExecutor: options.toolExecutor
     });
 
     this.planner = new TaskPlanner({

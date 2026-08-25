@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import {
   ToolRegistry,
@@ -165,6 +165,67 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
     expect(sendRes.success).toBe(false);
     expect(sendRes.error).toContain('connector configured');
+  });
+
+  it('uses a durable approval store to prevent replay across registry instances', async () => {
+    const registryOne = new ToolRegistry();
+    const registryTwo = new ToolRegistry();
+    registryOne.register(SendApprovedCommunicationTool);
+    registryTwo.register(SendApprovedCommunicationTool);
+
+    const secret = 'test-secret-key-32-chars-length!!';
+    const payload = {
+      recipient: '+62812345678',
+      channel: 'whatsapp' as const,
+      content: 'Hello Gym owner'
+    };
+    const approvalToken = TokenVerifier.generateToken(
+      randomUUID(),
+      'communication.send_approved',
+      payload,
+      secret
+    );
+    const claimed = new Set<string>();
+    const approvalExecutionStore = {
+      claimExecution: vi.fn(async (token: any) => {
+        if (claimed.has(token.signature)) return null;
+        claimed.add(token.signature);
+        return { id: token.requestId };
+      }),
+      finalizeExecution: vi.fn(async (id: string, result: { success: boolean }) => ({ id, status: result.success ? 'executed' : 'revoked' }))
+    };
+    const sender = async () => ({
+      messageId: 'provider-message-1',
+      timestamp: new Date().toISOString(),
+      recipient: payload.recipient
+    });
+
+    const first = await registryOne.execute('communication.send_approved', payload, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'hermes',
+      externalWritesEnabled: true,
+      approvalToken,
+      approvalSecretKey: secret,
+      approvalExecutionStore,
+      communicationSender: sender
+    });
+    const replay = await registryTwo.execute('communication.send_approved', payload, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'hermes',
+      externalWritesEnabled: true,
+      approvalToken,
+      approvalSecretKey: secret,
+      approvalExecutionStore,
+      communicationSender: sender
+    });
+
+    expect(first.success).toBe(true);
+    expect(replay.success).toBe(false);
+    expect(replay.error).toContain('already been claimed');
+    expect(approvalExecutionStore.claimExecution).toHaveBeenCalledTimes(2);
+    expect(approvalExecutionStore.finalizeExecution).toHaveBeenCalledTimes(1);
   });
 
   it('calculates 10-dimension rubric scores and ranks leads properly', () => {

@@ -58,6 +58,7 @@ export class ToolRegistry {
     }
 
     // 3. Verify approval against the exact validated payload before execution.
+    let durableApprovalId: string | undefined;
     if (policy.requiresApproval) {
       const token = context.approvalToken;
       if (!token || !context.approvalSecretKey) {
@@ -89,17 +90,30 @@ export class ToolRegistry {
         };
       }
 
-      if (this.consumedApprovalTokens.has(token.signature)) {
-        return {
-          success: false,
-          error: 'Approval token has already been consumed.',
-          durationMs: Date.now() - startTime,
-          riskLevel: policy.riskLevel
-        };
-      }
+      if (context.approvalExecutionStore) {
+        const claim = await context.approvalExecutionStore.claimExecution(token, parseResult.data);
+        if (!claim) {
+          return {
+            success: false,
+            error: 'Approval token has already been claimed or is no longer executable.',
+            durationMs: Date.now() - startTime,
+            riskLevel: policy.riskLevel
+          };
+        }
+        durableApprovalId = claim.id;
+      } else {
+        if (this.consumedApprovalTokens.has(token.signature)) {
+          return {
+            success: false,
+            error: 'Approval token has already been consumed.',
+            durationMs: Date.now() - startTime,
+            riskLevel: policy.riskLevel
+          };
+        }
 
-      // Consume before awaiting the external side effect to prevent concurrent replay.
-      this.consumedApprovalTokens.add(token.signature);
+        // Consume before awaiting the external side effect to prevent concurrent replay.
+        this.consumedApprovalTokens.add(token.signature);
+      }
     }
 
     // 4. Execute with timeout
@@ -110,6 +124,16 @@ export class ToolRegistry {
           setTimeout(() => reject(new Error(`Tool '${name}' timed out after ${tool.timeoutMs}ms`)), tool.timeoutMs)
         )
       ]);
+
+      if (durableApprovalId && context.approvalExecutionStore) {
+        const finalized = await context.approvalExecutionStore.finalizeExecution(durableApprovalId, {
+          success: true,
+          output
+        });
+        if (!finalized) {
+          throw new Error('Approval execution completed but durable finalization failed.');
+        }
+      }
 
       const durationMs = Date.now() - startTime;
 
@@ -130,6 +154,16 @@ export class ToolRegistry {
       };
     } catch (err: any) {
       const durationMs = Date.now() - startTime;
+      if (durableApprovalId && context.approvalExecutionStore) {
+        try {
+          await context.approvalExecutionStore.finalizeExecution(durableApprovalId, {
+            success: false,
+            error: String(err?.message || 'Tool execution failed')
+          });
+        } catch (finalizationError) {
+          rootLogger.error('Failed to finalize durable approval execution', { error: String(finalizationError) });
+        }
+      }
       rootLogger.error(`Error executing tool '${name}'`, { error: String(err?.message || err) });
       return {
         success: false,

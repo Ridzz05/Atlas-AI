@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ApprovalRepository } from '../src/index.js';
+import { TokenVerifier } from '@atlas/policy';
 
 const row = {
   id: '123e4567-e89b-12d3-a456-426614174000',
@@ -59,5 +60,78 @@ describe('ApprovalRepository', () => {
     const repository = new ApprovalRepository(db);
 
     await expect(repository.decide(row.id, 'rejected', 'owner')).resolves.toBeNull();
+  });
+
+  it('issues an execution token only for an approved, unexpired approval', async () => {
+    const secret = 'approval-secret-key-for-tests-32-chars';
+    const approvedRow = {
+      ...row,
+      status: 'approved',
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      decided_at: new Date().toISOString(),
+      decided_by: 'owner'
+    };
+    const db = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [approvedRow] })
+        .mockResolvedValueOnce({ rows: [{ ...approvedRow, execution_token_signature: 'stored-signature' }] })
+    } as any;
+    const repository = new ApprovalRepository(db, secret);
+
+    const token = await repository.issueExecutionToken(row.id);
+
+    expect(token?.requestId).toBe(row.id);
+    expect(token?.action).toBe(row.action);
+    expect(token?.payloadHash).toBe(TokenVerifier.hashPayload(row.payload));
+    expect(db.query).toHaveBeenLastCalledWith(
+      expect.stringContaining('execution_token_signature'),
+      expect.arrayContaining([row.id])
+    );
+  });
+
+  it('atomically claims an issued token and prevents a second worker from claiming it', async () => {
+    const secret = 'approval-secret-key-for-tests-32-chars';
+    const payload = { content: 'Hello' };
+    const token = TokenVerifier.generateToken(row.id, row.action, payload, secret, 300);
+    const claimedRow = {
+      ...row,
+      payload,
+      payload_hash: token.payloadHash,
+      status: 'executing',
+      execution_token_signature: token.signature,
+      execution_started_at: new Date().toISOString()
+    };
+    const db = {
+      query: vi.fn().mockResolvedValueOnce({ rows: [claimedRow] }).mockResolvedValueOnce({ rows: [] })
+    } as any;
+    const repository = new ApprovalRepository(db, secret);
+
+    const firstClaim = await repository.claimExecution(token, payload);
+    const secondClaim = await repository.claimExecution(token, payload);
+
+    expect(firstClaim?.status).toBe('executing');
+    expect(secondClaim).toBeNull();
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'approved'"),
+      expect.arrayContaining([row.id, row.action, token.payloadHash, token.signature])
+    );
+  });
+
+  it('finalizes a claimed execution as executed or revoked and never reopens it', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rows: [{ ...row, status: 'executed' }] })
+    } as any;
+    const repository = new ApprovalRepository(db, 'approval-secret-key-for-tests-32-chars');
+
+    const result = await repository.finalizeExecution(row.id, {
+      success: true,
+      output: { messageId: 'provider-1' }
+    });
+
+    expect(result?.status).toBe('executed');
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'executing'"),
+      expect.arrayContaining(['executed', row.id])
+    );
   });
 });

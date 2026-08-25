@@ -262,6 +262,9 @@ importers:
       '@atlas/observability':
         specifier: workspace:*
         version: link:../observability
+      '@atlas/policy':
+        specifier: workspace:*
+        version: link:../policy
       '@atlas/shared':
         specifier: workspace:*
         version: link:../shared

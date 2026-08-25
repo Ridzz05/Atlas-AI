@@ -19,6 +19,14 @@ export type CommunicationSender = (
   context: ToolContext
 ) => Promise<CommunicationSendResult>;
 
+export interface ApprovalExecutionStore {
+  claimExecution(token: ApprovalToken, currentPayload: unknown): Promise<{ id: string } | null>;
+  finalizeExecution(
+    id: string,
+    result: { success: boolean; output?: unknown; error?: string }
+  ): Promise<unknown>;
+}
+
 export interface ToolContext {
   taskId: string;
   runId: string;
@@ -27,6 +35,7 @@ export interface ToolContext {
   externalWritesEnabled?: boolean;
   approvalToken?: ApprovalToken;
   approvalSecretKey?: string;
+  approvalExecutionStore?: ApprovalExecutionStore;
   communicationSender?: CommunicationSender;
   signal?: AbortSignal;
 }

@@ -5,6 +5,7 @@ export const ApprovalStatusSchema = z.enum([
   'approved',
   'rejected',
   'revision_requested',
+  'executing',
   'expired',
   'executed',
   'revoked'
@@ -36,7 +37,11 @@ export const ApprovalRequestSchema = z.object({
   expiresAt: z.date().or(z.string()),
   decidedAt: z.date().or(z.string()).nullable().default(null),
   decidedBy: z.string().nullable().default(null),
-  decisionNote: z.string().nullable().default(null)
+  decisionNote: z.string().nullable().default(null),
+  executionStartedAt: z.date().or(z.string()).nullable().default(null),
+  executedAt: z.date().or(z.string()).nullable().default(null),
+  executionResult: z.record(z.unknown()).nullable().default(null),
+  executionError: z.string().nullable().default(null)
 });
 export type ApprovalRequest = z.infer<typeof ApprovalRequestSchema>;
 

@@ -1,14 +1,24 @@
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
+import { ApprovalRepository, DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
 import {
+  ArtifactService,
+  CompanyLookupTool,
+  CreateDraftTool,
+  SendApprovedCommunicationTool,
+  ToolRegistry,
+  WebSearchTool,
+  createArtifactTools
+} from '@atlas/tools';
+import {
   AgentRunner,
   TaskDelegator,
   TaskQueue,
-  InMemoryTaskQueue
+  InMemoryTaskQueue,
+  ToolGatewayExecutor
 } from '@atlas/orchestration';
 
 export interface WorkerRunnerOptions {
@@ -20,6 +30,7 @@ export interface WorkerRunnerOptions {
   eventBus?: EventBus;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
+  approvalRepo?: ApprovalRepository;
 }
 
 export class AgentWorkerRunner {
@@ -36,12 +47,29 @@ export class AgentWorkerRunner {
       providerType: options.config.MODEL_PROVIDER,
       apiKey: options.config.MODEL_API_KEY
     });
+    const toolRegistry = new ToolRegistry();
+    toolRegistry.register(WebSearchTool);
+    toolRegistry.register(CompanyLookupTool);
+    toolRegistry.register(CreateDraftTool);
+    toolRegistry.register(SendApprovedCommunicationTool);
+    for (const tool of createArtifactTools(new ArtifactService(options.config.ARTIFACT_STORAGE_PATH))) {
+      toolRegistry.register(tool);
+    }
+    const toolExecutor = new ToolGatewayExecutor({
+      registry: toolRegistry,
+      baseContext: {
+        externalWritesEnabled: options.config.EXTERNAL_WRITES_ENABLED,
+        approvalSecretKey: options.config.ENCRYPTION_KEY,
+        approvalExecutionStore: options.approvalRepo
+      }
+    });
 
     this.runner = new AgentRunner({
       provider,
       eventBus,
       taskRepo: options.taskRepo,
-      runRepo: options.runRepo
+      runRepo: options.runRepo,
+      toolExecutor
     });
 
     this.delegator = new TaskDelegator({
@@ -50,6 +78,7 @@ export class AgentWorkerRunner {
       eventBus,
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
+      toolExecutor,
       maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS
     });
 

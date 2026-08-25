@@ -158,4 +158,35 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.status).toBe('failed');
     expect(summary.error).toContain('Cost ceiling reached');
   });
+
+  it('fails closed when a tool executor rejects a model tool call', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: 'Attempting a protected action.',
+          toolCalls: [{ id: 'tc-protected', name: 'communication.send_approved', arguments: {} }]
+        },
+        { content: 'This must not be treated as completed.' }
+      ]
+    });
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({ success: false, error: 'Approval pending' })
+    };
+
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      toolExecutor
+    });
+
+    const summary = await runner.run({
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Attempt protected action'
+    });
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toContain('Approval pending');
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+  });
 });

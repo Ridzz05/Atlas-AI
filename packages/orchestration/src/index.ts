@@ -1,4 +1,5 @@
 export * from './engine/agent-runner.js';
+export * from './engine/tool-gateway-executor.js';
 export * from './queue/task-queue.js';
 export * from './queue/bullmq-task-queue.js';
 export * from './planner/task-planner.js';

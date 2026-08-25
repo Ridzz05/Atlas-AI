@@ -10,7 +10,10 @@ import { rootLogger } from '@atlas/observability';
 import { TaskRepository, RunRepository } from '@atlas/database';
 
 export interface ToolExecutor {
-  execute(toolCall: ToolCallRequest, context: { taskId: string; runId: string; agentId: string }): Promise<Record<string, unknown>>;
+  execute(
+    toolCall: ToolCallRequest,
+    context: { taskId: string; runId: string; agentId: string; signal?: AbortSignal }
+  ): Promise<Record<string, unknown>>;
 }
 
 export interface AgentRunnerOptions {
@@ -175,7 +178,16 @@ export class AgentRunner {
           for (const tc of modelResult.toolCalls) {
             let output: Record<string, unknown> = { success: true };
             if (this.options.toolExecutor) {
-              output = await this.options.toolExecutor.execute(tc, { taskId, runId, agentId });
+              output = await this.options.toolExecutor.execute(tc, {
+                taskId,
+                runId,
+                agentId,
+                signal: controller.signal
+              });
+            }
+
+            if (output.success === false) {
+              throw new Error(String(output.error || `Tool '${tc.name}' rejected execution.`));
             }
 
             messages.push({
