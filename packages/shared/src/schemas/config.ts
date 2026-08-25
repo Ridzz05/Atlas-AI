@@ -5,6 +5,8 @@ export const EnvConfigSchema = z.object({
   PORT: z.coerce.number().default(4000),
   APP_BASE_URL: z.string().url().default('http://localhost:3000'),
   API_AUTH_TOKEN: z.string().min(32).optional(),
+  API_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
   DATABASE_URL: z.string().min(1).default('postgresql://atlas:atlas@localhost:5432/atlas'),
   REDIS_URL: z.string().min(1).default('redis://localhost:6379'),

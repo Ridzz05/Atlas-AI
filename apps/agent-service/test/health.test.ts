@@ -88,4 +88,25 @@ describe('agent-service health endpoints', () => {
     });
     expect(denied.headers['access-control-allow-origin']).toBeUndefined();
   });
+
+  it('rate-limits protected API requests and leaves health checks available', async () => {
+    const limitedServer = buildServer({
+      config: EnvConfigSchema.parse({
+        NODE_ENV: 'test',
+        API_RATE_LIMIT_MAX_REQUESTS: 2,
+        API_RATE_LIMIT_WINDOW_SECONDS: 60
+      })
+    });
+
+    const first = await limitedServer.inject({ method: 'GET', url: '/api/v1/info' });
+    const second = await limitedServer.inject({ method: 'GET', url: '/api/v1/info' });
+    const third = await limitedServer.inject({ method: 'GET', url: '/api/v1/info' });
+    const health = await limitedServer.inject({ method: 'GET', url: '/health' });
+
+    expect(first.statusCode).toBe(200);
+    expect(second.statusCode).toBe(200);
+    expect(third.statusCode).toBe(429);
+    expect(third.headers['retry-after']).toBeDefined();
+    expect(health.statusCode).toBe(200);
+  });
 });

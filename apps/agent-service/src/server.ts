@@ -32,6 +32,9 @@ export interface ServerOptions {
 
 export function buildServer(options: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
+  const rateLimitWindowMs = options.config.API_RATE_LIMIT_WINDOW_SECONDS * 1000;
+  const rateLimitMax = options.config.API_RATE_LIMIT_MAX_REQUESTS;
+  const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
 
   const allowedOrigins = options.config.CORS_ALLOWED_ORIGINS
     .split(',')
@@ -40,8 +43,29 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   app.register(cors, { origin: allowedOrigins });
 
   app.addHook('onRequest', async (req, reply) => {
-    const requestPath = req.url.split('?')[0];
+    const requestPath = req.url.split('?')[0] || '';
     const isPublicHealthEndpoint = requestPath === '/health' || requestPath === '/ready';
+
+    if (!isPublicHealthEndpoint && requestPath.startsWith('/api/')) {
+      const now = Date.now();
+      const key = req.ip || 'unknown';
+      const current = rateLimitBuckets.get(key);
+      const bucket = !current || current.resetAt <= now
+        ? { count: 0, resetAt: now + rateLimitWindowMs }
+        : current;
+
+      if (bucket.count >= rateLimitMax) {
+        const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
+        return reply
+          .header('retry-after', String(retryAfterSeconds))
+          .status(429)
+          .send({ error: 'Too many API requests. Please retry later.' });
+      }
+
+      bucket.count += 1;
+      rateLimitBuckets.set(key, bucket);
+    }
+
     const expectedToken = options.config.API_AUTH_TOKEN;
 
     if (expectedToken && !isPublicHealthEndpoint) {
