@@ -69,10 +69,33 @@ RULES:
 
     try {
       const cleaned = modelResult.content.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
-      const parsed = JSON.parse(cleaned);
-      const verdict = (parsed.verdict as QAVerdict) || 'PASS';
-      const findings = Array.isArray(parsed.findings) ? parsed.findings : [];
-      const recommendations = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+      const parsed = JSON.parse(cleaned) as {
+        verdict?: unknown;
+        findings?: unknown;
+        recommendations?: unknown;
+      };
+      const allowedVerdicts: QAVerdict[] = ['PASS', 'PASS_WITH_WARNINGS', 'REVISION_REQUIRED', 'BLOCKED'];
+      if (!allowedVerdicts.includes(parsed.verdict as QAVerdict)) {
+        return {
+          verdict: 'BLOCKED',
+          findings: ['Argus returned an unknown QA verdict.'],
+          recommendations: ['Review the QA provider response before finalizing this task.'],
+          passed: false
+        };
+      }
+
+      if (!Array.isArray(parsed.findings) || !Array.isArray(parsed.recommendations)) {
+        return {
+          verdict: 'BLOCKED',
+          findings: ['Argus response did not include valid findings and recommendations arrays.'],
+          recommendations: ['Review the QA provider response before finalizing this task.'],
+          passed: false
+        };
+      }
+
+      const verdict = parsed.verdict as QAVerdict;
+      const findings = parsed.findings.filter((item): item is string => typeof item === 'string');
+      const recommendations = parsed.recommendations.filter((item): item is string => typeof item === 'string');
 
       return {
         verdict,
@@ -81,12 +104,11 @@ RULES:
         passed: verdict === 'PASS' || verdict === 'PASS_WITH_WARNINGS'
       };
     } catch {
-      // Safe fallback if parsing fails
       return {
-        verdict: 'PASS',
-        findings: ['Automated verification completed without blocking defects.'],
-        recommendations: [],
-        passed: true
+        verdict: 'BLOCKED',
+        findings: ['Argus response was not valid JSON.'],
+        recommendations: ['Review the QA provider response before finalizing this task.'],
+        passed: false
       };
     }
   }

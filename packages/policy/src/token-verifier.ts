@@ -38,7 +38,7 @@ export class TokenVerifier {
     secretKey: string
   ): { valid: boolean; reason?: string } {
     const now = Math.floor(Date.now() / 1000);
-    if (token.expiresAt < now) {
+    if (token.expiresAt <= now) {
       return { valid: false, reason: 'Approval token has expired' };
     }
 
@@ -52,6 +52,10 @@ export class TokenVerifier {
       .createHmac('sha256', secretKey)
       .update(dataToSign)
       .digest('hex');
+
+    if (!/^[0-9a-f]+$/i.test(token.signature) || token.signature.length !== expectedSignature.length) {
+      return { valid: false, reason: 'Invalid token signature' };
+    }
 
     const signatureMatch = crypto.timingSafeEqual(
       Buffer.from(token.signature, 'hex'),

@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types.js';
-import { TokenVerifier } from '@atlas/policy';
 
 export const CreateDraftTool: ToolDefinition = {
   name: 'communication.create_draft',
@@ -40,8 +39,7 @@ export const SendApprovedCommunicationTool: ToolDefinition = {
   inputSchema: z.object({
     recipient: z.string().min(1),
     channel: z.enum(['whatsapp', 'email', 'sms']),
-    content: z.string().min(1),
-    approvalToken: z.string().min(1)
+    content: z.string().min(1)
   }),
   outputSchema: z.object({
     messageId: z.string(),
@@ -53,12 +51,16 @@ export const SendApprovedCommunicationTool: ToolDefinition = {
   requiresApproval: true,
   timeoutMs: 10000,
   async execute(ctx, input) {
-    // In test/safe environments, this records the execution
+    if (!ctx.communicationSender) {
+      throw new Error('No outbound communication connector configured.');
+    }
+
+    const result = await ctx.communicationSender(input, ctx);
     return {
-      messageId: `msg_${crypto.randomUUID()}`,
+      messageId: result.messageId,
       status: 'sent',
-      recipient: input.recipient,
-      timestamp: new Date().toISOString()
+      recipient: result.recipient,
+      timestamp: result.timestamp
     };
   }
 };

@@ -1,5 +1,23 @@
 import { z, ZodSchema } from 'zod';
-import { ToolRiskLevel } from '@atlas/shared';
+import { ApprovalToken, ToolRiskLevel } from '@atlas/shared';
+
+export interface CommunicationSendInput {
+  recipient: string;
+  channel: 'whatsapp' | 'email' | 'sms';
+  content: string;
+  subject?: string;
+}
+
+export interface CommunicationSendResult {
+  messageId: string;
+  recipient: string;
+  timestamp: string;
+}
+
+export type CommunicationSender = (
+  input: CommunicationSendInput,
+  context: ToolContext
+) => Promise<CommunicationSendResult>;
 
 export interface ToolContext {
   taskId: string;
@@ -7,7 +25,9 @@ export interface ToolContext {
   agentId: string;
   grantedScopes?: string[];
   externalWritesEnabled?: boolean;
-  approvalToken?: string;
+  approvalToken?: ApprovalToken;
+  approvalSecretKey?: string;
+  communicationSender?: CommunicationSender;
   signal?: AbortSignal;
 }
 

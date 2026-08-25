@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import {
   ToolRegistry,
   WebSearchTool,
@@ -10,6 +11,7 @@ import {
   RubricEngine,
   LeadScoringInput
 } from '../src/index.js';
+import { TokenVerifier } from '@atlas/policy';
 
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('registers and executes read research tools safely', async () => {
@@ -35,7 +37,6 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       recipient: '+62812345678',
       channel: 'whatsapp',
       content: 'Hello Gym owner',
-      approvalToken: ''
     }, {
       taskId: 'task-1',
       runId: 'run-1',
@@ -51,22 +52,119 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('allows communication.send_approved when valid approvalToken is supplied', async () => {
     const registry = new ToolRegistry();
     registry.register(SendApprovedCommunicationTool);
+    const secret = 'test-secret-key-32-chars-length!!';
+    const payload = {
+      recipient: '+62812345678',
+      channel: 'whatsapp' as const,
+      content: 'Hello Gym owner'
+    };
+    const approvalToken = TokenVerifier.generateToken(
+      randomUUID(),
+      'communication.send_approved',
+      payload,
+      secret
+    );
+    let sendCount = 0;
+
+    const sendRes = await registry.execute('communication.send_approved', payload, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'hermes',
+      externalWritesEnabled: true,
+      approvalToken,
+      approvalSecretKey: secret,
+      communicationSender: async input => {
+        sendCount += 1;
+        return {
+          messageId: 'provider-message-1',
+          timestamp: new Date().toISOString(),
+          recipient: input.recipient
+        };
+      }
+    });
+
+    expect(sendRes.success).toBe(true);
+    expect((sendRes.output as any).messageId).toBe('provider-message-1');
+
+    const replayRes = await registry.execute('communication.send_approved', payload, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'hermes',
+      externalWritesEnabled: true,
+      approvalToken,
+      approvalSecretKey: secret,
+      communicationSender: async () => ({
+        messageId: 'should-not-send',
+        timestamp: new Date().toISOString(),
+        recipient: payload.recipient
+      })
+    });
+
+    expect(replayRes.success).toBe(false);
+    expect(replayRes.error).toContain('already been consumed');
+    expect(sendCount).toBe(1);
+  });
+
+  it('rejects an approval token when the signed payload or action does not match', async () => {
+    const registry = new ToolRegistry();
+    registry.register(SendApprovedCommunicationTool);
+    const secret = 'test-secret-key-32-chars-length!!';
+    const approvalToken = TokenVerifier.generateToken(
+      randomUUID(),
+      'communication.send_approved',
+      { recipient: '+62812345678', channel: 'whatsapp', content: 'Approved copy' },
+      secret
+    );
 
     const sendRes = await registry.execute('communication.send_approved', {
       recipient: '+62812345678',
       channel: 'whatsapp',
-      content: 'Hello Gym owner',
-      approvalToken: 'valid-token-123'
+      content: 'Tampered copy'
     }, {
       taskId: 'task-1',
       runId: 'run-1',
       agentId: 'hermes',
       externalWritesEnabled: true,
-      approvalToken: 'valid-token-123'
+      approvalToken,
+      approvalSecretKey: secret,
+      communicationSender: async () => ({
+        messageId: 'should-not-send',
+        timestamp: new Date().toISOString(),
+        recipient: '+62812345678'
+      })
     });
 
-    expect(sendRes.success).toBe(true);
-    expect((sendRes.output as any).status).toBe('sent');
+    expect(sendRes.success).toBe(false);
+    expect(sendRes.error).toContain('Payload has changed');
+  });
+
+  it('rejects outbound execution when no connector is configured', async () => {
+    const registry = new ToolRegistry();
+    registry.register(SendApprovedCommunicationTool);
+    const secret = 'test-secret-key-32-chars-length!!';
+    const payload = {
+      recipient: '+62812345678',
+      channel: 'whatsapp' as const,
+      content: 'Hello Gym owner'
+    };
+    const approvalToken = TokenVerifier.generateToken(
+      randomUUID(),
+      'communication.send_approved',
+      payload,
+      secret
+    );
+
+    const sendRes = await registry.execute('communication.send_approved', payload, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'hermes',
+      externalWritesEnabled: true,
+      approvalToken,
+      approvalSecretKey: secret
+    });
+
+    expect(sendRes.success).toBe(false);
+    expect(sendRes.error).toContain('connector configured');
   });
 
   it('calculates 10-dimension rubric scores and ranks leads properly', () => {
@@ -155,5 +253,12 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const reportMeta = artifactService.exportScoringReport([sampleLead], 'test_report.md');
     expect(reportMeta.sizeBytes).toBeGreaterThan(0);
     expect(artifactService.read('test_report.md')).toContain('Lead Scoring & ICP Evaluation Report');
+  });
+
+  it('rejects artifact paths that escape the storage root', () => {
+    const artifactService = new ArtifactService('./data/test-artifacts');
+
+    expect(() => artifactService.save('../outside.txt', 'must not escape')).toThrow('storage root');
+    expect(artifactService.read('../outside.txt')).toBeNull();
   });
 });

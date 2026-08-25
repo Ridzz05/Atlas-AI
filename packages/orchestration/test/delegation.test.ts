@@ -107,4 +107,33 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
 
     await expect(delegator.executePlan(deepParentTask)).rejects.toThrow('exceeds maximum allowed depth');
   });
+
+  it('does not synthesize or complete a task when Argus blocks the result', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: JSON.stringify({
+            goal: 'QA blocked task',
+            steps: [{ id: 'step_1', agent: 'ned', objective: 'Return evidence', depends_on: [] }],
+            approval_points: [],
+            estimated_cost_usd: 0.1
+          })
+        },
+        { content: 'Evidence without citations.' },
+        { content: '{not-json' }
+      ]
+    });
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus()
+    });
+
+    const result = await delegator.executePlan(parentTask);
+
+    expect(result.status).toBe('failed');
+    expect(result.qaResult?.verdict).toBe('BLOCKED');
+    expect(result.finalSynthesis).toContain('Task blocked by Argus QA gate');
+  });
 });

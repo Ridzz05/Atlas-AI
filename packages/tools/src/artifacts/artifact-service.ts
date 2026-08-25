@@ -11,14 +11,17 @@ export interface ArtifactMeta {
 }
 
 export class ArtifactService {
-  constructor(private storageDir = './data/artifacts') {
+  private readonly storageDir: string;
+
+  constructor(storageDir = './data/artifacts') {
+    this.storageDir = path.resolve(storageDir);
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
     }
   }
 
   public save(name: string, content: string, mimeType = 'text/plain'): ArtifactMeta {
-    const fullPath = path.resolve(this.storageDir, name);
+    const fullPath = this.resolveArtifactPath(name);
     const dir = path.dirname(fullPath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -37,9 +40,32 @@ export class ArtifactService {
   }
 
   public read(name: string): string | null {
-    const fullPath = path.resolve(this.storageDir, name);
+    let fullPath: string;
+    try {
+      fullPath = this.resolveArtifactPath(name);
+    } catch {
+      return null;
+    }
     if (!fs.existsSync(fullPath)) return null;
     return fs.readFileSync(fullPath, 'utf-8');
+  }
+
+  private resolveArtifactPath(name: string): string {
+    if (!name || path.isAbsolute(name)) {
+      throw new Error('Artifact path must be a relative name inside the storage root.');
+    }
+
+    const fullPath = path.resolve(this.storageDir, name);
+    const relativePath = path.relative(this.storageDir, fullPath);
+    if (
+      relativePath === '..' ||
+      relativePath.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relativePath)
+    ) {
+      throw new Error('Artifact path must remain inside the storage root.');
+    }
+
+    return fullPath;
   }
 
   // 1. Generate gym_leads.csv

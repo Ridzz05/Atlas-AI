@@ -200,20 +200,24 @@ export class TaskDelegator {
       qaResult = await this.qaGate.evaluate(parentTask, subtaskResults, signal);
       rootLogger.info(`QA Gate result for task ${parentTask.id}: ${qaResult.verdict}`);
     } catch (err) {
-      rootLogger.warn('QA Gate execution encountered non-fatal error', { error: String(err) });
+      rootLogger.error('QA Gate execution failed; task is blocked', { error: String(err) });
+      qaResult = {
+        verdict: 'BLOCKED',
+        findings: ['Argus QA execution failed before a trustworthy verdict was produced.'],
+        recommendations: ['Retry QA after the provider or orchestration error is resolved.'],
+        passed: false
+      };
     }
 
     // 4. Chief Final Synthesis
-    const finalSynthesis = await this.synthesizer.synthesize(
-      parentTask,
-      subtaskResults,
-      qaResult,
-      signal
-    );
+    const finalSynthesis = qaResult.passed
+      ? await this.synthesizer.synthesize(parentTask, subtaskResults, qaResult, signal)
+      : `Task blocked by Argus QA gate (${qaResult.verdict}). ${qaResult.findings.join(' ')}`;
 
-    // 5. Update Parent Task to Completed
+    // 5. Update Parent Task only after a passing QA gate.
     if (this.options.taskRepo) {
-      await this.options.taskRepo.updateStatus(parentTask.id, 'completed', {
+      await this.options.taskRepo.updateStatus(parentTask.id, qaResult.passed ? 'completed' : 'failed', {
+        error: qaResult.passed ? undefined : qaResult.findings.join(' '),
         result: {
           synthesis: finalSynthesis,
           qaVerdict: qaResult?.verdict || 'PASS',
@@ -230,7 +234,7 @@ export class TaskDelegator {
       qaResult,
       finalSynthesis,
       totalCostUsd,
-      status: 'completed'
+      status: qaResult.passed ? 'completed' : 'failed'
     };
   }
 }

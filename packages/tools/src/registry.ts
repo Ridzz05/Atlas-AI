@@ -1,9 +1,10 @@
 import { ToolDefinition, ToolContext, ToolExecutionResponse } from './types.js';
-import { ApprovalMatrix } from '@atlas/policy';
+import { ApprovalMatrix, TokenVerifier } from '@atlas/policy';
 import { rootLogger, AuditService } from '@atlas/observability';
 
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>();
+  private consumedApprovalTokens = new Set<string>();
 
   public register(tool: ToolDefinition): void {
     this.tools.set(tool.name, tool);
@@ -45,16 +46,6 @@ export class ToolRegistry {
       };
     }
 
-    if (policy.requiresApproval && !context.approvalToken) {
-      rootLogger.warn(`Tool '${name}' requires approval token which was not provided`);
-      return {
-        success: false,
-        error: `Action '${name}' requires a valid human approval token before execution.`,
-        durationMs: Date.now() - startTime,
-        riskLevel: policy.riskLevel
-      };
-    }
-
     // 2. Validate input schema
     const parseResult = tool.inputSchema.safeParse(input);
     if (!parseResult.success) {
@@ -66,7 +57,52 @@ export class ToolRegistry {
       };
     }
 
-    // 3. Execute with timeout
+    // 3. Verify approval against the exact validated payload before execution.
+    if (policy.requiresApproval) {
+      const token = context.approvalToken;
+      if (!token || !context.approvalSecretKey) {
+        rootLogger.warn(`Tool '${name}' requires an approval token and verification key`);
+        return {
+          success: false,
+          error: `Action '${name}' requires a valid human approval token before execution.`,
+          durationMs: Date.now() - startTime,
+          riskLevel: policy.riskLevel
+        };
+      }
+
+      if (token.action !== name) {
+        return {
+          success: false,
+          error: `Approval token action does not match '${name}'.`,
+          durationMs: Date.now() - startTime,
+          riskLevel: policy.riskLevel
+        };
+      }
+
+      const verification = TokenVerifier.verifyToken(token, parseResult.data, context.approvalSecretKey);
+      if (!verification.valid) {
+        return {
+          success: false,
+          error: verification.reason || 'Approval token verification failed.',
+          durationMs: Date.now() - startTime,
+          riskLevel: policy.riskLevel
+        };
+      }
+
+      if (this.consumedApprovalTokens.has(token.signature)) {
+        return {
+          success: false,
+          error: 'Approval token has already been consumed.',
+          durationMs: Date.now() - startTime,
+          riskLevel: policy.riskLevel
+        };
+      }
+
+      // Consume before awaiting the external side effect to prevent concurrent replay.
+      this.consumedApprovalTokens.add(token.signature);
+    }
+
+    // 4. Execute with timeout
     try {
       const output = await Promise.race([
         tool.execute(context, parseResult.data),
