@@ -1,0 +1,22 @@
+{
+    admin off
+}
+
+# Replace your-domain.com with your actual domain or use localhost for staging
+localhost {
+    handle /api/* {
+        reverse_proxy agent-service:4000
+    }
+
+    handle /health {
+        reverse_proxy agent-service:4000
+    }
+
+    handle /ready {
+        reverse_proxy agent-service:4000
+    }
+
+    handle {
+        reverse_proxy dashboard:3000
+    }
+}

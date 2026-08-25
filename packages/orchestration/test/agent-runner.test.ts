@@ -1,0 +1,161 @@
+import { describe, it, expect, vi } from 'vitest';
+import { AgentRunner } from '../src/index.js';
+import { MockModelProvider } from '@atlas/providers';
+import { InMemoryEventBus } from '@atlas/events';
+import { Task, AgentDefinition } from '@atlas/shared';
+
+describe('@atlas/orchestration AgentRunner tests', () => {
+  const mockTask: Task = {
+    id: '123e4567-e89b-12d3-a456-426614174000',
+    parentId: null,
+    title: 'Test Single Agent Task',
+    goal: 'Test single agent run',
+    assignedAgent: 'chief',
+    depth: 0,
+    status: 'queued',
+    priority: 'normal',
+    context: {},
+    plan: null,
+    result: null,
+    error: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    completedAt: null
+  };
+
+  const mockAgent: AgentDefinition = {
+    id: 'chief',
+    name: 'Chief',
+    role: 'orchestrator',
+    version: 1,
+    description: 'Root Orchestrator',
+    systemPrompt: 'You are Chief.',
+    limits: {
+      maxTurns: 5,
+      maxDelegationDepth: 2,
+      timeoutSeconds: 5,
+      maxCostUsd: 0.5
+    },
+    permissions: { tools: [], dataScopes: [], externalWrites: false },
+    modelPolicy: { preferredTier: 'balanced', fallbackTier: 'fast', temperature: 0.2 },
+    review: { humanApprovalFor: [] }
+  };
+
+  it('successfully executes a single-agent task run', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        { content: 'Here is the completed solution for the task.' }
+      ]
+    });
+    const eventBus = new InMemoryEventBus();
+    const eventsReceived: string[] = [];
+    eventBus.subscribe('*', (ev) => {
+      eventsReceived.push(ev.type);
+    });
+
+    const runner = new AgentRunner({ provider, eventBus });
+
+    const summary = await runner.run({
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Do the task'
+    });
+
+    expect(summary.status).toBe('completed');
+    expect(summary.turnsCount).toBe(1);
+    expect(summary.finalContent).toBe('Here is the completed solution for the task.');
+    expect(summary.totalCostUsd).toBeGreaterThan(0);
+    expect(eventsReceived).toContain('run.started');
+    expect(eventsReceived).toContain('run.turn_completed');
+    expect(eventsReceived).toContain('run.completed');
+  });
+
+  it('handles multi-turn tool execution loop', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: 'I will search memory first',
+          toolCalls: [{ id: 'tc-1', name: 'memory.search', arguments: { query: 'gyms' } }]
+        },
+        {
+          content: 'Final synthesis with memory results.'
+        }
+      ]
+    });
+
+    const eventBus = new InMemoryEventBus();
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({ items: ['gym1', 'gym2'] })
+    };
+
+    const runner = new AgentRunner({ provider, eventBus, toolExecutor });
+
+    const summary = await runner.run({
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Find info'
+    });
+
+    expect(summary.status).toBe('completed');
+    expect(summary.turnsCount).toBe(2);
+    expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(summary.finalContent).toBe('Final synthesis with memory results.');
+  });
+
+  it('cancels active run on demand', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        { content: 'Delayed turn', delayMs: 200 }
+      ]
+    });
+    const eventBus = new InMemoryEventBus();
+    const runner = new AgentRunner({ provider, eventBus });
+
+    const runPromise = runner.run({
+      runId: 'run-cancel-test',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Long task'
+    });
+
+    setTimeout(() => {
+      runner.cancelRun('run-cancel-test', 'User stopped');
+    }, 20);
+
+    const summary = await runPromise;
+    expect(summary.status).toBe('cancelled');
+    expect(summary.error).toContain('User stopped');
+  });
+
+  it('stops when cost ceiling is exceeded', async () => {
+    const lowBudgetAgent: AgentDefinition = {
+      ...mockAgent,
+      limits: {
+        ...mockAgent.limits,
+        maxCostUsd: 0.000001 // extremely low budget
+      }
+    };
+
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: 'Step 1',
+          toolCalls: [{ id: 'tc-1', name: 'dummy.tool', arguments: {} }]
+        },
+        { content: 'Step 2' }
+      ]
+    });
+
+    const eventBus = new InMemoryEventBus();
+    const runner = new AgentRunner({ provider, eventBus });
+
+    const summary = await runner.run({
+      task: mockTask,
+      agent: lowBudgetAgent,
+      initialPrompt: 'Over budget test'
+    });
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toContain('Cost ceiling reached');
+  });
+});

@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/policy" },
+    { "path": "../../packages/events" },
+    { "path": "../../packages/observability" },
+    { "path": "../../packages/database" },
+    { "path": "../../packages/providers" },
+    { "path": "../../packages/agents" },
+    { "path": "../../packages/orchestration" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test"]
+}

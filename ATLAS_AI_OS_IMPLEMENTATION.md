@@ -1,0 +1,1251 @@
+# ATLAS AI OS — Implementation Blueprint
+
+> Blueprint teknis untuk membangun sistem orkestrasi multi-agent yang dikendalikan melalui Telegram, memiliki shared memory, task delegation, human approval, dan dashboard observability real-time.
+
+| Metadata | Nilai |
+|---|---|
+| Status | Draft siap implementasi |
+| Versi | 0.1.0 |
+| Tanggal | 26 Agustus 2026 |
+| Target awal | Single-user, self-hosted, production-aware MVP |
+| Deployment utama | Ubuntu VPS menggunakan Docker Compose |
+| Bahasa utama | TypeScript |
+
+---
+
+## 1. Ringkasan Eksekutif
+
+ATLAS AI OS adalah sistem tempat satu manusia berkomunikasi dengan satu agent utama bernama **Chief**. Chief bertugas memahami tujuan, menyusun rencana, membagi pekerjaan kepada specialist agents, mengawasi hasil, meminta pemeriksaan QA, dan mengembalikan ringkasan final kepada manusia.
+
+Sistem ini **bukan kumpulan chatbot terpisah** dan bukan simulasi perusahaan semata. Setiap agent merupakan runtime terkontrol yang memiliki:
+
+- system prompt dan tanggung jawab yang spesifik;
+- daftar tools yang diizinkan;
+- akses terbatas ke shared memory;
+- budget, timeout, dan batas delegasi;
+- task state yang persisten;
+- audit trail atas setiap keputusan dan tindakan;
+- human approval untuk tindakan berdampak tinggi.
+
+MVP dimulai dengan lima agent inti:
+
+1. **Chief** — orchestrator dan satu-satunya pintu komunikasi utama.
+2. **Ned** — research dan information enrichment.
+3. **Layla** — sales, lead qualification, dan scoring.
+4. **Hermes** — content, copywriting, dan communication drafting.
+5. **Argus** — QA, verification, risk, dan policy checking.
+
+Jumlah agent sengaja dibatasi pada tahap awal. Agent baru hanya ditambahkan setelah ada workflow yang jelas, measurable, dan tidak dapat diselesaikan lebih baik oleh agent yang sudah tersedia.
+
+---
+
+## 2. Tujuan Produk
+
+### 2.1 Tujuan utama
+
+Membangun sebuah AI operating system pribadi yang mampu:
+
+- menerima instruksi natural language melalui Telegram dan dashboard;
+- mengubah instruksi menjadi task plan yang terstruktur;
+- mendelegasikan subtask kepada agent yang tepat;
+- menjalankan agent secara paralel bila aman dan berguna;
+- menyimpan percakapan, keputusan, hasil, dan knowledge secara persisten;
+- menggunakan tools eksternal melalui kontrak yang terkontrol;
+- menunjukkan pekerjaan agent secara real-time;
+- meminta persetujuan manusia sebelum tindakan sensitif;
+- memulihkan task setelah restart atau kegagalan worker;
+- mengukur kualitas, biaya, latency, dan tingkat keberhasilan.
+
+### 2.2 Target pengalaman pengguna
+
+Contoh interaksi yang ditargetkan:
+
+> **User:** Cari 50 calon klien gym di Palembang, nilai kecocokannya untuk layanan WhatsApp CRM kita, dan siapkan pendekatan untuk 10 prospek terbaik. Jangan kirim apa pun sebelum aku menyetujuinya.
+
+Chief kemudian:
+
+1. membuat parent task;
+2. meminta Ned mencari dan memperkaya data;
+3. meminta Layla menilai lead menggunakan rubric yang tersimpan;
+4. meminta Hermes membuat outreach draft;
+5. meminta Argus memvalidasi data dan klaim;
+6. menyimpan semua output sebagai artifacts;
+7. mengirim ringkasan serta tombol **Approve**, **Revise**, dan **Reject**;
+8. tidak menghubungi prospek sampai user memberikan persetujuan eksplisit.
+
+### 2.3 Indikator keberhasilan MVP
+
+- Minimal 90% task sederhana selesai tanpa kehilangan state.
+- Semua tool call tercatat beserta actor, input, output, durasi, dan status.
+- Tidak ada external write action tanpa approval bila policy mewajibkannya.
+- Chief dapat mendelegasikan minimal tiga subtask dalam satu parent task.
+- Agent dapat dilanjutkan setelah aplikasi atau worker direstart.
+- User dapat menghentikan seluruh eksekusi melalui Telegram.
+- Jawaban final memiliki tautan ke sumber atau artifact yang digunakan.
+
+---
+
+## 3. Non-Goals MVP
+
+Hal berikut tidak menjadi target versi pertama:
+
+- menjalankan puluhan agent secara bersamaan;
+- memberikan akses shell tanpa sandbox;
+- mengirim mass outreach secara otomatis;
+- mengambil keputusan finansial atau hukum tanpa manusia;
+- memberi agent akses penuh ke seluruh VPS;
+- membangun marketplace agent;
+- multi-tenant SaaS;
+- autonomous self-modification;
+- fine-tuning model sendiri;
+- menggantikan seluruh aktivitas manusia dalam bisnis.
+
+---
+
+## 4. Prinsip Desain
+
+1. **Human owns the outcome**  
+   Agent dapat merencanakan dan mengerjakan, tetapi manusia tetap pemilik keputusan akhir.
+
+2. **Least privilege by default**  
+   Agent hanya menerima tool dan data minimum yang dibutuhkan.
+
+3. **Persist before execute**  
+   Task, plan, dan intended action disimpan sebelum pekerjaan dimulai.
+
+4. **Artifacts over chat-only output**  
+   Output penting disimpan sebagai artifact yang dapat diperiksa, dibanding hanya berada di conversation buffer.
+
+5. **Every action is auditable**  
+   Semua delegasi, tool call, approval, retry, dan perubahan state dicatat.
+
+6. **Deterministic control, probabilistic reasoning**  
+   LLM dipakai untuk reasoning. Permission, state transition, budget, dan approval ditangani kode deterministik.
+
+7. **Fail closed**  
+   Bila policy, credential, atau approval tidak jelas, tindakan tidak dijalankan.
+
+8. **No agent theater**  
+   Status `WORKING` hanya tampil bila ada run aktif. Dashboard tidak boleh mensimulasikan aktivitas palsu.
+
+---
+
+## 5. Arsitektur Tingkat Tinggi
+
+```mermaid
+flowchart TD
+    U["User"] --> TG["Telegram / Web UI"]
+    TG --> GW["Command Gateway"]
+    GW --> CH["Chief Orchestrator"]
+    CH --> Q["Task Queue"]
+    Q --> WK["Agent Workers"]
+    WK --> TL["Tool Gateway"]
+    WK <--> MM["Shared Memory"]
+    CH --> AP["Approval Engine"]
+    CH --> EV["Event Stream"]
+    EV --> UI["ATLAS Dashboard"]
+    AP --> TG
+```
+
+### 5.1 Komponen inti
+
+| Komponen | Tanggung jawab |
+|---|---|
+| Telegram Bot | Input/output mobile, approval, status, emergency stop |
+| Web Dashboard | Command center, task graph, comms, memory, approvals, settings |
+| Command Gateway | Authentication, normalization, rate limiting, command routing |
+| Chief Orchestrator | Planning, delegation, synthesis, escalation |
+| Task Queue | Menjadwalkan run, retry, concurrency, delayed jobs |
+| Agent Workers | Menjalankan specialist agents dalam process terpisah |
+| Tool Gateway | Policy enforcement untuk semua integrasi dan side effects |
+| Shared Memory | Knowledge, event, task, conversation, dan artifact persistence |
+| Approval Engine | Menentukan tindakan yang membutuhkan persetujuan manusia |
+| Event Stream | Mengirim status real-time ke dashboard |
+| Audit Service | Append-only record untuk tindakan dan perubahan penting |
+
+---
+
+## 6. Keputusan Teknologi
+
+### 6.1 Stack MVP yang direkomendasikan
+
+| Layer | Teknologi | Alasan |
+|---|---|---|
+| Monorepo | pnpm workspaces + Turborepo | Shared types dan pemisahan app/worker yang rapi |
+| Dashboard | Next.js App Router + TypeScript | Cepat untuk UI dashboard dan API ringan |
+| UI | Tailwind CSS + shadcn/ui + Framer Motion | Konsisten, cepat, dan cocok untuk visual agent graph |
+| Agent service | Node.js TypeScript + Fastify | Runtime worker ringan dan mudah diobservasi |
+| Queue | Redis + BullMQ | Retry, concurrency, delayed jobs, recovery |
+| Database | PostgreSQL | Transaksi, durability, dan skalabilitas |
+| Semantic retrieval | pgvector | Menyimpan embedding di database yang sama |
+| Realtime | WebSocket atau Socket.IO | Kompatibel untuk event dashboard dan tunnel |
+| Validation | Zod | Shared runtime schemas |
+| Telegram | Telegram Bot API | Command interface utama dari ponsel |
+| Agent tools | MCP-compatible tool gateway | Kontrak tool terstandar dan dapat dikembangkan |
+| Storage | Local/S3-compatible object storage | Artifact, report, CSV, gambar, dan export |
+| Deployment | Docker Compose + reverse proxy | Cocok untuk single VPS dan mudah dipulihkan |
+| Observability | Structured logs + metrics + traces | Debugging multi-agent membutuhkan bukti, bukan tebakan |
+
+### 6.2 Model provider strategy
+
+Gunakan adapter agar sistem tidak terkunci pada satu provider:
+
+```ts
+interface ModelProvider {
+  run(request: AgentRunRequest): AsyncIterable<AgentEvent>;
+  estimateCost(request: AgentRunRequest): Promise<CostEstimate>;
+  cancel(runId: string): Promise<void>;
+}
+```
+
+Provider yang dapat ditambahkan:
+
+- Claude-compatible adapter;
+- OpenAI-compatible adapter;
+- Groq-compatible adapter untuk task cepat dan murah;
+- local model adapter bila suatu hari diperlukan.
+
+Untuk eksperimen lokal, runtime berbasis CLI dapat disediakan sebagai adapter terpisah. Untuk production, gunakan autentikasi resmi dan billing yang dapat diaudit.
+
+### 6.3 Mengapa tidak hanya Next.js API routes
+
+Agent run dapat berlangsung lama, membutuhkan retry, cancellation, concurrency control, dan pemulihan setelah restart. Karena itu:
+
+- Next.js menangani dashboard dan control API;
+- agent worker berjalan sebagai service terpisah;
+- queue menjadi boundary antara request singkat dan pekerjaan jangka panjang.
+
+---
+
+## 7. Struktur Monorepo
+
+```text
+atlas-ai-os/
+├── apps/
+│   ├── dashboard/                # Next.js dashboard
+│   ├── agent-service/            # Fastify orchestration API
+│   ├── worker/                   # BullMQ agent workers
+│   └── telegram-bot/             # Telegram webhook/polling service
+├── packages/
+│   ├── agents/                   # Agent definitions dan prompts
+│   ├── orchestration/            # Planner, router, delegation, synthesis
+│   ├── memory/                   # Retrieval, ingestion, summarization
+│   ├── tools/                    # Tool registry dan implementations
+│   ├── policy/                   # Permissions dan approval rules
+│   ├── database/                 # Schema, migrations, repositories
+│   ├── events/                   # Event schemas dan event bus
+│   ├── providers/                # LLM provider adapters
+│   ├── shared/                   # Shared types, Zod schemas, utilities
+│   └── observability/            # Logging, metrics, tracing
+├── infrastructure/
+│   ├── docker/
+│   ├── nginx/
+│   └── scripts/
+├── docs/
+│   ├── architecture.md
+│   ├── security.md
+│   ├── tools.md
+│   └── runbooks.md
+├── tests/
+│   ├── integration/
+│   ├── security/
+│   └── e2e/
+├── docker-compose.yml
+├── .env.example
+├── AGENTS.md
+├── README.md
+└── pnpm-workspace.yaml
+```
+
+---
+
+## 8. Agent Team MVP
+
+### 8.1 Chief — Orchestrator
+
+**Mission:** memahami tujuan user, membuat plan, mendelegasikan pekerjaan, mengontrol risiko, dan menyusun jawaban final.
+
+**Boleh melakukan:**
+
+- membuat dan memperbarui task;
+- mencari knowledge dari shared memory;
+- mendelegasikan pekerjaan;
+- meminta review dan approval;
+- membatalkan run;
+- menyusun final response.
+
+**Tidak boleh melakukan langsung:**
+
+- mengirim campaign;
+- mengubah production data;
+- menjalankan arbitrary shell;
+- mengakses secret mentah;
+- melewati approval engine.
+
+### 8.2 Ned — Research Agent
+
+**Mission:** mencari, mengumpulkan, memverifikasi, dan merangkum informasi.
+
+**Output wajib:**
+
+- findings terstruktur;
+- daftar sumber;
+- confidence score;
+- tanggal pengambilan data;
+- unresolved questions.
+
+### 8.3 Layla — Sales & Lead Scoring Agent
+
+**Mission:** memperkaya data lead, menghitung ICP fit, menjelaskan skor, dan menentukan next-best action.
+
+**Output wajib:**
+
+- score total;
+- score per dimensi;
+- alasan dan evidence;
+- missing data;
+- rekomendasi tindakan;
+- status `qualified`, `needs_review`, atau `disqualified`.
+
+### 8.4 Hermes — Content & Communication Agent
+
+**Mission:** membuat draft konten dan komunikasi berdasarkan brand voice serta evidence yang disediakan.
+
+**Ketentuan:**
+
+- tidak boleh menciptakan klaim bisnis tanpa sumber;
+- tidak boleh mengirim pesan sendiri;
+- seluruh outbound content harus berbentuk draft;
+- wajib mencantumkan target audience dan objective.
+
+### 8.5 Argus — QA & Risk Agent
+
+**Mission:** memeriksa factuality, kelengkapan, consistency, policy compliance, dan risiko sebelum output diserahkan atau dieksekusi.
+
+**Keputusan yang dihasilkan:**
+
+- `PASS`;
+- `PASS_WITH_WARNINGS`;
+- `REVISION_REQUIRED`;
+- `BLOCKED`.
+
+Argus tidak memperbaiki output secara diam-diam. Ia menghasilkan temuan yang kemudian ditindaklanjuti oleh agent pemilik output.
+
+---
+
+## 9. Format Definisi Agent
+
+Agent disimpan sebagai konfigurasi terversi, bukan hard-coded di UI.
+
+```yaml
+id: hermes
+name: Hermes
+role: content_lead
+version: 1
+description: Creates evidence-backed content and communication drafts.
+model_policy:
+  preferred_tier: balanced
+  fallback_tier: fast
+limits:
+  max_turns: 6
+  max_delegation_depth: 1
+  timeout_seconds: 180
+  max_cost_usd: 0.50
+permissions:
+  tools:
+    - memory.search
+    - artifacts.read
+    - artifacts.write
+    - brand.get_voice
+  data_scopes:
+    - business_knowledge
+    - approved_research
+  external_writes: false
+review:
+  required_agent: argus
+  human_approval_for:
+    - send_message
+    - publish_content
+```
+
+### 9.1 Ketentuan system prompt
+
+Setiap system prompt minimal berisi:
+
+- identity dan mission;
+- success criteria;
+- allowed tools;
+- forbidden actions;
+- required output schema;
+- source and evidence rules;
+- escalation rules;
+- data privacy instructions;
+- failure behavior;
+- instruction hierarchy.
+
+---
+
+## 10. Orchestration Model
+
+### 10.1 Task lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Queued
+    Queued --> Planning
+    Planning --> Running
+    Running --> Review
+    Review --> Running: Revision
+    Review --> Approval: Sensitive action
+    Review --> Completed: No approval needed
+    Approval --> Completed: Approved
+    Approval --> Cancelled: Rejected
+    Running --> Failed
+    Failed --> Queued: Retry allowed
+    Queued --> Cancelled
+```
+
+### 10.2 Delegation rules
+
+- Chief merupakan root agent dengan depth `0`.
+- Specialist yang dipanggil Chief berada pada depth `1`.
+- Peer delegation maksimal depth `2` pada MVP.
+- Agent tidak boleh mendelegasikan kembali ke dirinya sendiri.
+- Delegasi harus memiliki prompt self-contained.
+- Concurrency default maksimal tiga specialist run.
+- Satu task tidak boleh memiliki lebih dari delapan child task pada MVP.
+- Semua delegasi memiliki timeout dan cost ceiling.
+- Task yang gagal dua kali harus diekskalasi ke Chief atau manusia.
+- Chief wajib mensintesis hasil; tidak sekadar menempelkan semua output.
+
+### 10.3 Planning contract
+
+Sebelum menjalankan task kompleks, Chief menghasilkan plan terstruktur:
+
+```json
+{
+  "goal": "Find and qualify gym leads in Palembang",
+  "assumptions": [],
+  "questions": [],
+  "steps": [
+    {
+      "id": "step_1",
+      "agent": "ned",
+      "objective": "Collect and enrich candidate gyms",
+      "depends_on": [],
+      "parallelizable": true,
+      "expected_artifact": "lead_candidates.json"
+    }
+  ],
+  "approval_points": ["outreach_send"],
+  "estimated_cost_usd": 0.75
+}
+```
+
+Plan harus disimpan sebelum child tasks dibuat.
+
+---
+
+## 11. Shared Memory
+
+Shared memory bukan satu prompt raksasa. Sistem menggunakan beberapa lapisan memori dengan aturan retrieval berbeda.
+
+### 11.1 Jenis memori
+
+| Jenis | Contoh | Retensi |
+|---|---|---|
+| Working memory | Context run yang sedang aktif | Sampai run selesai |
+| Conversation memory | Pesan user dan agent | Persisten |
+| Episodic memory | Keputusan dan hasil task sebelumnya | Persisten, diringkas |
+| Semantic memory | SOP, produk, brand, client knowledge | Persisten dan terversi |
+| Entity memory | Lead, client, project, contact | Persisten terstruktur |
+| Artifact memory | CSV, report, draft, screenshot, code | Persisten sesuai policy |
+| Policy memory | Permissions, approval, compliance | Persisten dan immutable per version |
+
+### 11.2 Memory write rules
+
+Setiap memory item harus menyimpan:
+
+- source;
+- source timestamp;
+- author atau agent;
+- confidence;
+- scope;
+- sensitivity classification;
+- version;
+- expiry bila relevan;
+- links ke task dan artifact asal.
+
+Agent tidak boleh menulis kesimpulan spekulatif sebagai fakta. Bila informasi belum terverifikasi, status harus `unverified`.
+
+### 11.3 Retrieval pipeline
+
+1. Identifikasi entities dan intent dari task.
+2. Terapkan access scope agent.
+3. Jalankan structured filters berdasarkan project/client/time.
+4. Jalankan semantic retrieval pada kandidat yang diizinkan.
+5. Rerank berdasarkan relevance, freshness, confidence, dan source authority.
+6. Batasi context sesuai token budget.
+7. Catat memory item apa saja yang diberikan kepada agent.
+
+### 11.4 Memory hygiene
+
+- Jangan menyimpan seluruh chain-of-thought.
+- Simpan keputusan, evidence, tool result, dan concise rationale.
+- Deduplicate knowledge yang sama.
+- Tandai knowledge yang superseded.
+- Jalankan scheduled stale-memory review.
+- Sediakan fitur forget/delete sesuai kebutuhan privasi.
+
+---
+
+## 12. Model Data Awal
+
+### 12.1 Tabel inti
+
+| Tabel | Fungsi |
+|---|---|
+| `users` | Identitas user dan role |
+| `agents` | Agent configuration aktif |
+| `agent_versions` | Riwayat prompt, tools, dan policy |
+| `tasks` | Parent dan child task |
+| `task_dependencies` | Dependency graph |
+| `runs` | Satu eksekusi agent |
+| `messages` | Conversation events |
+| `plans` | Plan terstruktur milik Chief |
+| `tool_calls` | Seluruh pemanggilan tool |
+| `artifacts` | Metadata output file/data |
+| `memory_items` | Shared memory records |
+| `memory_embeddings` | Vector representation |
+| `approvals` | Permintaan dan keputusan approval |
+| `integrations` | Metadata koneksi, tanpa secret mentah |
+| `audit_events` | Append-only audit trail |
+| `scheduled_jobs` | Cron dan delayed execution |
+| `budgets` | Limit per task, agent, dan periode |
+
+### 12.2 Status penting
+
+```ts
+type TaskStatus =
+  | "queued"
+  | "planning"
+  | "running"
+  | "review_pending"
+  | "approval_pending"
+  | "completed"
+  | "failed"
+  | "cancelled";
+
+type RunStatus =
+  | "created"
+  | "active"
+  | "waiting_tool"
+  | "waiting_child"
+  | "waiting_approval"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "timed_out";
+```
+
+---
+
+## 13. Tool Gateway
+
+Semua tindakan agent harus melewati Tool Gateway. Agent tidak berinteraksi langsung dengan database production, shell, atau external API.
+
+### 13.1 Tool contract
+
+```ts
+interface ToolDefinition<TInput, TOutput> {
+  name: string;
+  description: string;
+  inputSchema: ZodSchema<TInput>;
+  outputSchema: ZodSchema<TOutput>;
+  riskLevel: "read" | "low" | "medium" | "high" | "critical";
+  requiresApproval: boolean;
+  timeoutMs: number;
+  execute(context: ToolContext, input: TInput): Promise<TOutput>;
+}
+```
+
+### 13.2 Tool MVP
+
+**Internal read tools**
+
+- `memory.search`
+- `memory.get`
+- `tasks.get`
+- `tasks.list`
+- `artifacts.read`
+- `agents.status`
+
+**Internal write tools**
+
+- `tasks.create_child`
+- `tasks.update_status`
+- `artifacts.write`
+- `memory.propose_write`
+
+**Research tools**
+
+- `web.search`
+- `web.fetch_safe`
+- `company.lookup`
+- `lead.enrich`
+
+**Communication tools**
+
+- `telegram.reply`
+- `communication.create_draft`
+- `communication.send_approved`
+
+**System tools**
+
+- `runs.cancel`
+- `runs.retry`
+- `system.pause_all`
+- `system.resume_all`
+
+### 13.3 Side-effect separation
+
+Pisahkan tool berikut:
+
+- `message.create_draft` — aman, tidak mengirim.
+- `message.request_send` — membuat approval request.
+- `message.send_approved` — hanya berjalan dengan valid approval token.
+
+Agent tidak pernah menerima tool `send_message` generik yang dapat melewati workflow tersebut.
+
+---
+
+## 14. Human Approval Engine
+
+### 14.1 Approval matrix
+
+| Tindakan | Default |
+|---|---|
+| Membaca knowledge internal | Otomatis bila scope sesuai |
+| Menulis draft/artifact | Otomatis |
+| Menambahkan proposed memory | Otomatis, lalu divalidasi |
+| Mengubah canonical knowledge | Approval atau trusted workflow |
+| Mengirim pesan eksternal | Wajib approval |
+| Membuat/menjadwalkan campaign | Wajib approval |
+| Mengubah production data | Wajib approval |
+| Menjalankan deployment | Wajib approval |
+| Menghapus data | Wajib approval dan confirmation kedua |
+| Transaksi finansial | Blocked pada MVP |
+| Mengubah permissions/policy | Wajib owner approval |
+
+### 14.2 Approval token
+
+Approval harus terikat pada:
+
+- exact action;
+- normalized input hash;
+- agent dan task;
+- expiry time;
+- approving user;
+- one-time execution.
+
+Jika payload berubah setelah approval, approval otomatis tidak valid.
+
+---
+
+## 15. Telegram Interface
+
+### 15.1 Commands
+
+| Command | Fungsi |
+|---|---|
+| `/new` | Membuat task baru |
+| `/status` | Ringkasan task aktif |
+| `/agents` | Status semua agent |
+| `/task <id>` | Detail task dan child tasks |
+| `/approve <id>` | Menyetujui exact pending action |
+| `/reject <id>` | Menolak pending action |
+| `/revise <id>` | Memberi revisi |
+| `/pause` | Menghentikan pengambilan task baru |
+| `/resume` | Melanjutkan sistem |
+| `/stop <task_id>` | Membatalkan task tertentu |
+| `/emergency_stop` | Membatalkan seluruh run dan memblokir external writes |
+| `/cost` | Penggunaan dan budget saat ini |
+| `/help` | Bantuan |
+
+Natural language tetap menjadi interface utama. Commands disediakan untuk operasi yang harus eksplisit dan deterministik.
+
+### 15.2 Telegram approval card
+
+Approval message minimal menampilkan:
+
+- action;
+- target;
+- preview payload;
+- alasan agent;
+- risk level;
+- estimated impact;
+- expiry;
+- tombol Approve, Reject, dan Revise.
+
+---
+
+## 16. Dashboard ATLAS
+
+### 16.1 Halaman MVP
+
+1. **Command Center**  
+   Agent graph, system health, task counters, cost, dan emergency controls.
+
+2. **Tasks**  
+   Parent/child task, dependencies, status, retry, cancel, dan artifacts.
+
+3. **Communications**  
+   User-to-agent, agent-to-agent delegation, tool calls, dan filters.
+
+4. **Agents**  
+   Agent definitions, versions, model policy, tools, limits, dan status.
+
+5. **Shared Brain**  
+   Search knowledge, entities, sources, freshness, confidence, dan version history.
+
+6. **Approvals**  
+   Pending, approved, rejected, expired, dan executed actions.
+
+7. **Artifacts**  
+   Report, CSV, draft, JSON, screenshot, dan output terstruktur.
+
+8. **Integrations**  
+   Connection status dan granted scopes.
+
+9. **Audit & Costs**  
+   Event timeline, token usage, cost, error, retry, dan performance.
+
+10. **Settings**  
+    Global budgets, concurrency, security, retention, dan notification preferences.
+
+### 16.2 Agent graph behavior
+
+- Node `IDLE` bila tidak ada active run.
+- Node `QUEUED` bila menunggu worker.
+- Node `WORKING` hanya saat run aktif.
+- Delegation line menyala berdasarkan real event.
+- Error state menunjukkan alasan singkat.
+- Clicking node membuka exact run dan artifacts.
+- UI tidak menampilkan fabricated thoughts atau hidden chain-of-thought.
+
+---
+
+## 17. Security Baseline
+
+### 17.1 Mandatory controls
+
+- Tidak ada `bypassPermissions`.
+- Tidak ada arbitrary Bash tool pada MVP.
+- Filesystem tool hanya bekerja dalam sandbox workdir.
+- Secret disimpan melalui secret manager atau encrypted store.
+- Secret tidak pernah masuk ke prompt atau logs.
+- Tool output disanitasi sebelum dikirim kembali ke model.
+- Semua fetched web content dianggap untrusted.
+- Instruction dari webpage tidak boleh mengubah system policy.
+- URL dan network egress dibatasi sesuai kebutuhan tool.
+- Setiap external write memakai idempotency key.
+- Setiap run memiliki timeout dan cost limit.
+- Audit logs append-only.
+- Emergency stop harus bekerja tanpa LLM.
+- Dashboard dan Telegram account memakai owner allowlist.
+
+### 17.2 Prompt injection defense
+
+Fetched content ditempatkan sebagai **data**, bukan instruction. Tool Gateway harus:
+
+1. menandai asal content;
+2. menghapus active content yang tidak dibutuhkan;
+3. membatasi ukuran;
+4. menolak credential requests;
+5. mencegah webpage menginstruksikan agent memakai tools;
+6. meminta approval bila ditemukan konflik policy.
+
+### 17.3 Sandbox policy
+
+Jika kelak filesystem/coding agent ditambahkan:
+
+- satu container per risky run;
+- non-root user;
+- resource limits;
+- read-only base image;
+- explicit mounted workdir;
+- no Docker socket;
+- network off secara default;
+- artifact export setelah scan;
+- container dihancurkan setelah run.
+
+---
+
+## 18. Reliability dan Recovery
+
+- Gunakan database transaction ketika membuat task dan run.
+- Worker mengambil job dengan lease/lock.
+- Heartbeat menandai worker aktif.
+- Stale run dipulihkan atau ditandai gagal.
+- Tool calls memakai idempotency key.
+- Retry memakai exponential backoff dan jitter.
+- Tidak melakukan retry otomatis untuk destructive action.
+- Parent task menunggu child completion melalui event, bukan polling agresif.
+- Cancellation harus diteruskan ke child tasks.
+- Graceful shutdown menolak job baru dan menyelesaikan checkpoint.
+- Backup database dan artifacts dijadwalkan.
+
+---
+
+## 19. Observability dan Evaluasi
+
+### 19.1 Metrics minimum
+
+- tasks created/completed/failed;
+- success rate per agent;
+- latency per task dan tool;
+- retries dan timeout;
+- input/output tokens;
+- estimated dan actual cost;
+- approval rate dan rejection rate;
+- human revisions per artifact;
+- hallucination/factual error findings oleh QA;
+- queue depth dan worker health;
+- memory retrieval hit rate.
+
+### 19.2 Evaluation dataset
+
+Buat kumpulan task tetap untuk regression testing:
+
+- research dengan sumber;
+- lead scoring dengan expected rubric;
+- content draft berdasarkan evidence;
+- QA yang harus menangkap klaim salah;
+- approval yang tidak boleh dilewati;
+- malicious webpage/prompt injection;
+- worker restart di tengah task;
+- duplicate Telegram webhook;
+- budget exhaustion;
+- emergency stop.
+
+Model atau prompt baru tidak dipromosikan sebelum melewati evaluation suite.
+
+---
+
+## 20. Environment Variables
+
+`.env.example` hanya berisi placeholder:
+
+```dotenv
+NODE_ENV=development
+APP_BASE_URL=http://localhost:3000
+
+DATABASE_URL=postgresql://atlas:atlas@postgres:5432/atlas
+REDIS_URL=redis://redis:6379
+
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USER_IDS=
+TELEGRAM_WEBHOOK_SECRET=
+
+MODEL_PROVIDER=
+MODEL_API_KEY=
+
+ENCRYPTION_KEY=
+ARTIFACT_STORAGE_PATH=/data/artifacts
+
+GLOBAL_DAILY_BUDGET_USD=5
+MAX_CONCURRENT_AGENT_RUNS=3
+MAX_DELEGATION_DEPTH=2
+EXTERNAL_WRITES_ENABLED=false
+```
+
+Tidak boleh ada credential asli dalam repository.
+
+---
+
+## 21. Fase Implementasi
+
+### Phase 0 — Repository Foundation
+
+**Deliverables:**
+
+- monorepo;
+- linting, formatting, typecheck, unit test;
+- Docker Compose untuk PostgreSQL dan Redis;
+- migration system;
+- shared schemas;
+- health endpoints;
+- CI dasar;
+- `.env.example`;
+- `AGENTS.md`.
+
+**Exit criteria:** seluruh app dapat boot, database bermigrasi, dan health check lulus.
+
+### Phase 1 — Task Engine dan Single Agent
+
+**Deliverables:**
+
+- task/run persistence;
+- queue dan worker;
+- provider adapter;
+- Chief single-agent run;
+- event persistence;
+- cancellation dan timeout;
+- basic cost tracking.
+
+**Exit criteria:** satu task dapat dibuat, dijalankan, direstart, dan diselesaikan secara persisten.
+
+### Phase 2 — Multi-Agent Delegation
+
+**Deliverables:**
+
+- agent registry;
+- five MVP agent definitions;
+- structured planning;
+- child tasks;
+- parallel execution;
+- max-depth enforcement;
+- synthesis;
+- Argus QA gate.
+
+**Exit criteria:** Chief dapat membagi task kepada minimal tiga agents dan menghasilkan final synthesis.
+
+### Phase 3 — Telegram Control Plane
+
+**Deliverables:**
+
+- secure Telegram bot;
+- owner allowlist;
+- natural-language command intake;
+- status updates;
+- approve/reject/revise;
+- cancellation;
+- emergency stop;
+- duplicate webhook protection.
+
+**Exit criteria:** seluruh lifecycle task dasar dapat dikendalikan dari ponsel.
+
+### Phase 4 — Shared Memory
+
+**Deliverables:**
+
+- memory schemas;
+- ingestion;
+- semantic + structured retrieval;
+- source/confidence/freshness metadata;
+- memory proposal workflow;
+- stale-memory handling;
+- privacy deletion.
+
+**Exit criteria:** agent dapat menggunakan knowledge dari task sebelumnya dan menunjukkan source yang dipakai.
+
+### Phase 5 — Tool Gateway dan Lead Workflow
+
+**Deliverables:**
+
+- tool registry;
+- risk classification;
+- approval tokens;
+- research tools;
+- lead ingestion/enrichment;
+- configurable scoring rubric;
+- outreach draft;
+- QA report;
+- CSV/report artifacts.
+
+**Exit criteria:** contoh gym-lead workflow selesai end-to-end tanpa mengirim outbound message.
+
+### Phase 6 — ATLAS Dashboard
+
+**Deliverables:**
+
+- command center;
+- realtime agent graph;
+- task graph;
+- communications feed;
+- shared brain viewer;
+- approvals;
+- audit/cost dashboard;
+- system controls.
+
+**Exit criteria:** seluruh state yang ditampilkan berasal dari backend events dan konsisten setelah refresh.
+
+### Phase 7 — Production Hardening
+
+**Deliverables:**
+
+- authentication;
+- encrypted secrets;
+- backup/restore;
+- rate limits;
+- sandboxing;
+- security tests;
+- monitoring/alerts;
+- deployment runbook;
+- incident runbook;
+- retention policy.
+
+**Exit criteria:** threat-model checklist lulus dan recovery drill berhasil.
+
+---
+
+## 22. MVP Acceptance Criteria
+
+### Task dan orchestration
+
+- [ ] User dapat membuat task dari Telegram.
+- [ ] Chief menyimpan plan sebelum delegasi.
+- [ ] Child tasks memiliki parent dan dependency yang benar.
+- [ ] Maksimal delegation depth diterapkan oleh kode.
+- [ ] Concurrency limit diterapkan oleh queue.
+- [ ] Chief menghasilkan final synthesis.
+- [ ] Argus memeriksa final artifact.
+
+### Memory
+
+- [ ] Conversation tetap tersedia setelah restart.
+- [ ] Artifact dapat ditelusuri ke task asal.
+- [ ] Retrieved memory dicatat pada run.
+- [ ] Knowledge memiliki source, confidence, dan freshness.
+- [ ] Unverified information tidak tersimpan sebagai canonical fact.
+
+### Approval dan security
+
+- [ ] External write tidak dapat dilakukan tanpa approval token.
+- [ ] Perubahan payload membatalkan approval.
+- [ ] Duplicate webhook tidak mengeksekusi tindakan dua kali.
+- [ ] Secret tidak muncul di logs atau prompts.
+- [ ] Emergency stop membatalkan active runs.
+- [ ] Agent tidak memiliki arbitrary shell access.
+
+### Dashboard
+
+- [ ] Agent status sesuai dengan real backend state.
+- [ ] Delegation line berasal dari real delegation event.
+- [ ] Task detail menampilkan messages, tool calls, dan artifacts.
+- [ ] Audit log dapat difilter berdasarkan task, agent, dan action.
+- [ ] Cost dapat dilihat per task dan per agent.
+
+---
+
+## 23. Testing Strategy
+
+### Unit tests
+
+- schemas;
+- policy decisions;
+- task transitions;
+- cost calculation;
+- approval hash;
+- scoring rubric;
+- memory ranking;
+- agent configuration validation.
+
+### Integration tests
+
+- database + queue transaction;
+- parent/child lifecycle;
+- provider adapter mock;
+- tool gateway;
+- Telegram update handling;
+- WebSocket events;
+- artifact storage;
+- retry and cancellation.
+
+### End-to-end tests
+
+- create task → delegate → QA → complete;
+- create external action → approval → execute once;
+- reject approval → no side effect;
+- restart worker → recover task;
+- malicious content → blocked;
+- emergency stop → all runs cancelled.
+
+---
+
+## 24. First Demonstration Scenario
+
+### Scenario: Palembang Gym Lead Intelligence
+
+**Input:**
+
+> Temukan 30 gym atau fitness center di Palembang yang berpotensi membutuhkan WhatsApp CRM. Nilai setiap lead, pilih 10 terbaik, dan buat draft pendekatan. Jangan kirim pesan.
+
+**Expected workflow:**
+
+1. Chief membuat plan dan rubric requirement.
+2. Ned mengumpulkan kandidat beserta sumber.
+3. Layla melakukan enrichment dan scoring.
+4. Hermes membuat personalized drafts untuk top 10.
+5. Argus memeriksa sumber, skor, dan klaim.
+6. Chief menghasilkan executive summary.
+7. Sistem membuat artifacts:
+   - `gym_leads.csv`;
+   - `lead_scoring_report.md`;
+   - `outreach_drafts.md`;
+   - `qa_report.md`.
+8. Telegram mengirim ringkasan dan link artifact.
+9. Tidak ada pesan outbound yang dikirim.
+
+### Contoh rubric awal
+
+| Metrik | Bobot |
+|---|---:|
+| Kesesuaian jenis usaha | 15 |
+| Banyaknya channel komunikasi | 10 |
+| Indikasi volume pelanggan | 10 |
+| Kebutuhan follow-up/member retention | 15 |
+| Kualitas digital presence | 8 |
+| Responsiveness saat ini | 8 |
+| Potensi automasi CS | 10 |
+| Potensi broadcast yang sah | 8 |
+| Kemudahan menemukan decision maker | 6 |
+| Kelengkapan dan freshness data | 10 |
+| **Total** | **100** |
+
+Rubric harus dapat diubah dari dashboard dan memiliki version history.
+
+---
+
+## 25. Instruksi untuk Coding Agent
+
+Coding agent yang menerima dokumen ini harus mengikuti aturan berikut:
+
+1. Baca dokumen sepenuhnya sebelum membuat perubahan.
+2. Jangan langsung membangun seluruh fase sekaligus.
+3. Mulai dari Phase 0 dan selesaikan exit criteria-nya.
+4. Buat implementation plan yang menyebut file dan package yang akan dibuat.
+5. Jangan memasukkan credential asli.
+6. Jangan mengaktifkan external writes pada development default.
+7. Jangan menambahkan arbitrary shell atau `bypassPermissions`.
+8. Semua state transition harus tervalidasi dan diuji.
+9. Semua tool harus memiliki schema, timeout, risk level, dan audit record.
+10. Gunakan mocks/fakes untuk provider dan external tools pada automated tests.
+11. Hindari coupling langsung antara dashboard dan provider SDK.
+12. Pertahankan provider abstraction.
+13. Dokumentasikan keputusan arsitektur penting.
+14. Jalankan lint, typecheck, unit test, dan relevant integration tests sebelum menyatakan fase selesai.
+15. Berhenti dan meminta keputusan manusia bila perubahan memperluas scope atau permission.
+
+### Format laporan setiap fase
+
+```markdown
+## Phase X Completion Report
+
+### Implemented
+- ...
+
+### Verification
+- Command: `...`
+- Result: PASS/FAIL
+
+### Known limitations
+- ...
+
+### Security notes
+- ...
+
+### Next phase readiness
+- READY/BLOCKED
+```
+
+---
+
+## 26. Definition of Done
+
+Satu phase dinyatakan selesai hanya jika:
+
+- code telah diimplementasikan;
+- migration berhasil;
+- test yang relevan lulus;
+- error handling tersedia;
+- logging dan audit events tersedia;
+- dokumentasi diperbarui;
+- security implications telah diperiksa;
+- exit criteria phase terbukti;
+- tidak ada secret atau debug bypass tertinggal;
+- perubahan dapat dijalankan ulang dari clean environment.
+
+---
+
+## 27. Future Roadmap
+
+Setelah MVP stabil:
+
+- scheduled morning briefing;
+- WhatsApp CRM connector dengan official API;
+- GitHub engineering agent;
+- calendar dan email integration;
+- client/project-specific memory namespaces;
+- visual workflow builder;
+- agent evaluation dashboard;
+- prompt/version A/B testing;
+- voice note input melalui Telegram;
+- document and meeting ingestion;
+- multi-project business brain;
+- role-based multi-user access;
+- isolated coding sandboxes;
+- custom agent marketplace internal;
+- mobile-first command center.
+
+Agent baru seperti Iris, Apollo, Calliope, atau dedicated finance agent hanya ditambahkan berdasarkan kebutuhan workflow dan setelah policy serta evaluation set tersedia.
+
+---
+
+## 28. Risiko Utama
+
+| Risiko | Mitigasi |
+|---|---|
+| Agent memberikan fakta salah | Source requirement, confidence, Argus QA |
+| Prompt injection | Untrusted-content boundary dan Tool Gateway |
+| Biaya membengkak | Per-run, per-agent, dan daily budgets |
+| Delegation loop | Hard max depth dan child-task count |
+| Duplicate external action | Approval token dan idempotency key |
+| Memory menjadi basi | Freshness metadata dan stale review |
+| Secret bocor | Encrypted store dan prompt redaction |
+| Worker mati | Queue persistence, heartbeat, recovery |
+| Dashboard terlihat aktif padahal tidak | Event-derived state only |
+| Terlalu banyak agent | Agent admission criteria dan evaluasi ROI |
+
+---
+
+## 29. Referensi Awal
+
+- [Business-Ai-Claude](https://github.com/soheru/Business-Ai-Claude) — referensi open-source untuk pola CEO-to-specialist delegation dan dashboard lokal. Gunakan sebagai bahan studi, bukan dependency wajib.
+- [Telegram Bot API](https://core.telegram.org/bots/api) — interface bot resmi.
+- [Model Context Protocol](https://modelcontextprotocol.io/) — pola standardisasi agent tools.
+- [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/) — secure access menuju self-hosted dashboard.
+
+---
+
+## 30. Keputusan Awal yang Dikunci
+
+- [x] Sistem dimulai sebagai single-user self-hosted MVP.
+- [x] Telegram menjadi primary remote control.
+- [x] Chief menjadi satu-satunya root orchestrator.
+- [x] MVP menggunakan lima agent.
+- [x] PostgreSQL dan Redis digunakan sejak awal.
+- [x] Worker dipisahkan dari Next.js dashboard.
+- [x] External writes mati secara default.
+- [x] Human approval wajib untuk tindakan sensitif.
+- [x] Arbitrary shell tidak tersedia pada MVP.
+- [x] Agent state berasal dari real events.
+- [x] Provider dibuat swappable melalui adapter.
+- [x] Deployment target adalah Docker Compose di VPS.
+
+---
+
+## 31. Immediate Next Action
+
+Langkah berikutnya adalah menjalankan **Phase 0 — Repository Foundation**:
+
+1. tentukan nama repository final;
+2. buat monorepo dan package boundaries;
+3. buat Docker Compose untuk PostgreSQL dan Redis;
+4. buat schema dan migration awal;
+5. buat shared event/type contracts;
+6. buat health checks dan CI;
+7. verifikasi clean boot dari dokumentasi.
+
+Jangan menghubungkan model berbayar atau external integrations sebelum foundation dan test harness siap.
+

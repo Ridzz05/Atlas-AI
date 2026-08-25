@@ -1,0 +1,74 @@
+import { FastifyInstance } from 'fastify';
+import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition } from '@atlas/shared';
+import { TaskRepository } from '@atlas/database';
+import { TaskQueue } from '@atlas/orchestration';
+import { rootLogger } from '@atlas/observability';
+
+export interface TaskRouteOptions {
+  taskRepo: TaskRepository;
+  taskQueue: TaskQueue;
+  getAgentDefinition: (id: string) => AgentDefinition;
+}
+
+export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptions): void {
+  // Create Task
+  app.post('/api/v1/tasks', async (req, reply) => {
+    const parseResult = CreateTaskInputSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({
+        error: 'Invalid task input',
+        details: parseResult.error.errors
+      });
+    }
+
+    const input = parseResult.data;
+    try {
+      const task = await options.taskRepo.create(input);
+      const agent = options.getAgentDefinition(task.assignedAgent);
+
+      // Enqueue job for background processing
+      await options.taskQueue.enqueue({
+        task,
+        agent,
+        prompt: task.goal
+      });
+
+      return reply.status(201).send(task);
+    } catch (err) {
+      rootLogger.error('Failed to create task', { error: String(err) });
+      return reply.status(500).send({ error: 'Failed to create task' });
+    }
+  });
+
+  // List Tasks
+  app.get('/api/v1/tasks', async (req, reply) => {
+    const query = req.query as any;
+    const status = query.status ? TaskStatusSchema.safeParse(query.status).data : undefined;
+    const assignedAgent = query.assignedAgent as string | undefined;
+    const limit = query.limit ? Number(query.limit) : 50;
+    const offset = query.offset ? Number(query.offset) : 0;
+
+    try {
+      const tasks = await options.taskRepo.list({ status, assignedAgent, limit, offset });
+      return reply.status(200).send({ data: tasks, count: tasks.length });
+    } catch (err) {
+      rootLogger.error('Failed to list tasks', { error: String(err) });
+      return reply.status(500).send({ error: 'Failed to list tasks' });
+    }
+  });
+
+  // Get Task by ID
+  app.get('/api/v1/tasks/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    try {
+      const task = await options.taskRepo.findById(id);
+      if (!task) {
+        return reply.status(404).send({ error: `Task not found: ${id}` });
+      }
+      return reply.status(200).send(task);
+    } catch (err) {
+      rootLogger.error(`Failed to find task ${id}`, { error: String(err) });
+      return reply.status(500).send({ error: 'Failed to fetch task' });
+    }
+  });
+}

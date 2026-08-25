@@ -1,0 +1,30 @@
+{
+  "name": "@atlas/telegram-bot",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc --build",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "clean": "rimraf dist tsconfig.tsbuildinfo"
+  },
+  "dependencies": {
+    "@atlas/shared": "workspace:*",
+    "@atlas/policy": "workspace:*",
+    "@atlas/events": "workspace:*",
+    "@atlas/observability": "workspace:*",
+    "@atlas/database": "workspace:*",
+    "@atlas/providers": "workspace:*",
+    "@atlas/agents": "workspace:*",
+    "@atlas/orchestration": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.9",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7",
+    "rimraf": "^6.0.1"
+  }
+}

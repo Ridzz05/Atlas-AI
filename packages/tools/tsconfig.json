@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../policy" },
+    { "path": "../observability" },
+    { "path": "../database" },
+    { "path": "../memory" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test"]
+}

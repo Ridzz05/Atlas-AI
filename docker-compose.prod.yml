@@ -1,0 +1,187 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: atlas_postgres_prod
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-atlas_os}
+      POSTGRES_USER: ${POSTGRES_USER:-atlas_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlas_secure_password_123}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-atlas_admin} -d ${POSTGRES_DB:-atlas_os}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  redis:
+    image: redis:7-alpine
+    container_name: atlas_redis_prod
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD:-redis_secure_pass} --appendonly yes
+    volumes:
+      - redis_prod_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_secure_pass}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  agent-service:
+    build:
+      context: .
+      dockerfile: apps/agent-service/Dockerfile
+    container_name: atlas_agent_service_prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-atlas_admin}:${POSTGRES_PASSWORD:-atlas_secure_password_123}@postgres:5432/${POSTGRES_DB:-atlas_os}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_pass}@redis:6379
+      APPROVAL_SECRET_KEY: ${APPROVAL_SECRET_KEY:-change_me_super_secret_approval_key_32bytes}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: atlas_worker_prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-atlas_admin}:${POSTGRES_PASSWORD:-atlas_secure_password_123}@postgres:5432/${POSTGRES_DB:-atlas_os}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_pass}@redis:6379
+      APPROVAL_SECRET_KEY: ${APPROVAL_SECRET_KEY:-change_me_super_secret_approval_key_32bytes}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: apps/telegram-bot/Dockerfile
+    container_name: atlas_telegram_bot_prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_USER_IDS: ${TELEGRAM_ALLOWED_USER_IDS:-}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-atlas_admin}:${POSTGRES_PASSWORD:-atlas_secure_password_123}@postgres:5432/${POSTGRES_DB:-atlas_os}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_secure_pass}@redis:6379
+      APPROVAL_SECRET_KEY: ${APPROVAL_SECRET_KEY:-change_me_super_secret_approval_key_32bytes}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: apps/dashboard/Dockerfile
+    container_name: atlas_dashboard_prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    depends_on:
+      - agent-service
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: atlas_caddy_prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+      - agent-service
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+  caddy_data:
+  caddy_config:
