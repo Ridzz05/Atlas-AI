@@ -14,6 +14,7 @@ import { AgentRunner } from '../engine/agent-runner.js';
 import { TaskPlanner } from '../planner/task-planner.js';
 import { TaskSynthesizer } from '../synthesizer/task-synthesizer.js';
 import { QAGate, QAResult } from '../qa/qa-gate.js';
+import { PlanValidator } from '../planner/plan-validator.js';
 
 export interface MultiAgentDelegatorOptions {
   provider: ModelProvider;
@@ -81,6 +82,7 @@ export class TaskDelegator {
         await this.options.taskRepo.updatePlan(parentTask.id, plan);
       }
     }
+    PlanValidator.assertValid(plan, { registry: this.options.registry });
 
     const subtaskResults = new Map<string, { agentId: string; content: string }>();
     const completedStepIds = new Set<string>();

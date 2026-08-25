@@ -2,6 +2,7 @@ import { Task, TaskPlan, TaskPlanSchema } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
 import { AgentRegistry } from '@atlas/agents';
 import { rootLogger } from '@atlas/observability';
+import { PlanValidator } from './plan-validator.js';
 
 export interface TaskPlannerOptions {
   provider: ModelProvider;
@@ -61,7 +62,8 @@ RULES:
     try {
       const cleaned = result.content.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
       const parsed = JSON.parse(cleaned);
-      return TaskPlanSchema.parse(parsed);
+      const plan = TaskPlanSchema.parse(parsed);
+      return PlanValidator.assertValid(plan, { registry: this.options.registry });
     } catch (err) {
       rootLogger.warn(`Failed to parse LLM plan output for task ${task.id}, using fallback plan`, { error: String(err) });
       return this.generateFallbackPlan(task);
