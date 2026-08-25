@@ -22,7 +22,7 @@ export class BullMqTaskQueue implements TaskQueue {
 
   public async enqueue(data: TaskJobData): Promise<string> {
     const job = await this.queue.add('agent-task', data, {
-      jobId: data.runId || undefined,
+      jobId: data.runId || data.task.id,
       attempts: 3,
       backoff: { type: 'exponential', delay: 1000 },
       removeOnComplete: { age: 86400, count: 1000 },

@@ -46,4 +46,21 @@ describe('BullMqTaskQueue', () => {
     expect(workerClose).toHaveBeenCalledOnce();
     expect(queueClose).toHaveBeenCalledOnce();
   });
+
+  it('uses the task id as an idempotency key when no run id exists', async () => {
+    const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-idempotent' });
+
+    await queue.enqueue({
+      task: { id: 'task-123' } as never,
+      agent: {} as never,
+      prompt: 'retry-safe task'
+    });
+
+    expect(add).toHaveBeenLastCalledWith(
+      'agent-task',
+      expect.objectContaining({ prompt: 'retry-safe task' }),
+      expect.objectContaining({ jobId: 'task-123' })
+    );
+    await queue.close();
+  });
 });

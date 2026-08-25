@@ -2,6 +2,8 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
+> Release status (26 August 2026): durable runtime, API auth/CORS, Telegram polling, approval decision persistence, and dashboard task/approval views are implemented and tested. Do not enable external writes yet: no approved outbound connector or persisted execute-once token service is configured. Compose boot and recovery drills require a Docker host.
+
 ---
 
 ## 1. System Architecture & Inventory
@@ -89,7 +91,7 @@ When an unexpected agent behavior or runaway task is detected:
 ### 4.2 System Recovery / Resume
 1. Inspect audit logs in the Dashboard (`/audit`) or PostgreSQL:
    ```sql
-   SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 20;
+   SELECT * FROM audit_events ORDER BY timestamp DESC LIMIT 20;
    ```
 2. Verify token budgets and policy rules.
 3. In Telegram: Send `/resume` to unfreeze the engine.
@@ -98,14 +100,14 @@ When an unexpected agent behavior or runaway task is detected:
 
 ## 5. Security & Secret Rotation
 
-### 5.1 Rotating `APPROVAL_SECRET_KEY`
-1. Generate a new 32-byte secret:
+### 5.1 Rotating `ENCRYPTION_KEY` and `API_AUTH_TOKEN`
+1. Generate new secrets:
    ```bash
    openssl rand -hex 32
    ```
-2. Update `APPROVAL_SECRET_KEY` in `.env`.
-3. Restart `agent-service`, `worker`, and `telegram-bot`.
-4. *Note:* Existing pending approval tokens will be invalidated; pending requests must be re-issued.
+2. Update `ENCRYPTION_KEY` and `API_AUTH_TOKEN` in `.env`.
+3. Restart `agent-service`, `worker`, `telegram-bot`, and `dashboard`.
+4. Re-issue pending approval decisions after a key rotation.
 
 ### 5.2 Rotating Telegram Bot Token
 1. Generate new token via Telegram `@BotFather`.
@@ -119,6 +121,6 @@ When an unexpected agent behavior or runaway task is detected:
 
 ## 6. Token Budget & Cost Controls
 
-- Global daily spending limit is configured in `.env` (`DAILY_SPEND_BUDGET_USD=5.00`).
+- Global daily spending limit is configured in `.env` (`GLOBAL_DAILY_BUDGET_USD=5.00`).
 - Each individual run is hard-capped at `$1.00 USD` (or agent specific limits).
 - If daily budget is reached, new tasks are rejected with `BUDGET_EXCEEDED` error.

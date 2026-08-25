@@ -9,14 +9,17 @@ describe('@atlas/database tests', () => {
 
     const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql'));
     expect(files.length).toBeGreaterThan(0);
+    expect(files).toContain('001_initial_schema.sql');
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
       expect(content).toContain('CREATE TABLE IF NOT EXISTS');
-      expect(content).toContain('tasks');
-      expect(content).toContain('runs');
-      expect(content).toContain('approvals');
-      expect(content).toContain('memory_items');
+      if (file === '001_initial_schema.sql') {
+        expect(content).toContain('tasks');
+        expect(content).toContain('runs');
+        expect(content).toContain('approvals');
+        expect(content).toContain('memory_items');
+      }
     }
   });
 });
