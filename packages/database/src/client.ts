@@ -27,6 +27,21 @@ export class DatabaseClient {
     return this.pool.query<T>(sql, params);
   }
 
+  public async transaction<T>(callback: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   public async healthCheck(): Promise<boolean> {
     try {
       const res = await this.pool.query('SELECT 1 as healthy');
