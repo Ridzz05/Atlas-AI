@@ -105,4 +105,16 @@ describe('@atlas/shared schema tests', () => {
     expect(env.MAX_DELEGATION_DEPTH).toBe(2);
     expect(env.EXTERNAL_WRITES_ENABLED).toBe(false);
   });
+
+  it('requires an API auth token in production', () => {
+    expect(() => EnvConfigSchema.parse({ NODE_ENV: 'production' })).toThrow('API_AUTH_TOKEN');
+  });
+
+  it('accepts a production configuration with an explicit auth token', () => {
+    const token = 'a'.repeat(32);
+    const env = EnvConfigSchema.parse({ NODE_ENV: 'production', API_AUTH_TOKEN: token });
+
+    expect(env.API_AUTH_TOKEN).toBe(token);
+    expect(env.CORS_ALLOWED_ORIGINS).toBe('http://localhost:3000');
+  });
 });

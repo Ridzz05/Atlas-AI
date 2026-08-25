@@ -39,4 +39,53 @@ describe('agent-service health endpoints', () => {
     const body = JSON.parse(response.body);
     expect(body.name).toBe('ATLAS AI OS Agent Service');
   });
+
+  it('protects API routes with the configured bearer token', async () => {
+    const token = 'a'.repeat(32);
+    const protectedServer = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'production', API_AUTH_TOKEN: token })
+    });
+
+    const unauthorized = await protectedServer.inject({
+      method: 'GET',
+      url: '/api/v1/info'
+    });
+    expect(unauthorized.statusCode).toBe(401);
+
+    const authorized = await protectedServer.inject({
+      method: 'GET',
+      url: '/api/v1/info',
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(authorized.statusCode).toBe(200);
+
+    const health = await protectedServer.inject({
+      method: 'GET',
+      url: '/health'
+    });
+    expect(health.statusCode).toBe(200);
+  });
+
+  it('emits CORS headers only for configured origins', async () => {
+    const corsServer = buildServer({
+      config: EnvConfigSchema.parse({
+        NODE_ENV: 'test',
+        CORS_ALLOWED_ORIGINS: 'https://dashboard.example.com'
+      })
+    });
+
+    const allowed = await corsServer.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { origin: 'https://dashboard.example.com' }
+    });
+    expect(allowed.headers['access-control-allow-origin']).toBe('https://dashboard.example.com');
+
+    const denied = await corsServer.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { origin: 'https://evil.example.com' }
+    });
+    expect(denied.headers['access-control-allow-origin']).toBeUndefined();
+  });
 });

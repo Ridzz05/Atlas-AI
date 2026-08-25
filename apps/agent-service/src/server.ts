@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
 import { DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
@@ -30,7 +31,37 @@ export interface ServerOptions {
 export function buildServer(options: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
 
-  app.register(cors, { origin: true });
+  const allowedOrigins = options.config.CORS_ALLOWED_ORIGINS
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
+  app.register(cors, { origin: allowedOrigins });
+
+  app.addHook('onRequest', async (req, reply) => {
+    const requestPath = req.url.split('?')[0];
+    const isPublicHealthEndpoint = requestPath === '/health' || requestPath === '/ready';
+    const expectedToken = options.config.API_AUTH_TOKEN;
+
+    if (expectedToken && !isPublicHealthEndpoint) {
+      const authorization = req.headers.authorization || '';
+      const providedToken = authorization.startsWith('Bearer ')
+        ? authorization.slice('Bearer '.length)
+        : '';
+      const provided = Buffer.from(providedToken);
+      const expected = Buffer.from(expectedToken);
+      const valid = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
+
+      if (!valid) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+    }
+
+    rootLogger.debug('Incoming request', {
+      method: req.method,
+      url: req.url,
+      ip: req.ip
+    });
+  });
 
   const eventBus = options.eventBus || new InMemoryEventBus();
   const registry = options.registry || defaultAgentRegistry;
@@ -118,14 +149,6 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   registerRunRoutes(app, {
     runner,
     runRepo: options.runRepo
-  });
-
-  app.addHook('onRequest', async (req) => {
-    rootLogger.debug('Incoming request', {
-      method: req.method,
-      url: req.url,
-      ip: req.ip
-    });
   });
 
   return app;
