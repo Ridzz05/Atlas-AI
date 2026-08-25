@@ -8,7 +8,7 @@ import {
   seedAgents,
   TaskRepository
 } from '@atlas/database';
-import { EventBus, InMemoryEventBus } from '@atlas/events';
+import { EventBus, PostgresEventBus } from '@atlas/events';
 import { BullMqTaskQueue, TaskQueue } from '@atlas/orchestration';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { AgentDefinition, EnvConfig } from '@atlas/shared';
@@ -53,7 +53,7 @@ export async function createAtlasRuntime(
   }
 
   const taskQueue = options.taskQueue || new BullMqTaskQueue({ redisUrl: config.REDIS_URL });
-  const eventBus = options.eventBus || new InMemoryEventBus();
+  const eventBus = options.eventBus || new PostgresEventBus(db);
   const provider = options.provider || createModelProvider({
     providerType: config.MODEL_PROVIDER,
     apiKey: config.MODEL_API_KEY
@@ -74,6 +74,9 @@ export async function createAtlasRuntime(
     registry,
     async close() {
       await taskQueue.close();
+      if ('close' in eventBus && typeof eventBus.close === 'function') {
+        await eventBus.close();
+      }
       await db.close();
     }
   };
