@@ -50,6 +50,9 @@ importers:
       '@atlas/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@atlas/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@atlas/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -197,6 +200,9 @@ importers:
       '@atlas/providers':
         specifier: workspace:*
         version: link:../../packages/providers
+      '@atlas/runtime':
+        specifier: workspace:*
+        version: link:../../packages/runtime
       '@atlas/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -368,6 +374,9 @@ importers:
       '@atlas/tools':
         specifier: workspace:*
         version: link:../tools
+      bullmq:
+        specifier: ^5.41.6
+        version: 5.81.3
     devDependencies:
       '@types/node':
         specifier: ^22.13.9
@@ -409,6 +418,40 @@ importers:
       '@atlas/observability':
         specifier: workspace:*
         version: link:../observability
+      '@atlas/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.20.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.1.3
+      typescript:
+        specifier: ^5.8.2
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.7
+        version: 3.2.7(@types/node@22.20.1)(jiti@1.21.7)
+
+  packages/runtime:
+    dependencies:
+      '@atlas/agents':
+        specifier: workspace:*
+        version: link:../agents
+      '@atlas/database':
+        specifier: workspace:*
+        version: link:../database
+      '@atlas/events':
+        specifier: workspace:*
+        version: link:../events
+      '@atlas/orchestration':
+        specifier: workspace:*
+        version: link:../orchestration
+      '@atlas/providers':
+        specifier: workspace:*
+        version: link:../providers
       '@atlas/shared':
         specifier: workspace:*
         version: link:../shared

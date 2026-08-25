@@ -1,16 +1,28 @@
 import { EnvConfigSchema } from '@atlas/shared';
 import { rootLogger } from '@atlas/observability';
+import { createAtlasRuntime } from '@atlas/runtime';
 import { AgentWorkerRunner } from './worker.js';
 
 async function main() {
   const config = EnvConfigSchema.parse(process.env);
-  const runner = new AgentWorkerRunner({ config });
+  const runtime = await createAtlasRuntime(config);
+  const runner = new AgentWorkerRunner({
+    config,
+    db: runtime.db,
+    taskRepo: runtime.taskRepo,
+    runRepo: runtime.runRepo,
+    eventBus: runtime.eventBus,
+    provider: runtime.provider,
+    registry: runtime.registry,
+    taskQueue: runtime.taskQueue
+  });
 
   await runner.start();
 
   const shutdown = async (signal: string) => {
     rootLogger.info(`Received ${signal}, shutting down worker...`);
     await runner.stop();
+    await runtime.db.close();
     process.exit(0);
   };
 

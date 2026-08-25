@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "composite": true,
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo"
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../events" },
+    { "path": "../database" },
+    { "path": "../providers" },
+    { "path": "../agents" },
+    { "path": "../orchestration" }
+  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test"]
+}

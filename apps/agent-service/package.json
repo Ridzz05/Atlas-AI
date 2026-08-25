@@ -22,6 +22,7 @@
     "@atlas/memory": "workspace:*",
     "@atlas/tools": "workspace:*",
     "@atlas/orchestration": "workspace:*",
+    "@atlas/runtime": "workspace:*",
     "fastify": "^5.2.1",
     "@fastify/cors": "^10.0.2"
   },

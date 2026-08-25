@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
 import { DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
-import { InMemoryEventBus } from '@atlas/events';
+import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
 import {
@@ -21,9 +21,10 @@ export interface ServerOptions {
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
   provider?: ModelProvider;
-  eventBus?: InMemoryEventBus;
+  eventBus?: EventBus;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
+  processQueue?: boolean;
 }
 
 export function buildServer(options: ServerOptions): FastifyInstance {
@@ -55,20 +56,20 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   });
 
   const taskQueue = options.taskQueue || new InMemoryTaskQueue();
-  taskQueue.process(options.config.MAX_CONCURRENT_AGENT_RUNS, async (job) => {
-    if (job.agent.role === 'orchestrator') {
-      // Chief delegates through multi-agent DAG
-      return delegator.executePlan(job.task);
-    } else {
-      // Specialist runs directly
+  if (options.processQueue !== false) {
+    taskQueue.process(options.config.MAX_CONCURRENT_AGENT_RUNS, async (job) => {
+      if (job.agent.role === 'orchestrator') {
+        return delegator.executePlan(job.task);
+      }
+
       return runner.run({
         task: job.task,
         agent: job.agent,
         initialPrompt: job.prompt,
         runId: job.runId
       });
-    }
-  });
+    });
+  }
 
   // Health and readiness endpoints
   app.get('/health', async (_req, reply) => {

@@ -16,7 +16,8 @@
     { "path": "../../packages/agents" },
     { "path": "../../packages/memory" },
     { "path": "../../packages/tools" },
-    { "path": "../../packages/orchestration" }
+    { "path": "../../packages/orchestration" },
+    { "path": "../../packages/runtime" }
   ],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

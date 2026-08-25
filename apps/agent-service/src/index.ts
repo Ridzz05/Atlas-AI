@@ -1,10 +1,22 @@
 import { EnvConfigSchema } from '@atlas/shared';
 import { rootLogger } from '@atlas/observability';
+import { createAtlasRuntime } from '@atlas/runtime';
 import { buildServer } from './server.js';
 
 async function main() {
   const config = EnvConfigSchema.parse(process.env);
-  const server = buildServer({ config });
+  const runtime = await createAtlasRuntime(config);
+  const server = buildServer({
+    config,
+    db: runtime.db,
+    taskRepo: runtime.taskRepo,
+    runRepo: runtime.runRepo,
+    eventBus: runtime.eventBus,
+    provider: runtime.provider,
+    registry: runtime.registry,
+    taskQueue: runtime.taskQueue,
+    processQueue: false
+  });
 
   const port = config.PORT || 4000;
   const host = '0.0.0.0';
@@ -23,6 +35,7 @@ async function main() {
   const shutdown = async (signal: string) => {
     rootLogger.info(`Received ${signal}, closing agent-service gracefully...`);
     await server.close();
+    await runtime.close();
     process.exit(0);
   };
 

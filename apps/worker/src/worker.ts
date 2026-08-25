@@ -1,7 +1,7 @@
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
 import { DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
-import { InMemoryEventBus } from '@atlas/events';
+import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
 import {
@@ -17,7 +17,7 @@ export interface WorkerRunnerOptions {
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
   provider?: ModelProvider;
-  eventBus?: InMemoryEventBus;
+  eventBus?: EventBus;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
 }

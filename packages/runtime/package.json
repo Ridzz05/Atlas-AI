@@ -1,6 +1,7 @@
 {
-  "name": "@atlas/orchestration",
+  "name": "@atlas/runtime",
   "version": "0.1.0",
+  "private": true,
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
@@ -16,16 +17,12 @@
     "clean": "rimraf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {
-    "@atlas/shared": "workspace:*",
-    "@atlas/policy": "workspace:*",
-    "@atlas/events": "workspace:*",
-    "@atlas/observability": "workspace:*",
-    "@atlas/database": "workspace:*",
-    "@atlas/providers": "workspace:*",
     "@atlas/agents": "workspace:*",
-    "@atlas/memory": "workspace:*",
-    "@atlas/tools": "workspace:*",
-    "bullmq": "^5.41.6"
+    "@atlas/database": "workspace:*",
+    "@atlas/events": "workspace:*",
+    "@atlas/orchestration": "workspace:*",
+    "@atlas/providers": "workspace:*",
+    "@atlas/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.13.9",
