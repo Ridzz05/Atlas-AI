@@ -225,6 +225,10 @@ export class AtlasTelegramBot {
     return this.router;
   }
 
+  public getStatus(): { isRunning: boolean } {
+    return { isRunning: this.pollingPromise !== null };
+  }
+
   private async updatePausedState(paused: boolean, actorId = 'telegram-owner'): Promise<void> {
     if (this.options.stateRepo) {
       const state = await this.options.stateRepo.setPaused(paused, actorId);

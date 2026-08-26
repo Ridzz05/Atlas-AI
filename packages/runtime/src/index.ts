@@ -21,6 +21,8 @@ import { BullMqTaskQueue, TaskQueue } from '@atlas/orchestration';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { AgentDefinition, EnvConfig } from '@atlas/shared';
 
+export * from './health.js';
+
 export interface AtlasRuntime {
   db: DatabaseClient;
   taskRepo: TaskRepository;

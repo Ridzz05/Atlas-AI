@@ -1,6 +1,6 @@
 import { EnvConfigSchema } from '@atlas/shared';
 import { rootLogger } from '@atlas/observability';
-import { createAtlasRuntime } from '@atlas/runtime';
+import { createAtlasRuntime, createServiceHealthServer } from '@atlas/runtime';
 import { parseTelegramConfig } from './config.js';
 import { AtlasTelegramBot } from './bot.js';
 
@@ -19,9 +19,17 @@ async function main() {
     taskQueue: runtime.taskQueue
   });
   await bot.start();
+  const healthServer = createServiceHealthServer({
+    service: 'telegram-bot',
+    isRunning: () => bot.getStatus().isRunning,
+    database: runtime.db,
+    queue: runtime.taskQueue
+  });
+  await healthServer.start();
 
   const shutdown = async (signal: string) => {
     rootLogger.info(`Received ${signal}, shutting down Telegram bot...`);
+    await healthServer.stop();
     await bot.stop();
     await runtime.close();
     process.exit(0);

@@ -1,6 +1,6 @@
 import { EnvConfigSchema } from '@atlas/shared';
 import { rootLogger } from '@atlas/observability';
-import { createAtlasRuntime } from '@atlas/runtime';
+import { createAtlasRuntime, createServiceHealthServer } from '@atlas/runtime';
 import { AgentWorkerRunner } from './worker.js';
 
 async function main() {
@@ -26,9 +26,17 @@ async function main() {
   });
 
   await runner.start();
+  const healthServer = createServiceHealthServer({
+    service: 'worker',
+    isRunning: () => runner.getStatus().isRunning,
+    database: runtime.db,
+    queue: runtime.taskQueue
+  });
+  await healthServer.start();
 
   const shutdown = async (signal: string) => {
     rootLogger.info(`Received ${signal}, shutting down worker...`);
+    await healthServer.stop();
     await runner.stop();
     await runtime.close();
     process.exit(0);
