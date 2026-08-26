@@ -98,6 +98,22 @@ describe('agent-service metadata endpoints', () => {
     expect(invalidId.statusCode).toBe(400);
   });
 
+  it('rejects UUID-shaped but invalid memory ids before repository access', async () => {
+    const findById = vi.fn();
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      memoryStore: { findById } as any
+    });
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/memory/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(findById).not.toHaveBeenCalled();
+  });
+
   it('rejects invalid UUID filters before querying metadata repositories', async () => {
     const artifactList = vi.fn().mockResolvedValue([]);
     const auditList = vi.fn().mockResolvedValue([]);

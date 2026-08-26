@@ -4,6 +4,8 @@ import type { MemoryStore } from '@atlas/memory';
 import { MemoryStatusSchema, MemoryTypeSchema } from '@atlas/shared';
 import { z } from 'zod';
 
+const MemoryIdSchema = z.string().uuid();
+
 export interface MetadataRouteOptions {
   artifactRepo?: ArtifactRepository;
   auditRepo?: AuditRepository;
@@ -151,7 +153,7 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
   app.get('/api/v1/memory/:id', async (req, reply) => {
     if (!options.memoryStore) return reply.status(200).send({ item: null, durable: false });
     const { id } = req.params as { id: string };
-    if (!/^[0-9a-f-]{36}$/i.test(id)) return reply.status(400).send({ error: 'Memory id must be a UUID.' });
+    if (!MemoryIdSchema.safeParse(id).success) return reply.status(400).send({ error: 'Memory id must be a UUID.' });
     const item = await options.memoryStore.findById(id);
     if (!item) return reply.status(404).send({ error: 'Memory item not found.' });
     return reply.status(200).send({ item, durable: true });
