@@ -27,7 +27,7 @@
 
 - [x] Validate plans: agent allowlist, max eight steps, unique IDs, dependency references, and no cycles.
 - [x] Enforce configured depth, concurrency, child count, per-run timeout, and cancellation paths.
-- [ ] Enforce complete per-agent tool allowlists/scopes and global daily budget in runtime execution.
+- [x] Enforce complete per-agent tool allowlists/scopes and durable global daily/per-run budget in runtime execution.
 - [x] Implement persisted approval requests, exact payload hash, signature, expiry, owner decision, atomic one-time execution, and resume queueing.
 - [x] Implement durable emergency stop, pause/resume, reject, and revise state across processes; restart recovery still needs an environment drill.
 
@@ -36,7 +36,7 @@
 - [x] Implement Telegram polling transport, allowlist, response delivery, and callback acknowledgement.
 - [x] Route Telegram and dashboard approval/task mutations through durable repositories where available.
 - [x] Replace dashboard operational sample data with API-backed pages and honest unavailable states.
-- [ ] Add reconnect replay semantics for authenticated realtime events; the PostgreSQL-backed SSE stream and cross-process event delivery are implemented.
+- [x] Add reconnect replay semantics for authenticated realtime events; the PostgreSQL-backed SSE stream replays durable events after `Last-Event-ID` and preserves the live-event handoff.
 
 ## Checkpoint: User lifecycle
 
@@ -63,7 +63,7 @@
 
 ## Current execution checkpoint
 
-Implemented through commit `6ed8194`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE, persisted message/tool-call history, scoped MemoryTools, artifact/audit repositories, memory query API, API-backed dashboard observability pages, and CI lint/build/Compose validation. Full local gates pass: lint, typecheck 26/26, test 26/26, and build 15/15. Docker-backed boot/recovery, real providers/connectors, reconnect replay, backup restore, and full formatter enforcement remain open.
+Implemented through commit `c691872`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE with reconnect replay, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement across planner/specialist/QA/synthesis stages, worker leases/heartbeats/stale-run recovery, artifact/audit repositories, memory query API, API-backed dashboard observability pages, and CI lint/build/Compose validation. Full local gates pass: lint 141 files, typecheck 26/26, test 26/26, and build 15/15. Docker-backed boot/recovery, real providers/connectors, backup restore, and full formatter enforcement remain open.
 
 ## Final release checkpoint
 

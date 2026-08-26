@@ -11,7 +11,7 @@
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS/rate limiting, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools, authenticated event streaming, metadata repositories/APIs, and API-backed dashboard observability pages are implemented. External writes remain disabled: an approved outbound connector, real research adapters, cross-restart recovery drill, backup verification, event replay, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS/rate limiting, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, and API-backed dashboard observability pages are implemented and locally tested. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -523,7 +523,8 @@ Agent tidak boleh menulis kesimpulan spekulatif sebagai fakta. Bila informasi be
 | `integrations` | Metadata koneksi, tanpa secret mentah |
 | `audit_events` | Append-only audit trail |
 | `scheduled_jobs` | Cron dan delayed execution |
-| `budgets` | Limit per task, agent, dan periode |
+| `budgets` | Limit global harian dan per-run; aggregate per-agent memerlukan policy limit terpisah |
+| `budget_reservations` | Reservasi biaya lintas proses dan settlement biaya aktual |
 
 ### 12.2 Status penting
 
@@ -1200,7 +1201,7 @@ Agent baru seperti Iris, Apollo, Calliope, atau dedicated finance agent hanya di
 |---|---|
 | Agent memberikan fakta salah | Source requirement, confidence, Argus QA |
 | Prompt injection | Untrusted-content boundary dan Tool Gateway |
-| Biaya membengkak | Per-run, per-agent, dan daily budgets |
+| Biaya membengkak | Reservasi per-run dan daily budget; aggregate per-agent perlu policy limit eksplisit |
 | Delegation loop | Hard max depth dan child-task count |
 | Duplicate external action | Approval token dan idempotency key |
 | Memory menjadi basi | Freshness metadata dan stale review |
@@ -1245,6 +1246,6 @@ Langkah berikutnya adalah menutup release gate pada lingkungan yang memiliki Doc
 2. boot Compose dari database kosong dan verifikasi migration/agent seeding;
 3. uji task execution lintas restart API/worker, duplicate Telegram update, pause/emergency stop, cancellation, dan approval execute-once;
 4. buat backup PostgreSQL, lakukan restore ke database terpisah, lalu verifikasi artifact/message/tool-call history;
-5. tambahkan reconnect replay event dan formatter enforcement sebelum menyebut production-ready.
+5. verifikasi reconnect replay, budget reservation/settlement, worker lease recovery, dan backup restore pada host Docker; formatter enforcement tetap menjadi quality follow-up sebelum menyebut production-ready.
 
 External writes tetap nonaktif sampai connector outbound, research provider, model provider, dan owner approval untuk production dipilih serta diuji.

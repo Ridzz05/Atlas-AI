@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools, PostgreSQL event streaming, metadata APIs, and API-backed dashboard task/approval/agent/artifact/audit/memory views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, event replay, and production-provider verification still require a Docker host or external integration environment.
+> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery, metadata APIs, and API-backed dashboard task/approval/agent/artifact/audit/memory views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, and production-provider verification still require a Docker host or external integration environment.
 
 ---
 
@@ -122,4 +122,7 @@ When an unexpected agent behavior or runaway task is detected:
 
 - Global daily spending limit is configured in `.env` (`GLOBAL_DAILY_BUDGET_USD=5.00`).
 - Each individual run is hard-capped at `$1.00 USD` (or agent specific limits).
-- If daily budget is reached, new tasks are rejected with `BUDGET_EXCEEDED` error.
+- A budget reservation is acquired before each planner, specialist, Argus, and synthesis model call; the reservation is settled with actual provider cost after the call.
+- If a global or per-run budget is reached, the provider call is rejected with `BUDGET_EXCEEDED` and no model call is started.
+- Reservations older than 15 minutes are released during runtime startup. Worker leases are renewed by heartbeat and expired executable runs are marked failed during worker startup recovery.
+- Verify budget and lease state directly in PostgreSQL during a recovery drill before enabling production traffic.
