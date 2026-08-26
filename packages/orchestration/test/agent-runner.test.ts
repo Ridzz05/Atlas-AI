@@ -189,4 +189,37 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.error).toContain('Approval pending');
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
   });
+
+  it('pauses a run when a tool creates a pending human approval', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [{
+        content: 'Requesting approval.',
+        toolCalls: [{ id: 'tc-approval', name: 'communication.send_approved', arguments: {} }]
+      }]
+    });
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        success: false,
+        approvalPending: true,
+        approvalId: '123e4567-e89b-12d3-a456-426614174003',
+        error: 'Action requires human approval.'
+      })
+    };
+
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      toolExecutor
+    });
+
+    const summary = await runner.run({
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Request protected action'
+    });
+
+    expect(summary.status).toBe('waiting_approval');
+    expect(summary.error).toContain('human approval');
+    expect(summary.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
+  });
 });

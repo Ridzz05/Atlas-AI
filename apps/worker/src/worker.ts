@@ -60,7 +60,8 @@ export class AgentWorkerRunner {
       baseContext: {
         externalWritesEnabled: options.config.EXTERNAL_WRITES_ENABLED,
         approvalSecretKey: options.config.ENCRYPTION_KEY,
-        approvalExecutionStore: options.approvalRepo
+        approvalExecutionStore: options.approvalRepo,
+        approvalRequestStore: options.approvalRepo
       }
     });
 

@@ -33,7 +33,8 @@ export interface DelegationResult {
   qaResult?: QAResult;
   finalSynthesis: string;
   totalCostUsd: number;
-  status: 'completed' | 'failed' | 'cancelled';
+  status: 'completed' | 'failed' | 'cancelled' | 'waiting_approval';
+  approvalId?: string;
 }
 
 export class TaskDelegator {
@@ -172,6 +173,17 @@ export class TaskDelegator {
           signal
         });
 
+        if (summary.status === 'waiting_approval') {
+          totalCostUsd += summary.totalCostUsd;
+          return {
+            stepId: step.id,
+            agentId: step.agent,
+            content: '',
+            status: 'waiting_approval' as const,
+            approvalId: summary.approvalId
+          };
+        }
+
         if (summary.status !== 'completed') {
           throw new Error(`Subtask ${step.id} (${step.agent}) failed: ${summary.error || 'Unknown error'}`);
         }
@@ -180,11 +192,35 @@ export class TaskDelegator {
         return {
           stepId: step.id,
           agentId: step.agent,
-          content: summary.finalContent
+          content: summary.finalContent,
+          status: 'completed' as const
         };
       });
 
       const batchResults = await Promise.all(batchPromises);
+      const waitingResult = batchResults.find(result => result.status === 'waiting_approval');
+      if (waitingResult) {
+        const finalSynthesis = `Task is waiting for human approval${waitingResult.approvalId ? ` (${waitingResult.approvalId})` : ''} before continuing.`;
+        if (this.options.taskRepo) {
+          await this.options.taskRepo.updateStatus(parentTask.id, 'approval_pending', {
+            error: finalSynthesis,
+            result: {
+              approvalId: waitingResult.approvalId,
+              subtaskCount: subtaskResults.size,
+              totalCostUsd
+            }
+          });
+        }
+        return {
+          parentTaskId: parentTask.id,
+          plan,
+          subtaskResults,
+          finalSynthesis,
+          totalCostUsd,
+          status: 'waiting_approval',
+          approvalId: waitingResult.approvalId
+        };
+      }
 
       for (const res of batchResults) {
         subtaskResults.set(res.stepId, { agentId: res.agentId, content: res.content });

@@ -36,13 +36,14 @@ export interface AgentRunSummary {
   runId: string;
   taskId: string;
   agentId: string;
-  status: 'completed' | 'failed' | 'cancelled' | 'timed_out';
+  status: 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'waiting_approval';
   finalContent: string;
   turnsCount: number;
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCostUsd: number;
   error?: string;
+  approvalId?: string;
 }
 
 export class AgentRunner {
@@ -85,8 +86,9 @@ export class AgentRunner {
     let totalCostUsd = 0;
     let turnsCount = 0;
     let finalContent = '';
-    let status: 'completed' | 'failed' | 'cancelled' | 'timed_out' = 'completed';
+    let status: 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'waiting_approval' = 'completed';
     let errorMessage: string | undefined;
+    let approvalId: string | undefined;
 
     const messages: ChatMessage[] = [
       { role: 'user', content: input.initialPrompt }
@@ -187,7 +189,14 @@ export class AgentRunner {
             }
 
             if (output.success === false) {
-              throw new Error(String(output.error || `Tool '${tc.name}' rejected execution.`));
+              const toolError = new Error(String(output.error || `Tool '${tc.name}' rejected execution.`));
+              if (output.approvalPending === true) {
+                (toolError as Error & { approvalPending?: boolean; approvalId?: string }).approvalPending = true;
+                (toolError as Error & { approvalPending?: boolean; approvalId?: string }).approvalId = typeof output.approvalId === 'string'
+                  ? output.approvalId
+                  : undefined;
+              }
+              throw toolError;
             }
 
             messages.push({
@@ -237,10 +246,15 @@ export class AgentRunner {
     } catch (err: any) {
       const isAbort = controller.signal.aborted || String(err?.message || '').includes('aborted');
       const isTimeout = String(err?.message || '').includes('Timeout');
+      const isApprovalPending = err?.approvalPending === true;
 
       if (isTimeout) {
         status = 'timed_out';
         errorMessage = 'Execution timed out';
+      } else if (isApprovalPending) {
+        status = 'waiting_approval';
+        approvalId = typeof err?.approvalId === 'string' ? err.approvalId : undefined;
+        errorMessage = String(err?.message || 'Execution is waiting for human approval');
       } else if (isAbort) {
         status = 'cancelled';
         errorMessage = String(controller.signal.reason || err?.message || 'Execution cancelled');
@@ -255,16 +269,18 @@ export class AgentRunner {
         await this.options.runRepo.updateStatus(runId, status as any, errorMessage);
       }
       if (this.options.taskRepo) {
-        await this.options.taskRepo.updateStatus(taskId, status as any, { error: errorMessage });
+        await this.options.taskRepo.updateStatus(taskId, status === 'waiting_approval' ? 'approval_pending' : status as any, { error: errorMessage });
       }
 
       await this.publishEvent({
         id: crypto.randomUUID(),
-        type: status === 'cancelled' ? 'run.cancelled' : 'run.failed',
+        type: status === 'waiting_approval'
+          ? 'approval.requested'
+          : status === 'cancelled' ? 'run.cancelled' : 'run.failed',
         taskId,
         runId,
         agentId,
-        payload: { error: errorMessage },
+        payload: { error: errorMessage, approvalId },
         timestamp: new Date().toISOString()
       });
 
@@ -283,7 +299,8 @@ export class AgentRunner {
       totalInputTokens,
       totalOutputTokens,
       totalCostUsd,
-      error: errorMessage
+      error: errorMessage,
+      approvalId
     };
   }
 

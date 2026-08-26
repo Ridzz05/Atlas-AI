@@ -239,6 +239,34 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(approvalExecutionStore.finalizeExecution).toHaveBeenCalledTimes(1);
   });
 
+  it('creates a durable approval request when a protected tool has no token', async () => {
+    const registry = new ToolRegistry();
+    registry.register(SendApprovedCommunicationTool);
+    const approvalRequestStore = {
+      requestApproval: vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174003' })
+    };
+
+    const result = await registry.execute('communication.send_approved', {
+      recipient: '+62812345678',
+      channel: 'whatsapp',
+      content: 'Approval required'
+    }, {
+      taskId: '123e4567-e89b-12d3-a456-426614174000',
+      runId: '123e4567-e89b-12d3-a456-426614174001',
+      agentId: 'hermes',
+      externalWritesEnabled: true,
+      approvalRequestStore
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
+    expect(result.error).toContain('human approval');
+    expect(approvalRequestStore.requestApproval).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'communication.send_approved',
+      taskId: '123e4567-e89b-12d3-a456-426614174000'
+    }));
+  });
+
   it('calculates 10-dimension rubric scores and ranks leads properly', () => {
     const gym1: LeadScoringInput = {
       leadId: 'gym-1',

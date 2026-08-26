@@ -136,4 +136,43 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
     expect(result.qaResult?.verdict).toBe('BLOCKED');
     expect(result.finalSynthesis).toContain('Task blocked by Argus QA gate');
   });
+
+  it('pauses the parent task when a child run is waiting for approval', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: JSON.stringify({
+            goal: 'Approval task',
+            steps: [{ id: 'step_1', agent: 'hermes', objective: 'Prepare protected send', depends_on: [] }],
+            approval_points: ['communication.send_approved'],
+            estimated_cost_usd: 0.1
+          })
+        },
+        {
+          content: 'Requesting approval',
+          toolCalls: [{ id: 'tc-approval', name: 'communication.send_approved', arguments: {} }]
+        }
+      ]
+    });
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        success: false,
+        approvalPending: true,
+        approvalId: '123e4567-e89b-12d3-a456-426614174003',
+        error: 'Waiting for human approval.'
+      })
+    };
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      toolExecutor
+    });
+
+    const result = await delegator.executePlan(parentTask);
+
+    expect(result.status).toBe('waiting_approval');
+    expect(result.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
+    expect(result.finalSynthesis).toContain('waiting for human approval');
+  });
 });

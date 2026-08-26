@@ -62,6 +62,32 @@ export class ToolRegistry {
     if (policy.requiresApproval) {
       const token = context.approvalToken;
       if (!token || !context.approvalSecretKey) {
+        if (context.approvalRequestStore) {
+          const payload = parseResult.data as Record<string, unknown>;
+          const target = typeof payload.recipient === 'string'
+            ? payload.recipient
+            : typeof payload.target === 'string' ? payload.target : name;
+          const approval = await context.approvalRequestStore.requestApproval({
+            taskId: context.taskId,
+            runId: context.runId,
+            agentId: context.agentId,
+            action: name,
+            target,
+            payload,
+            reason: policy.reason || `Action '${name}' requires human approval.`,
+            riskLevel: policy.riskLevel,
+            expiresAt: new Date(Date.now() + 60 * 60 * 1000)
+          });
+          return {
+            success: false,
+            error: `Action '${name}' requires human approval before execution.`,
+            approvalId: approval?.id,
+            approvalPending: true,
+            durationMs: Date.now() - startTime,
+            riskLevel: policy.riskLevel
+          };
+        }
+
         rootLogger.warn(`Tool '${name}' requires an approval token and verification key`);
         return {
           success: false,

@@ -44,6 +44,20 @@ export interface ApprovalExecutionStore {
   ): Promise<unknown>;
 }
 
+export interface ApprovalRequestStore {
+  requestApproval(input: {
+    taskId: string;
+    runId: string;
+    agentId: string;
+    action: string;
+    target: string;
+    payload: Record<string, unknown>;
+    reason: string;
+    riskLevel: ToolRiskLevel;
+    expiresAt: Date;
+  }): Promise<{ id: string } | null>;
+}
+
 export interface ToolContext {
   taskId: string;
   runId: string;
@@ -53,6 +67,7 @@ export interface ToolContext {
   approvalToken?: ApprovalToken;
   approvalSecretKey?: string;
   approvalExecutionStore?: ApprovalExecutionStore;
+  approvalRequestStore?: ApprovalRequestStore;
   communicationSender?: CommunicationSender;
   researchProvider?: ResearchProvider;
   signal?: AbortSignal;
@@ -73,6 +88,8 @@ export interface ToolExecutionResponse {
   success: boolean;
   output?: unknown;
   error?: string;
+  approvalId?: string;
+  approvalPending?: boolean;
   durationMs: number;
   riskLevel: ToolRiskLevel;
 }

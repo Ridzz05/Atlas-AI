@@ -25,7 +25,9 @@ export class ToolGatewayExecutor implements ToolExecutor {
     if (!result.success) {
       return {
         success: false,
-        error: result.error || `Tool '${toolCall.name}' rejected execution.`
+        error: result.error || `Tool '${toolCall.name}' rejected execution.`,
+        approvalId: result.approvalId,
+        approvalPending: result.approvalPending
       };
     }
 

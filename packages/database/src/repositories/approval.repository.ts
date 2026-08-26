@@ -39,6 +39,69 @@ export class ApprovalRepository {
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
+  public async requestApproval(input: {
+    taskId: string;
+    runId: string;
+    agentId: string;
+    action: string;
+    target: string;
+    payload: Record<string, unknown>;
+    reason: string;
+    riskLevel: ApprovalRequest['riskLevel'];
+    expiresAt: Date;
+  }): Promise<ApprovalRequest | null> {
+    const id = crypto.randomUUID();
+    const payloadHash = TokenVerifier.hashPayload(input.payload);
+    const inserted = await this.db.query(
+      `WITH expired_requests AS (
+         UPDATE approvals
+         SET status = 'expired',
+             decided_at = COALESCE(decided_at, NOW()),
+             decision_note = COALESCE(decision_note, 'Approval request expired before retry.')
+         WHERE task_id = $2
+           AND run_id = $3
+           AND action = $5
+           AND payload_hash = $8
+           AND status IN ('pending', 'approved', 'executing')
+           AND expires_at <= NOW()
+       )
+       INSERT INTO approvals (
+         id, task_id, run_id, agent_id, action, target, payload, payload_hash,
+         reason, risk_level, status, expires_at
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'pending', $11)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
+      [
+        id,
+        input.taskId,
+        input.runId,
+        input.agentId,
+        input.action,
+        input.target,
+        JSON.stringify(input.payload),
+        payloadHash,
+        input.reason,
+        input.riskLevel,
+        input.expiresAt
+      ]
+    );
+    if (inserted.rows[0]) return this.mapRow(inserted.rows[0]);
+
+    const existing = await this.db.query(
+      `SELECT * FROM approvals
+       WHERE task_id = $1
+         AND run_id = $2
+         AND action = $3
+         AND payload_hash = $4
+         AND status IN ('pending', 'approved', 'executing')
+         AND expires_at > NOW()
+       ORDER BY requested_at DESC
+       LIMIT 1`,
+      [input.taskId, input.runId, input.action, payloadHash]
+    );
+    return existing.rows[0] ? this.mapRow(existing.rows[0]) : null;
+  }
+
   public async issueExecutionToken(id: string, ttlSeconds = 3600): Promise<ApprovalToken | null> {
     if (!this.approvalSecretKey) {
       throw new Error('Approval token signing key is not configured.');

@@ -134,4 +134,29 @@ describe('ApprovalRepository', () => {
       expect.arrayContaining(['executed', row.id])
     );
   });
+
+  it('creates one durable approval request for an exact task, action, and payload', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValueOnce({ rows: [{ ...row, status: 'pending' }] })
+    } as any;
+    const repository = new ApprovalRepository(db, 'approval-secret-key-for-tests-32-chars');
+
+    const approval = await repository.requestApproval({
+      taskId: row.task_id,
+      runId: row.run_id,
+      agentId: row.agent_id,
+      action: row.action,
+      target: row.target,
+      payload: row.payload,
+      reason: row.reason,
+      riskLevel: row.risk_level,
+      expiresAt: new Date(Date.now() + 60_000)
+    });
+
+    expect(approval?.id).toBe(row.id);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('ON CONFLICT DO NOTHING'),
+      expect.arrayContaining([row.task_id, row.run_id, row.action])
+    );
+  });
 });

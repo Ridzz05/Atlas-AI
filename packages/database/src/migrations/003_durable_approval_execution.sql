@@ -15,3 +15,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_execution_token_signature
 
 CREATE INDEX IF NOT EXISTS idx_approvals_execution_state
     ON approvals(status, execution_started_at);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_approvals_active_request_dedup
+    ON approvals(task_id, run_id, action, payload_hash)
+    WHERE status IN ('pending', 'approved', 'executing');
