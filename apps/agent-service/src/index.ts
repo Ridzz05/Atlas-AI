@@ -24,6 +24,7 @@ async function main() {
     provider: runtime.provider,
     registry: runtime.registry,
     taskQueue: runtime.taskQueue,
+    redisUrl: config.REDIS_URL,
     processQueue: false
   });
 

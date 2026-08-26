@@ -19,6 +19,7 @@ import { registerRunRoutes } from './routes/runs.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
+import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
 export interface ServerOptions {
   config: EnvConfig;
@@ -38,6 +39,8 @@ export interface ServerOptions {
   eventBus?: EventBus;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
+  redisUrl?: string;
+  rateLimiter?: RateLimiter;
   processQueue?: boolean;
 }
 
@@ -45,7 +48,23 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const rateLimitWindowMs = options.config.API_RATE_LIMIT_WINDOW_SECONDS * 1000;
   const rateLimitMax = options.config.API_RATE_LIMIT_MAX_REQUESTS;
-  const rateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+  const rateLimiter = options.rateLimiter || (options.redisUrl
+    ? new RedisRateLimiter({
+      redisUrl: options.redisUrl,
+      windowMs: rateLimitWindowMs,
+      maxRequests: rateLimitMax
+    })
+    : new InMemoryRateLimiter({
+      windowMs: rateLimitWindowMs,
+      maxRequests: rateLimitMax
+    }));
+  const ownsRateLimiter = !options.rateLimiter;
+
+  app.addHook('onClose', async () => {
+    if (ownsRateLimiter) {
+      await rateLimiter.close();
+    }
+  });
 
   const allowedOrigins = options.config.CORS_ALLOWED_ORIGINS
     .split(',')
@@ -63,23 +82,19 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     reply.header('x-request-id', requestId);
 
     if (!isPublicHealthEndpoint && requestPath.startsWith('/api/')) {
-      const now = Date.now();
       const key = req.ip || 'unknown';
-      const current = rateLimitBuckets.get(key);
-      const bucket = !current || current.resetAt <= now
-        ? { count: 0, resetAt: now + rateLimitWindowMs }
-        : current;
-
-      if (bucket.count >= rateLimitMax) {
-        const retryAfterSeconds = Math.max(1, Math.ceil((bucket.resetAt - now) / 1000));
-        return reply
-          .header('retry-after', String(retryAfterSeconds))
-          .status(429)
-          .send({ error: 'Too many API requests. Please retry later.' });
+      try {
+        const decision = await rateLimiter.check(key);
+        if (!decision.allowed) {
+          return reply
+            .header('retry-after', String(decision.retryAfterSeconds || 1))
+            .status(429)
+            .send({ error: 'Too many API requests. Please retry later.' });
+        }
+      } catch (err) {
+        rootLogger.error('Distributed rate limiter unavailable', { error: String(err) });
+        return reply.status(503).send({ error: 'Rate limiter unavailable. Please retry later.' });
       }
-
-      bucket.count += 1;
-      rateLimitBuckets.set(key, bucket);
     }
 
     const expectedToken = options.config.API_AUTH_TOKEN;

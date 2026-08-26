@@ -208,4 +208,18 @@ describe('agent-service health endpoints', () => {
     expect(third.headers['retry-after']).toBeDefined();
     expect(health.statusCode).toBe(200);
   });
+
+  it('fails closed when the distributed rate limiter is unavailable', async () => {
+    const rateLimiter = {
+      check: vi.fn().mockRejectedValue(new Error('redis offline')),
+      close: vi.fn().mockResolvedValue(undefined)
+    };
+    const protectedServer = buildServer({ config, rateLimiter });
+
+    const response = await protectedServer.inject({ method: 'GET', url: '/api/v1/info' });
+
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body).error).toContain('Rate limiter unavailable');
+    expect(rateLimiter.check).toHaveBeenCalledWith('127.0.0.1');
+  });
 });
