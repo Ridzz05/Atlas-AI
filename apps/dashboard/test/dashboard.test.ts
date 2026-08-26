@@ -103,4 +103,12 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(directApiIndex).toBeGreaterThan(dashboardProxyIndex);
     expect(caddy.slice(dashboardProxyIndex, directApiIndex)).toContain('reverse_proxy dashboard:3000');
   });
+
+  it('excludes local secrets and generated data from Docker build contexts', () => {
+    const dockerignore = readFileSync(resolve(process.cwd(), '../../.dockerignore'), 'utf8');
+    expect(dockerignore.split(/\r?\n/)).toContain('.env');
+    expect(dockerignore.split(/\r?\n/)).toContain('node_modules');
+    expect(dockerignore.split(/\r?\n/)).toContain('.git');
+    expect(dockerignore.split(/\r?\n/)).toContain('**/data');
+  });
 });

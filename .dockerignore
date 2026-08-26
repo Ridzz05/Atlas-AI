@@ -1,0 +1,22 @@
+# Never send local credentials or repository metadata to the Docker daemon.
+.env
+.env.*
+!.env.example
+.git
+.git/**
+
+# Dependencies and generated build output are recreated inside the image.
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+*.tsbuildinfo
+.turbo
+coverage
+
+# Runtime/test data belongs in named volumes or test workspaces, not images.
+data
+**/data
+*.log
