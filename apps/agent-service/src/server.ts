@@ -110,7 +110,9 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   const registry = options.registry || defaultAgentRegistry;
   const provider = options.provider || createModelProvider({
     providerType: options.config.MODEL_PROVIDER,
-    apiKey: options.config.MODEL_API_KEY
+    apiKey: options.config.MODEL_API_KEY,
+    baseUrl: options.config.MODEL_BASE_URL,
+    model: options.config.MODEL_NAME
   });
 
   const runner = new AgentRunner({

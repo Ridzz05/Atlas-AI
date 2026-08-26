@@ -144,4 +144,22 @@ describe('@atlas/shared schema tests', () => {
   it('rejects an unsupported model provider', () => {
     expect(() => EnvConfigSchema.parse({ MODEL_PROVIDER: 'typo-provider' })).toThrow('MODEL_PROVIDER');
   });
+
+  it('requires provider-specific model configuration in production', () => {
+    const base = {
+      NODE_ENV: 'production',
+      API_AUTH_TOKEN: 'a'.repeat(32),
+      ENCRYPTION_KEY: 'b'.repeat(64),
+      MODEL_PROVIDER: 'groq',
+      MODEL_API_KEY: 'test-model-key'
+    };
+
+    expect(() => EnvConfigSchema.parse(base)).toThrow('MODEL_NAME');
+    expect(() => EnvConfigSchema.parse({ ...base, MODEL_NAME: 'llama-model' })).not.toThrow();
+    expect(() => EnvConfigSchema.parse({
+      ...base,
+      MODEL_NAME: 'llama-model',
+      MODEL_API_KEY: undefined
+    })).toThrow('MODEL_API_KEY');
+  });
 });

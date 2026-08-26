@@ -72,7 +72,9 @@ export async function createAtlasRuntime(
   const eventBus = options.eventBus || new PostgresEventBus(db);
   const provider = options.provider || createModelProvider({
     providerType: config.MODEL_PROVIDER,
-    apiKey: config.MODEL_API_KEY
+    apiKey: config.MODEL_API_KEY,
+    baseUrl: config.MODEL_BASE_URL,
+    model: config.MODEL_NAME
   });
 
   const taskRepo = new TaskRepository(db);

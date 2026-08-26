@@ -14,13 +14,33 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
 
   switch (type) {
     case 'openai':
-    case 'openai-compatible':
-    case 'groq':
-    case 'ollama':
-    case 'deepseek':
       return new OpenAICompatibleProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
+        defaultModel: config.model
+      });
+    case 'openai-compatible':
+      return new OpenAICompatibleProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        defaultModel: config.model
+      });
+    case 'groq':
+      return new OpenAICompatibleProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || 'https://api.groq.com/openai/v1',
+        defaultModel: config.model
+      });
+    case 'ollama':
+      return new OpenAICompatibleProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || 'http://localhost:11434/v1',
+        defaultModel: config.model
+      });
+    case 'deepseek':
+      return new OpenAICompatibleProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || 'https://api.deepseek.com/v1',
         defaultModel: config.model
       });
     case 'mock':

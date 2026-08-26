@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { MockModelProvider, createModelProvider } from '../src/index.js';
 
 describe('@atlas/providers tests', () => {
@@ -9,6 +9,33 @@ describe('@atlas/providers tests', () => {
 
   it('rejects unsupported provider types instead of silently using mock', () => {
     expect(() => createModelProvider({ providerType: 'typo-provider' })).toThrow('Unsupported model provider');
+  });
+
+  it('uses a provider-specific endpoint for Groq', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'provider response' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const provider = createModelProvider({ providerType: 'groq', apiKey: 'test-key' });
+      await provider.run({
+        runId: '123e4567-e89b-12d3-a456-426614174000',
+        agentId: 'chief',
+        messages: [{ role: 'user', content: 'Hello' }]
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://api.groq.com/openai/v1/chat/completions',
+        expect.any(Object)
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('runs mock completion with canned responses', async () => {

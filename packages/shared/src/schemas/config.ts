@@ -18,6 +18,8 @@ export const EnvConfigSchema = z.object({
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
   MODEL_PROVIDER: ModelProviderSchema.default('mock'),
   MODEL_API_KEY: z.string().optional(),
+  MODEL_BASE_URL: z.preprocess(value => value === '' ? undefined : value, z.string().url().optional()),
+  MODEL_NAME: z.preprocess(value => value === '' ? undefined : value, z.string().trim().min(1).max(128).optional()),
   ENCRYPTION_KEY: z.string().min(32).default(DEFAULT_ENCRYPTION_KEY),
   ARTIFACT_STORAGE_PATH: z.string().default('./data/artifacts'),
   GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(5.0),
@@ -44,6 +46,27 @@ export const EnvConfigSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['MODEL_PROVIDER'],
       message: 'MODEL_PROVIDER=mock is not allowed in production.'
+    });
+  }
+  if (config.NODE_ENV === 'production' && config.MODEL_PROVIDER !== 'openai' && !config.MODEL_NAME) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MODEL_NAME'],
+      message: 'MODEL_NAME is required for non-OpenAI providers in production.'
+    });
+  }
+  if (config.NODE_ENV === 'production' && config.MODEL_PROVIDER === 'ollama' && !config.MODEL_BASE_URL) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MODEL_BASE_URL'],
+      message: 'MODEL_BASE_URL is required for Ollama in production.'
+    });
+  }
+  if (config.NODE_ENV === 'production' && config.MODEL_PROVIDER !== 'ollama' && !config.MODEL_API_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MODEL_API_KEY'],
+      message: 'MODEL_API_KEY is required for this provider in production.'
     });
   }
 });
