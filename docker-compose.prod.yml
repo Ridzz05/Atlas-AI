@@ -228,7 +228,7 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--header", "Host: ${ATLAS_DOMAIN:-localhost}", "--spider", "http://127.0.0.1/health"]
       interval: 15s
       timeout: 5s
       retries: 5

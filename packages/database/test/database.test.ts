@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { Migrator } from '../src/migrator.js';
 
 describe('@atlas/database tests', () => {
   it('has valid SQL migration files', () => {
@@ -40,5 +41,30 @@ describe('@atlas/database tests', () => {
         expect(content).toContain('lease_expires_at');
       }
     }
+  });
+
+  it('serializes concurrent migration runners with a PostgreSQL advisory lock', async () => {
+    const queries: string[] = [];
+    const client = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql.trim());
+        return { rows: [] };
+      }),
+      release: vi.fn()
+    };
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        queries.push(sql.trim());
+        return { rows: [] };
+      }),
+      getPool: () => ({ connect: vi.fn().mockResolvedValue(client) })
+    } as any;
+
+    await new Migrator(db).runMigrations(path.resolve(__dirname, '../src/migrations'));
+
+    expect(queries[0]).toContain('pg_advisory_lock');
+    expect(queries.some(query => query.includes('CREATE TABLE IF NOT EXISTS schema_migrations'))).toBe(true);
+    expect(queries.at(-1)).toContain('pg_advisory_unlock');
+    expect(client.release).toHaveBeenCalledOnce();
   });
 });

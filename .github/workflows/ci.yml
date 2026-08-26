@@ -50,3 +50,14 @@ jobs:
           MODEL_PROVIDER: openai
           MODEL_API_KEY: ci-model-api-key
         run: docker compose -f docker-compose.prod.yml config --quiet
+
+  compose-smoke:
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Compose boot, readiness, and backup/restore smoke test
+        run: bash scripts/ci-compose-smoke.sh
