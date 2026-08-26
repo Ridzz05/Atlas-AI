@@ -1,6 +1,6 @@
 import { MemoryRetriever } from '../pipeline/retriever.js';
 import { MemoryProposalService } from '../pipeline/proposal-service.js';
-import { MemoryStore } from '../store/memory-store.js';
+import { isMemoryExpired, MemoryStore } from '../store/memory-store.js';
 import { MemoryType } from '@atlas/shared';
 
 export class MemoryTools {
@@ -36,6 +36,9 @@ export class MemoryTools {
 
   public async get(input: { id: string; allowedScopes?: string[] }): Promise<{ item: any | null }> {
     const item = await this.store.findById(input.id);
+    if (item && isMemoryExpired(item)) {
+      return { item: null };
+    }
     if (item && input.allowedScopes && item.scope !== 'global' && !input.allowedScopes.includes(item.scope)) {
       return { item: null };
     }

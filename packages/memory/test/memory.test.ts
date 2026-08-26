@@ -153,6 +153,86 @@ describe('@atlas/memory tests', () => {
     expect(deprecated?.status).toBe('deprecated');
   });
 
+  it('does not retrieve or expose expired memory items', async () => {
+    const store = new InMemoryMemoryStore();
+    const retriever = new MemoryRetriever(store);
+    const proposalService = new MemoryProposalService(store);
+    const tools = new MemoryTools(retriever, proposalService, store);
+    const expiredId = crypto.randomUUID();
+    const activeId = crypto.randomUUID();
+    const now = Date.now();
+
+    await store.save({
+      id: expiredId,
+      type: 'semantic',
+      status: 'verified',
+      content: 'Expired CRM policy fact',
+      scope: 'global',
+      author: 'system',
+      source: 'policy',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: new Date(now - 1_000).toISOString(),
+      createdAt: new Date(now - 86_400_000).toISOString(),
+      updatedAt: new Date(now - 86_400_000).toISOString()
+    });
+    await store.save({
+      id: activeId,
+      type: 'semantic',
+      status: 'verified',
+      content: 'Active CRM policy fact',
+      scope: 'global',
+      author: 'system',
+      source: 'policy',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: new Date(now + 86_400_000).toISOString(),
+      createdAt: new Date(now).toISOString(),
+      updatedAt: new Date(now).toISOString()
+    });
+
+    const results = await retriever.retrieve({ query: 'CRM policy fact', status: 'verified' });
+    expect(results.map(result => result.item.id)).toEqual([activeId]);
+
+    const expired = await tools.get({ id: expiredId });
+    expect(expired.item).toBeNull();
+  });
+
+  it('allows a fresh proposal after an identical memory item expires', async () => {
+    const store = new InMemoryMemoryStore();
+    const proposalService = new MemoryProposalService(store);
+
+    await store.save({
+      id: crypto.randomUUID(),
+      type: 'entity',
+      status: 'verified',
+      content: 'Temporary gym member count',
+      scope: 'approved_research',
+      author: 'ned',
+      source: 'web.search',
+      confidence: 0.8,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: new Date(Date.now() - 1_000).toISOString(),
+      createdAt: new Date(Date.now() - 86_400_000).toISOString(),
+      updatedAt: new Date(Date.now() - 86_400_000).toISOString()
+    });
+
+    const proposal = await proposalService.propose({
+      type: 'entity',
+      content: 'Temporary gym member count',
+      scope: 'approved_research',
+      author: 'ned'
+    });
+
+    expect(proposal.status).toBe('unverified');
+  });
+
   it('supports privacy deletion by scope', async () => {
     const store = new InMemoryMemoryStore();
     const privId = crypto.randomUUID();

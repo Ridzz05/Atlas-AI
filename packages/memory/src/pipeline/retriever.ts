@@ -1,4 +1,4 @@
-import { MemoryStore } from '../store/memory-store.js';
+import { isMemoryExpired, MemoryStore } from '../store/memory-store.js';
 import { MemoryQuery, RankedMemoryResult } from '../types.js';
 import { MemoryItem } from '@atlas/shared';
 import { rootLogger } from '@atlas/observability';
@@ -24,6 +24,10 @@ export class MemoryRetriever {
     const ranked: RankedMemoryResult[] = [];
 
     for (const item of candidates) {
+      if (isMemoryExpired(item, now)) {
+        continue;
+      }
+
       if (query.minConfidence && item.confidence < query.minConfidence) {
         continue;
       }

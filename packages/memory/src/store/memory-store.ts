@@ -17,6 +17,12 @@ export interface MemoryStore {
   deleteByScope(scope: string): Promise<number>;
 }
 
+export function isMemoryExpired(item: Pick<MemoryItem, 'expiresAt'>, now = Date.now()): boolean {
+  if (item.expiresAt == null) return false;
+  const expiresAt = new Date(item.expiresAt).getTime();
+  return !Number.isFinite(expiresAt) || expiresAt <= now;
+}
+
 export class InMemoryMemoryStore implements MemoryStore {
   private items = new Map<string, MemoryItem>();
 
@@ -51,6 +57,8 @@ export class InMemoryMemoryStore implements MemoryStore {
     if (params.status) {
       list = list.filter(item => item.status === params.status);
     }
+
+    list = list.filter(item => !isMemoryExpired(item));
 
     if (params.limit) {
       list = list.slice(0, params.limit);
@@ -147,6 +155,8 @@ export class DatabaseMemoryStore implements MemoryStore {
       values.push(params.status);
       sql += ` AND status = $${values.length}`;
     }
+
+    sql += ' AND (expires_at IS NULL OR expires_at > NOW())';
 
     sql += ' ORDER BY created_at DESC';
 
