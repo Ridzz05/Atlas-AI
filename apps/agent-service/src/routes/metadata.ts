@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { ArtifactRepository, AuditRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
+import { ArtifactRepository, AuditRepository, BudgetRepository, MessageRepository, RunRepository, ToolCallRepository } from '@atlas/database';
 import type { MemoryStore } from '@atlas/memory';
 import { MemoryStatusSchema, MemoryTypeSchema } from '@atlas/shared';
 
@@ -9,6 +9,8 @@ export interface MetadataRouteOptions {
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
   memoryStore?: MemoryStore;
+  runRepo?: RunRepository;
+  budgetRepo?: BudgetRepository;
 }
 
 function parseLimit(value: string | undefined, label: string): number | { error: string } {
@@ -20,6 +22,25 @@ function parseLimit(value: string | undefined, label: string): number | { error:
 }
 
 export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRouteOptions): void {
+  app.get('/api/v1/costs', async (_req, reply) => {
+    const getCostSummary = options.runRepo && typeof (options.runRepo as any).getCostSummary === 'function'
+      ? () => (options.runRepo as RunRepository).getCostSummary()
+      : async () => null;
+    const getBudgetSummary = options.budgetRepo && typeof (options.budgetRepo as any).getGlobalDailySummary === 'function'
+      ? () => (options.budgetRepo as BudgetRepository).getGlobalDailySummary()
+      : async () => null;
+
+    try {
+      const [costs, budget] = await Promise.all([getCostSummary(), getBudgetSummary()]);
+      return reply.status(200).send({
+        data: { costs, budget },
+        durable: Boolean(options.runRepo || options.budgetRepo)
+      });
+    } catch {
+      return reply.status(503).send({ error: 'Cost and budget metrics are unavailable.' });
+    }
+  });
+
   app.get('/api/v1/artifacts', async (req, reply) => {
     const query = req.query as { taskId?: string; limit?: string };
     const limit = parseLimit(query.limit, 'Artifact');

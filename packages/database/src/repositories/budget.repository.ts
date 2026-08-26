@@ -25,6 +25,14 @@ export interface BudgetReservationInput {
   now?: Date;
 }
 
+export interface GlobalDailyBudgetSummary {
+  limitUsd: number;
+  usedUsd: number;
+  reservedUsd: number;
+  availableUsd: number;
+  resetAt: string | null;
+}
+
 interface BudgetScope {
   scope: 'global_daily' | 'task';
   targetId: string | null;
@@ -106,6 +114,30 @@ export class BudgetRepository {
 
   public async release(reservationId: string): Promise<BudgetReservation | null> {
     return this.settle(reservationId, 'released', 0);
+  }
+
+  public async getGlobalDailySummary(now = new Date()): Promise<GlobalDailyBudgetSummary | null> {
+    const resetAt = this.nextUtcDay(now).toISOString();
+    const result = await this.db.query(`
+      SELECT limit_usd, used_usd, reserved_usd, reset_at
+      FROM budgets
+      WHERE scope = 'global_daily'
+        AND target_id IS NULL
+        AND period = 'daily'
+        AND reset_at = $1`, [resetAt]);
+    const row = result.rows[0];
+    if (!row) return null;
+
+    const limitUsd = Number(row.limit_usd || 0);
+    const usedUsd = Number(row.used_usd || 0);
+    const reservedUsd = Number(row.reserved_usd || 0);
+    return {
+      limitUsd,
+      usedUsd,
+      reservedUsd,
+      availableUsd: Math.max(0, limitUsd - usedUsd - reservedUsd),
+      resetAt: row.reset_at ? new Date(row.reset_at).toISOString() : null
+    };
   }
 
   public async recoverStaleReservations(olderThanSeconds = 900, now = new Date()): Promise<number> {

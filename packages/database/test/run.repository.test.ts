@@ -26,6 +26,42 @@ function runRow(overrides: Record<string, unknown> = {}) {
 }
 
 describe('RunRepository cancellation state', () => {
+  it('returns durable aggregate cost metrics by period and agent', async () => {
+    const db = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [{
+          period_cost_usd: '0.1200',
+          total_cost_usd: '1.2500',
+          run_count: '4',
+          active_run_count: '1',
+          completed_run_count: '2',
+          failed_run_count: '1'
+        }] })
+        .mockResolvedValueOnce({ rows: [
+          { agent_id: 'ned', period_cost_usd: '0.6000', cost_usd: '0.8000', run_count: '2' },
+          { agent_id: 'argus', period_cost_usd: '0.1200', cost_usd: '0.4500', run_count: '2' }
+        ] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    const summary = await repository.getCostSummary(new Date('2026-08-26T10:00:00.000Z'));
+
+    expect(summary).toMatchObject({
+      periodCostUsd: 0.12,
+      totalCostUsd: 1.25,
+      runCount: 4,
+      activeRunCount: 1,
+      completedRunCount: 2,
+      failedRunCount: 1,
+      byAgent: [
+        { agentId: 'ned', periodCostUsd: 0.6, costUsd: 0.8, runCount: 2 },
+        { agentId: 'argus', periodCostUsd: 0.12, costUsd: 0.45, runCount: 2 }
+      ]
+    });
+    expect(summary.periodStart).toBe('2026-08-26T00:00:00.000Z');
+    expect(summary.periodEnd).toBe('2026-08-27T00:00:00.000Z');
+  });
+
   it('records a cancellation request durably for an active run', async () => {
     const db = {
       query: vi.fn().mockResolvedValue({ rows: [{

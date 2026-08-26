@@ -243,7 +243,26 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     auditRepo: options.auditRepo,
     messageRepo: options.messageRepo,
     toolCallRepo: options.toolCallRepo,
-    memoryStore: options.memoryStore
+    memoryStore: options.memoryStore,
+    runRepo: options.runRepo,
+    budgetRepo: options.budgetRepo
+  });
+
+  app.get('/api/v1/settings', async (_req, reply) => {
+    return reply.status(200).send({
+      data: {
+        nodeEnv: options.config.NODE_ENV,
+        modelProvider: options.config.MODEL_PROVIDER,
+        globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
+        maxConcurrentAgentRuns: options.config.MAX_CONCURRENT_AGENT_RUNS,
+        maxDelegationDepth: options.config.MAX_DELEGATION_DEPTH,
+        externalWritesEnabled: options.config.EXTERNAL_WRITES_ENABLED,
+        apiAuthRequired: Boolean(options.config.API_AUTH_TOKEN),
+        corsAllowedOrigins: options.config.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean),
+        source: 'environment',
+        mutable: false
+      }
+    });
   });
 
   return app;

@@ -40,6 +40,40 @@ describe('agent-service health endpoints', () => {
     expect(body.name).toBe('ATLAS AI OS Agent Service');
   });
 
+  it('GET /api/v1/settings exposes governance configuration without secrets', async () => {
+    const token = 'a'.repeat(32);
+    const secret = 'sk-sensitive-model-key';
+    const settingsServer = buildServer({
+      config: EnvConfigSchema.parse({
+        NODE_ENV: 'production',
+        API_AUTH_TOKEN: token,
+        MODEL_PROVIDER: 'approved-provider',
+        MODEL_API_KEY: secret,
+        GLOBAL_DAILY_BUDGET_USD: 7.5,
+        EXTERNAL_WRITES_ENABLED: false
+      })
+    });
+
+    const response = await settingsServer.inject({
+      method: 'GET',
+      url: '/api/v1/settings',
+      headers: { authorization: `Bearer ${token}` }
+    });
+    const body = JSON.parse(response.body);
+
+    expect(response.statusCode).toBe(200);
+    expect(body.data).toMatchObject({
+      nodeEnv: 'production',
+      modelProvider: 'approved-provider',
+      globalDailyBudgetUsd: 7.5,
+      externalWritesEnabled: false,
+      mutable: false,
+      source: 'environment'
+    });
+    expect(response.body).not.toContain(secret);
+    expect(response.body).not.toContain(token);
+  });
+
   it('protects API routes with the configured bearer token', async () => {
     const token = 'a'.repeat(32);
     const protectedServer = buildServer({

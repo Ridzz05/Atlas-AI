@@ -13,6 +13,32 @@ function createTransactionalDb(query: (sql: string, params?: unknown[]) => Promi
 }
 
 describe('BudgetRepository', () => {
+  it('returns the current global daily budget summary', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rows: [{
+        limit_usd: '5.0000',
+        used_usd: '1.2500',
+        reserved_usd: '0.5000',
+        reset_at: '2026-08-27T00:00:00.000Z'
+      }] })
+    } as any;
+    const repository = new BudgetRepository(db);
+
+    const summary = await repository.getGlobalDailySummary(new Date('2026-08-26T10:00:00.000Z'));
+
+    expect(summary).toMatchObject({
+      limitUsd: 5,
+      usedUsd: 1.25,
+      reservedUsd: 0.5,
+      availableUsd: 3.25,
+      resetAt: '2026-08-27T00:00:00.000Z'
+    });
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining("scope = 'global_daily'"),
+      ['2026-08-27T00:00:00.000Z']
+    );
+  });
+
   it('reserves global and per-run budget atomically', async () => {
     let budgetSelects = 0;
     const { db, client } = createTransactionalDb(async (sql) => {

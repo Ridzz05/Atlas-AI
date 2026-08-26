@@ -52,7 +52,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 2. **Telegram active-run recovery is not yet demonstrated.** Update deduplication, pause/emergency control state, and cancellation propagation are persisted, but restart recovery still requires an integration drill.
 3. **No real outbound connector is configured.** Approved execution now mints an exact, durable, one-time token and resumes the paused task, but `EXTERNAL_WRITES_ENABLED` must remain false until a real connector, owner decision, and integration tests are approved.
 4. **Research is deliberately fail-closed rather than live.** Without an injected verified provider, search/company lookup returns no external facts. A real adapter with source, freshness, confidence, and prompt-injection boundaries is still required for the demo workflow.
-5. **Dashboard observability is incomplete.** Authenticated event SSE with replay and read-only artifact/memory/audit APIs are exposed, but aggregate cost views and settings APIs are not complete.
+5. **Dashboard observability is intentionally read-only for governance.** Authenticated event SSE with replay, read-only artifact/memory/audit APIs, durable aggregate cost/budget metrics, and environment-backed settings are exposed. Mutable settings remain deployment-only by design.
 6. **Rate limiting is process-local.** API bearer auth and strict CORS are present, but rate-limit buckets do not coordinate across replicas; Telegram update/control state now uses PostgreSQL.
 7. **Operational gates are incomplete.** Lint is now a real CI gate, but there is no verified backup restore drill and Docker boot/recovery remains untested here.
 
@@ -71,7 +71,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 1. Implement Telegram polling or webhook mode with secret verification, outbound response delivery, callback acknowledgement, persistent update deduplication, durable control state, and dependency injection into the command router. Active-run recovery still needs an environment drill.
 2. Route `/new`, `/status`, `/task`, `/stop`, `/pause`, `/resume`, `/emergency_stop`, and approval actions through the same control service as the web UI.
 3. Add API authentication suitable for the single-user MVP, strict CORS, rate limits, request IDs, and owner-only mutation checks.
-4. Dashboard tasks, approvals, agents, command intake, overview, artifacts, audit, and memory now use authenticated API queries with loading/error/empty states. Event replay/reconnect semantics are implemented; the remaining settings API is still open.
+4. Dashboard tasks, approvals, agents, command intake, overview, artifacts, audit, memory, aggregate cost/budget metrics, and governance settings now use authenticated API queries with loading/error/empty states. Event replay/reconnect semantics are implemented; mutable configuration remains deployment-only.
 
 ### Required / P3 — make intelligence truthful and useful
 
@@ -152,7 +152,7 @@ Execution is committed through `9fbb6f4`. The full local gates pass: `pnpm.cmd l
 
 Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, API-backed dashboard observability pages, and the CI lint/build/Compose gates.
 
-Remaining release blockers: no approved outbound connector, no verified real research adapters, no Docker boot/recovery/backup drill, formatter enforcement, production recovery/lease observability, aggregate cost/settings APIs, and a configured per-agent aggregate budget policy if required by the owner.
+Remaining release blockers: no approved outbound connector, no verified real research adapters, no Docker boot/recovery/backup drill, formatter enforcement, production recovery/lease observability, and a configured per-agent aggregate budget policy if required by the owner.
 
 ## Release gate
 

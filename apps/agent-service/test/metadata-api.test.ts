@@ -47,6 +47,44 @@ describe('agent-service metadata endpoints', () => {
     expect(JSON.parse(memory.body)).toMatchObject({ count: 1, durable: true });
   });
 
+  it('returns durable aggregate cost and budget metrics', async () => {
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      runRepo: {
+        getCostSummary: vi.fn().mockResolvedValue({
+          periodStart: '2026-08-26T00:00:00.000Z',
+          periodEnd: '2026-08-27T00:00:00.000Z',
+          periodCostUsd: 0.12,
+          totalCostUsd: 1.25,
+          runCount: 4,
+          activeRunCount: 1,
+          completedRunCount: 2,
+          failedRunCount: 1,
+          byAgent: [{ agentId: 'ned', costUsd: 0.8, runCount: 2 }]
+        })
+      } as any,
+      budgetRepo: {
+        getGlobalDailySummary: vi.fn().mockResolvedValue({
+          limitUsd: 5,
+          usedUsd: 1.25,
+          reservedUsd: 0.5,
+          availableUsd: 3.25,
+          resetAt: '2026-08-27T00:00:00.000Z'
+        })
+      } as any
+    });
+
+    const response = await server.inject({ method: 'GET', url: '/api/v1/costs' });
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toMatchObject({
+      durable: true,
+      data: {
+        costs: { periodCostUsd: 0.12, totalCostUsd: 1.25 },
+        budget: { availableUsd: 3.25 }
+      }
+    });
+  });
+
   it('rejects unsupported memory filters and invalid ids', async () => {
     const server = buildServer({
       config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),

@@ -6,6 +6,25 @@ export interface CreateRunInput {
   agentId: string;
 }
 
+export interface CostByAgent {
+  agentId: string;
+  periodCostUsd: number;
+  costUsd: number;
+  runCount: number;
+}
+
+export interface CostSummary {
+  periodStart: string;
+  periodEnd: string;
+  periodCostUsd: number;
+  totalCostUsd: number;
+  runCount: number;
+  activeRunCount: number;
+  completedRunCount: number;
+  failedRunCount: number;
+  byAgent: CostByAgent[];
+}
+
 export class RunRepository {
   constructor(private db: DatabaseClient) {}
 
@@ -31,6 +50,56 @@ export class RunRepository {
   public async findByTaskId(taskId: string): Promise<Run[]> {
     const res = await this.db.query('SELECT * FROM runs WHERE task_id = $1 ORDER BY created_at ASC', [taskId]);
     return res.rows.map(r => this.mapRow(r));
+  }
+
+  public async getCostSummary(now = new Date()): Promise<CostSummary> {
+    const periodStart = new Date(Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate()
+    ));
+    const periodEnd = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000);
+
+    const [summaryResult, byAgentResult] = await Promise.all([
+      this.db.query(`
+        SELECT
+          COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= $1 AND created_at < $2), 0) AS period_cost_usd,
+          COALESCE(SUM(cost_usd), 0) AS total_cost_usd,
+          COUNT(*)::int AS run_count,
+          COUNT(*) FILTER (WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval'))::int AS active_run_count,
+          COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_run_count,
+          COUNT(*) FILTER (WHERE status IN ('failed', 'cancelled', 'timed_out'))::int AS failed_run_count
+        FROM runs`,
+      [periodStart.toISOString(), periodEnd.toISOString()]),
+      this.db.query(`
+        SELECT
+          agent_id,
+          COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= $1 AND created_at < $2), 0) AS period_cost_usd,
+          COALESCE(SUM(cost_usd), 0) AS cost_usd,
+          COUNT(*)::int AS run_count
+        FROM runs
+        GROUP BY agent_id
+        ORDER BY SUM(cost_usd) DESC, agent_id ASC`,
+      [periodStart.toISOString(), periodEnd.toISOString()])
+    ]);
+
+    const summary = summaryResult.rows[0] || {};
+    return {
+      periodStart: periodStart.toISOString(),
+      periodEnd: periodEnd.toISOString(),
+      periodCostUsd: Number(summary.period_cost_usd || 0),
+      totalCostUsd: Number(summary.total_cost_usd || 0),
+      runCount: Number(summary.run_count || 0),
+      activeRunCount: Number(summary.active_run_count || 0),
+      completedRunCount: Number(summary.completed_run_count || 0),
+      failedRunCount: Number(summary.failed_run_count || 0),
+      byAgent: byAgentResult.rows.map(row => ({
+        agentId: row.agent_id,
+        periodCostUsd: Number(row.period_cost_usd || 0),
+        costUsd: Number(row.cost_usd || 0),
+        runCount: Number(row.run_count || 0)
+      }))
+    };
   }
 
   public async acquireLease(runId: string, workerId: string, leaseSeconds = 60): Promise<Run | null> {

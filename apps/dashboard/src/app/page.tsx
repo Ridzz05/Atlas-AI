@@ -18,6 +18,25 @@ interface ApiTask {
 
 interface TaskListResponse { data: ApiTask[]; count: number; }
 interface ApprovalListResponse { data: unknown[]; count: number; }
+interface CostMetrics {
+  periodCostUsd: number;
+  totalCostUsd: number;
+  runCount: number;
+  activeRunCount: number;
+  completedRunCount: number;
+  failedRunCount: number;
+}
+interface BudgetMetrics {
+  limitUsd: number;
+  usedUsd: number;
+  reservedUsd: number;
+  availableUsd: number;
+  resetAt: string | null;
+}
+interface CostSummaryResponse {
+  data: { costs: CostMetrics | null; budget: BudgetMetrics | null };
+  durable: boolean;
+}
 
 const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status'] => {
   const assigned = tasks.filter(task => task.assignedAgent === agentId);
@@ -30,18 +49,21 @@ const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status
 export default function CommandCenterPage() {
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
+  const [costMetrics, setCostMetrics] = useState<CostSummaryResponse['data'] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadOverview = async () => {
     setLoading(true);
     try {
-      const [taskResponse, approvalResponse] = await Promise.all([
+      const [taskResponse, approvalResponse, costResponse] = await Promise.all([
         atlasFetch<TaskListResponse>('/tasks?limit=100'),
-        atlasFetch<ApprovalListResponse>('/approvals?status=pending&limit=100')
+        atlasFetch<ApprovalListResponse>('/approvals?status=pending&limit=100'),
+        atlasFetch<CostSummaryResponse>('/costs')
       ]);
       setTasks(taskResponse.data);
       setPendingApprovals(approvalResponse.count);
+      setCostMetrics(costResponse.data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load the live command center.');
@@ -64,7 +86,8 @@ export default function CommandCenterPage() {
 
   const activeCount = tasks.filter(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)).length;
   const completedCount = tasks.filter(task => task.status === 'completed').length;
-  const costToday = tasks.reduce((total, task) => total + (typeof task.result?.totalCostUsd === 'number' ? task.result.totalCostUsd : 0), 0);
+  const costToday = costMetrics?.costs?.periodCostUsd;
+  const budget = costMetrics?.budget;
   const agentIds = ['chief', 'ned', 'layla', 'hermes', 'argus'];
   const graphAgents: AgentNodeData[] = agentIds.map(id => ({
     id,
@@ -88,11 +111,12 @@ export default function CommandCenterPage() {
 
       {error && <div role="alert" className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">{error}</div>}
       {loading ? <div className="p-12 text-center text-xs text-gray-400" role="status" aria-busy="true">Loading live control-plane metrics…</div> : <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           <Metric label="ACTIVE TASKS" value={String(activeCount)} icon={<Clock className="w-5 h-5" />} tone="indigo" />
           <Metric label="TASKS COMPLETED" value={String(completedCount)} icon={<CheckCircle2 className="w-5 h-5" />} tone="emerald" />
           <Metric label="PENDING APPROVALS" value={String(pendingApprovals)} icon={<AlertCircle className="w-5 h-5" />} tone="amber" />
-          <Metric label="RECORDED COST" value={`$${costToday.toFixed(2)}`} icon={<DollarSign className="w-5 h-5" />} tone="cyan" />
+          <Metric label="COST TODAY" value={costToday == null ? 'N/A' : `$${costToday.toFixed(2)}`} icon={<DollarSign className="w-5 h-5" />} tone="cyan" />
+          <Metric label="DAILY BUDGET USED" value={budget ? `$${budget.usedUsd.toFixed(2)} / $${budget.limitUsd.toFixed(2)}` : 'N/A'} icon={<DollarSign className="w-5 h-5" />} tone="cyan" />
         </div>
 
         <AgentGraph agents={graphAgents} />
