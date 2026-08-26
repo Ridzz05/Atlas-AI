@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'groq', 'ollama', 'deepseek']);
+const ResearchProviderSchema = z.enum(['none', 'brave']);
 const StrictBooleanFromEnvSchema = z.preprocess(value => {
   if (typeof value !== 'string') return value;
 
@@ -30,6 +31,22 @@ export const EnvConfigSchema = z
     MODEL_API_KEY: z.string().optional(),
     MODEL_BASE_URL: z.preprocess(value => (value === '' ? undefined : value), z.string().url().optional()),
     MODEL_NAME: z.preprocess(value => (value === '' ? undefined : value), z.string().trim().min(1).max(128).optional()),
+    RESEARCH_PROVIDER: ResearchProviderSchema.default('none'),
+    RESEARCH_API_KEY: z.preprocess(value => (value === '' ? undefined : value), z.string().trim().min(1).max(512).optional()),
+    RESEARCH_COUNTRY: z.preprocess(
+      value => (typeof value === 'string' && value.trim() ? value.trim().toUpperCase() : value),
+      z
+        .string()
+        .regex(/^[A-Z]{2}$/)
+        .default('ID')
+    ),
+    RESEARCH_SEARCH_LANG: z.preprocess(
+      value => (typeof value === 'string' && value.trim() ? value.trim().toLowerCase() : value),
+      z
+        .string()
+        .regex(/^[a-z]{2,12}(?:-[a-z]{2,8})?$/)
+        .default('id')
+    ),
     ENCRYPTION_KEY: z.string().min(32).default(DEFAULT_ENCRYPTION_KEY),
     ARTIFACT_STORAGE_PATH: z.string().default('./data/artifacts'),
     MEMORY_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(3600),
@@ -81,6 +98,13 @@ export const EnvConfigSchema = z
         code: z.ZodIssueCode.custom,
         path: ['MODEL_API_KEY'],
         message: 'MODEL_API_KEY is required for this provider in production.'
+      });
+    }
+    if (config.RESEARCH_PROVIDER === 'brave' && !config.RESEARCH_API_KEY) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEARCH_API_KEY'],
+        message: 'RESEARCH_API_KEY is required when RESEARCH_PROVIDER=brave.'
       });
     }
   });

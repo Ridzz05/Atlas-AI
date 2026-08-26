@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { EnvConfigSchema } from '@atlas/shared';
 import { InMemoryTaskQueue } from '@atlas/orchestration';
-import { DEFAULT_LEAD_RUBRIC, RubricEngine } from '@atlas/tools';
+import { BraveResearchProvider, DEFAULT_LEAD_RUBRIC, RubricEngine } from '@atlas/tools';
 import { createAtlasRuntime } from '../src/index.js';
 import { createServiceHealthServer, getServiceReadiness } from '../src/health.js';
 
@@ -23,6 +23,28 @@ describe('@atlas/runtime', () => {
     expect(runtime.taskQueue).toBe(queue);
     expect(runtime.registry.list()).toHaveLength(5);
 
+    await runtime.close();
+  });
+
+  it('constructs the explicitly configured research provider without enabling it by default', async () => {
+    const db = {
+      close: async () => undefined
+    } as never;
+    const runtime = await createAtlasRuntime(
+      EnvConfigSchema.parse({
+        NODE_ENV: 'test',
+        RESEARCH_PROVIDER: 'brave',
+        RESEARCH_API_KEY: 'test-research-key'
+      }),
+      {
+        db,
+        taskQueue: new InMemoryTaskQueue(),
+        migrate: false,
+        seed: false
+      }
+    );
+
+    expect(runtime.researchProvider).toBeInstanceOf(BraveResearchProvider);
     await runtime.close();
   });
 

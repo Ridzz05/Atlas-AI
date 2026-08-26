@@ -1,6 +1,6 @@
 import { z } from 'zod';
-import { isIP } from 'node:net';
 import { ToolDefinition } from '../types.js';
+import { SafeWebUrlSchema } from '../research/url-safety.js';
 
 const ResearchEvidenceSchema = z.object({
   extractedAt: z.string().datetime({ offset: true }),
@@ -9,36 +9,6 @@ const ResearchEvidenceSchema = z.object({
   unresolvedQuestions: z.array(z.string().min(1)),
   confidence: z.number().min(0).max(1)
 });
-
-function isSafePublicWebUrl(value: string): boolean {
-  let parsed: URL;
-  try {
-    parsed = new URL(value);
-  } catch {
-    return false;
-  }
-
-  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.username || parsed.password) {
-    return false;
-  }
-
-  const hostname = parsed.hostname
-    .toLowerCase()
-    .replace(/^\[|\]$/g, '')
-    .replace(/\.$/, '');
-  if (!hostname || isIP(hostname) !== 0) {
-    return false;
-  }
-
-  return hostname !== 'localhost' && !hostname.endsWith('.localhost') && !hostname.endsWith('.local') && !hostname.endsWith('.internal');
-}
-
-const SafeWebUrlSchema = z
-  .string()
-  .trim()
-  .max(2048)
-  .url()
-  .refine(isSafePublicWebUrl, 'Only credential-free HTTP(S) URLs with a public hostname are allowed.');
 
 const WebFetchUnavailableSchema = z.object({
   configured: z.literal(false),

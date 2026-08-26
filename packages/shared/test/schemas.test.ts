@@ -177,4 +177,19 @@ describe('@atlas/shared schema tests', () => {
       })
     ).toThrow('MODEL_API_KEY');
   });
+
+  it('defaults research to fail-closed and requires a key for Brave', () => {
+    expect(EnvConfigSchema.parse({}).RESEARCH_PROVIDER).toBe('none');
+    expect(() => EnvConfigSchema.parse({ RESEARCH_PROVIDER: 'brave' })).toThrow('RESEARCH_API_KEY');
+    expect(
+      EnvConfigSchema.parse({
+        RESEARCH_PROVIDER: 'brave',
+        RESEARCH_API_KEY: 'test-research-key'
+      })
+    ).toMatchObject({ RESEARCH_PROVIDER: 'brave', RESEARCH_COUNTRY: 'ID', RESEARCH_SEARCH_LANG: 'id' });
+  });
+
+  it('rejects unsupported research providers', () => {
+    expect(() => EnvConfigSchema.parse({ RESEARCH_PROVIDER: 'unsupported' })).toThrow('RESEARCH_PROVIDER');
+  });
 });

@@ -17,7 +17,8 @@ import {
   DEFAULT_LEAD_RUBRIC,
   LEAD_DIMENSIONS,
   LeadScoringInput,
-  createMemoryTools
+  createMemoryTools,
+  BraveResearchProvider
 } from '../src/index.js';
 import { TokenVerifier } from '@atlas/policy';
 import { InMemoryMemoryStore, MemoryRetriever, MemoryProposalService, MemoryTools } from '@atlas/memory';
@@ -183,6 +184,64 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect((result.output as any).configured).toBe(true);
     expect((result.output as any).contentIsUntrusted).toBe(true);
     expect((result.output as any).confidence).toBe(0.81);
+  });
+
+  it('runs the opt-in Brave provider through Tool Gateway evidence contracts', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockImplementation(async input => {
+      if (String(input).includes('/web/search')) {
+        return new Response(
+          JSON.stringify({
+            web: {
+              results: [
+                {
+                  title: 'Palembang Fitness Center',
+                  url: 'https://fitness.example.com/palembang',
+                  description: 'Public fitness profile'
+                }
+              ]
+            }
+          }),
+          { headers: { 'content-type': 'application/json' } }
+        );
+      }
+      return new Response('<p>Untrusted public page</p>', { headers: { 'content-type': 'text/html' } });
+    });
+    const provider = new BraveResearchProvider({
+      apiKey: 'test-brave-key',
+      fetchImpl,
+      dnsLookup: vi.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }]),
+      now: () => new Date('2026-08-26T00:00:00.000Z')
+    });
+    const registry = new ToolRegistry();
+    registry.register(WebSearchTool);
+    registry.register(WebFetchTool);
+
+    const search = await registry.execute(
+      'web.search',
+      { query: 'gym Palembang' },
+      { taskId: 'task-1', runId: 'run-1', agentId: 'ned', researchProvider: provider }
+    );
+    const fetch = await registry.execute(
+      'web.fetch_safe',
+      { url: 'https://fitness.example.com/palembang' },
+      { taskId: 'task-1', runId: 'run-1', agentId: 'ned', researchProvider: provider }
+    );
+
+    expect(search.success).toBe(true);
+    expect((search.output as any).configured).toBe(true);
+    expect((search.output as any).results[0]).toMatchObject({
+      title: 'Palembang Fitness Center',
+      confidence: 0.5,
+      freshness: 'fresh',
+      sensitivity: 'public'
+    });
+    expect(fetch.success).toBe(true);
+    expect(fetch.output as any).toMatchObject({
+      configured: true,
+      content: '<p>Untrusted public page</p>',
+      contentIsUntrusted: true,
+      confidence: 0.5
+    });
   });
 
   it('rejects unsafe web URL schemes and credential-bearing URLs before provider access', async () => {

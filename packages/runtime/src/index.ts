@@ -21,7 +21,7 @@ import { EventBus, PostgresEventBus } from '@atlas/events';
 import { BullMqTaskQueue, TaskQueue } from '@atlas/orchestration';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { AgentDefinition, EnvConfig } from '@atlas/shared';
-import { DEFAULT_LEAD_RUBRIC, LeadRubricDefinitionSchema, RubricEngine } from '@atlas/tools';
+import { createResearchProvider, DEFAULT_LEAD_RUBRIC, LeadRubricDefinitionSchema, ResearchProvider, RubricEngine } from '@atlas/tools';
 
 export * from './health.js';
 
@@ -42,6 +42,7 @@ export interface AtlasRuntime {
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
+  researchProvider?: ResearchProvider;
   registry: AgentRegistry;
   close(): Promise<void>;
 }
@@ -51,6 +52,7 @@ export interface AtlasRuntimeOptions {
   taskQueue?: TaskQueue;
   eventBus?: EventBus;
   provider?: ModelProvider;
+  researchProvider?: ResearchProvider;
   registry?: AgentRegistry;
   migrationsDir?: string;
   migrate?: boolean;
@@ -79,6 +81,14 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
       apiKey: config.MODEL_API_KEY,
       baseUrl: config.MODEL_BASE_URL,
       model: config.MODEL_NAME
+    });
+  const researchProvider =
+    options.researchProvider ||
+    createResearchProvider({
+      providerType: config.RESEARCH_PROVIDER,
+      apiKey: config.RESEARCH_API_KEY,
+      country: config.RESEARCH_COUNTRY,
+      searchLang: config.RESEARCH_SEARCH_LANG
     });
 
   const taskRepo = new TaskRepository(db);
@@ -129,6 +139,7 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
     taskQueue,
     eventBus,
     provider,
+    researchProvider,
     registry,
     async close() {
       await taskQueue.close();

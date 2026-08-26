@@ -21,6 +21,7 @@ async function main() {
     budgetRepo: runtime.budgetRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
+    researchProvider: runtime.researchProvider,
     registry: runtime.registry,
     taskQueue: runtime.taskQueue
   });

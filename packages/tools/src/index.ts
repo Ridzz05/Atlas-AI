@@ -8,3 +8,7 @@ export * from './tools/policy-tools.js';
 export * from './tools/artifact-tools.js';
 export * from './tools/communication-tools.js';
 export * from './tools/memory-tools.js';
+export * from './research/brave-provider.js';
+export * from './research/url-safety.js';
+export * from './research/factory.js';
+export * from './research/safe-web-fetcher.js';
