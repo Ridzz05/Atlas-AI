@@ -14,7 +14,7 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 - `pnpm lint`: runs a repository source-hygiene gate over 138 source files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
 - Telegram polling, durable approval decisions, update claims, pause/emergency control state, and durable active-run cancellation are wired; cross-restart recovery still needs an integration drill.
-- Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, and realtime refresh use authenticated APIs. Event reconnect replay is implemented; settings APIs remain open and no sample operational data remains in the dashboard.
+- Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, realtime refresh, and read-only environment-backed settings use authenticated APIs. Event reconnect replay is implemented; no sample operational data remains in the dashboard.
 
 ## Target architecture and dependency order
 
@@ -41,7 +41,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 | Phase 3 — Telegram | Mostly implemented | Polling transport, allowlist, response delivery, callbacks, PostgreSQL update deduplication, durable pause/emergency state, and cross-process cancellation are wired. Recovery drills remain. |
 | Phase 4 — Memory | Mostly implemented | Database/lexical stores, scoped MemoryTools, and authenticated dashboard query APIs are wired. Freshness jobs and canonical-memory audit remain. |
 | Phase 5 — Tools/workflow | Mostly implemented with safe gaps | Tool gateway, output schemas, artifact containment, durable approval request/claim/finalize/resume, and fail-closed unverified research are wired. Real research/enrichment adapters and an outbound connector remain intentionally disabled. |
-| Phase 6 — Dashboard | Mostly connected | Tasks, approvals, agents, overview, command intake, artifacts, audit, and memory use API loading/error/empty states. Authenticated SSE refresh and durable event replay/reconnect semantics are wired; settings APIs remain. |
+| Phase 6 — Dashboard | Mostly connected | Tasks, approvals, agents, overview, command intake, artifacts, audit, memory, cost/budget metrics, and read-only governance settings use API loading/error/empty states. Authenticated SSE refresh and durable event replay/reconnect semantics are wired; mutable configuration remains deployment-only. |
 | Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, readiness, runbook, and a repository lint gate exist. Rate limiting remains process-local; Compose boot, recovery, backup restore, formatter enforcement, and alerting remain. |
 
 ## Findings ordered by leverage
@@ -126,7 +126,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 **Acceptance criteria:**
 
 - A Telegram message creates a persisted task and the user receives persisted status updates.
-- Dashboard task creation, approval, stop, and settings actions call authenticated APIs.
+- Dashboard task creation, approval, and stop actions call authenticated APIs; the settings view reads authenticated environment-backed governance state.
 - All displayed task/agent/approval/audit/cost values come from backend state or real events; no sample data remains in production builds.
 - Refreshing or reconnecting yields the same state as the backend.
 
