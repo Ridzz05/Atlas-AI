@@ -2,8 +2,8 @@
     admin off
 }
 
-# Replace your-domain.com with your actual domain or use localhost for staging
-localhost {
+# Set ATLAS_DOMAIN to the public hostname in production; localhost is suitable only for staging.
+{$ATLAS_DOMAIN} {
     handle /api/* {
         reverse_proxy agent-service:4000
     }

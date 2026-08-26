@@ -213,6 +213,8 @@ services:
     image: caddy:2-alpine
     container_name: atlas_caddy_prod
     restart: always
+    environment:
+      ATLAS_DOMAIN: ${ATLAS_DOMAIN:-localhost}
     ports:
       - "80:80"
       - "443:443"

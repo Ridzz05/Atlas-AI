@@ -30,7 +30,7 @@ cd /opt/atlas-os
 
 # 2. Copy and configure production environment
 cp .env.example .env
-nano .env # Set secure passwords, tokens, and model API keys
+nano .env # Set ATLAS_DOMAIN, secure passwords, owner tokens, and model provider settings
 
 # 3. Launch stack
 docker compose -f docker-compose.prod.yml up -d --build

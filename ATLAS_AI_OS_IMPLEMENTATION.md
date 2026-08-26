@@ -845,6 +845,7 @@ Model atau prompt baru tidak dipromosikan sebelum melewati evaluation suite.
 ```dotenv
 NODE_ENV=development
 APP_BASE_URL=http://localhost:3000
+ATLAS_DOMAIN=localhost
 
 DATABASE_URL=postgresql://atlas:atlas@postgres:5432/atlas
 REDIS_URL=redis://redis:6379
