@@ -86,7 +86,7 @@ Add to crontab (`crontab -e`):
 
 ### 3.4 Memory Lifecycle Maintenance
 
-The worker runs memory maintenance before accepting queue work and then on the configured interval. Expired records are first marked `deprecated` and audited; deprecated records are deleted after the configured grace period. Defaults are `MEMORY_MAINTENANCE_INTERVAL_SECONDS=3600` and `MEMORY_DELETION_GRACE_DAYS=7`. Keep these values in the deployment environment when a different retention window is required.
+The worker runs memory maintenance before accepting queue work and then on the configured interval. Expired records are first marked `deprecated` and audited; deprecated records are deleted after the configured grace period. Agent `memory.search` exposes only `verified` records; proposal records remain hidden until governance verification. Defaults are `MEMORY_MAINTENANCE_INTERVAL_SECONDS=3600` and `MEMORY_DELETION_GRACE_DAYS=7`. Keep these values in the deployment environment when a different retention window is required.
 
 ---
 
