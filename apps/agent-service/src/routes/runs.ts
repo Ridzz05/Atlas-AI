@@ -2,6 +2,12 @@ import { FastifyInstance } from 'fastify';
 import { AgentRunner } from '@atlas/orchestration';
 import { RunRepository } from '@atlas/database';
 import { rootLogger } from '@atlas/observability';
+import { z } from 'zod';
+
+const RunIdSchema = z.string().uuid();
+const CancellationBodySchema = z.object({
+  reason: z.string().trim().min(1).max(500).optional()
+});
 
 export interface RunRouteOptions {
   runner: AgentRunner;
@@ -12,8 +18,15 @@ export function registerRunRoutes(app: FastifyInstance, options: RunRouteOptions
   // Cancel active run
   app.post('/api/v1/runs/:id/cancel', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = (req.body as any) || {};
-    const reason = body.reason || 'Cancelled via API';
+    if (!RunIdSchema.safeParse(id).success) {
+      return reply.status(400).send({ error: 'Run id must be a UUID.' });
+    }
+
+    const parsedBody = CancellationBodySchema.safeParse(req.body ?? {});
+    if (!parsedBody.success) {
+      return reply.status(400).send({ error: 'Invalid cancellation reason.' });
+    }
+    const reason = parsedBody.data.reason || 'Cancelled via API';
 
     const cancelled = await options.runner.requestCancellation(id, reason);
     if (!cancelled) {
@@ -31,6 +44,9 @@ export function registerRunRoutes(app: FastifyInstance, options: RunRouteOptions
   // Get run details
   app.get('/api/v1/runs/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
+    if (!RunIdSchema.safeParse(id).success) {
+      return reply.status(400).send({ error: 'Run id must be a UUID.' });
+    }
     if (!options.runRepo) {
       return reply.status(501).send({ error: 'Run repository not configured' });
     }
