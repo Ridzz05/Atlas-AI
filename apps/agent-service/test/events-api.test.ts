@@ -45,6 +45,23 @@ describe('agent-service event endpoints', () => {
     expect(invalidSince.statusCode).toBe(400);
   });
 
+  it('rejects an invalid Last-Event-ID before opening the stream', async () => {
+    const eventRepo = { listAfterId: vi.fn() } as any;
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      eventRepo
+    });
+
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/v1/events/stream',
+      headers: { 'last-event-id': 'not-a-uuid' }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(eventRepo.listAfterId).not.toHaveBeenCalled();
+  });
+
   it('exposes an authenticated-compatible SSE stream backed by the event bus', async () => {
     const eventBus = new InMemoryEventBus();
     const server = buildServer({
@@ -61,6 +78,47 @@ describe('agent-service event endpoints', () => {
       const reader = response.body!.getReader();
       const firstChunk = await reader.read();
       expect(new TextDecoder().decode(firstChunk.value)).toContain(': connected');
+      await reader.cancel();
+      controller.abort();
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('replays durable events after Last-Event-ID before delivering live events', async () => {
+    const eventBus = new InMemoryEventBus();
+    const replayedEvent = {
+      ...event,
+      id: '123e4567-e89b-12d3-a456-426614174002',
+      type: 'run.completed' as const,
+      runId: '123e4567-e89b-12d3-a456-426614174003',
+      timestamp: '2026-08-26T00:00:01.000Z'
+    };
+    const eventRepo = {
+      listAfterId: vi.fn().mockResolvedValue([replayedEvent])
+    } as any;
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      eventBus,
+      eventRepo
+    });
+
+    const address = await server.listen({ host: '127.0.0.1', port: 0 });
+    const controller = new AbortController();
+    try {
+      const response = await fetch(`${address}/api/v1/events/stream`, {
+        headers: { 'last-event-id': event.id },
+        signal: controller.signal
+      });
+      expect(response.status).toBe(200);
+      const reader = response.body!.getReader();
+      let body = '';
+      for (let attempt = 0; attempt < 5 && !body.includes(replayedEvent.id); attempt++) {
+        const chunk = await reader.read();
+        body += new TextDecoder().decode(chunk.value);
+      }
+      expect(body).toContain(`id: ${replayedEvent.id}`);
+      expect(eventRepo.listAfterId).toHaveBeenCalledWith(event.id, 100);
       await reader.cancel();
       controller.abort();
     } finally {

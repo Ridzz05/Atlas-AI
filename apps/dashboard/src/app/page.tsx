@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, AlertCircle, DollarSign, ArrowUpRight, RefreshCw }
 import Link from 'next/link';
 import { AgentGraph, AgentNodeData } from '../components/agent-graph';
 import { atlasFetch } from '../lib/atlas-api';
+import { subscribeToAtlasEvents } from '../lib/event-stream';
 
 interface ApiTask {
   id: string;
@@ -54,8 +55,11 @@ export default function CommandCenterPage() {
   useEffect(() => {
     const stream = new EventSource('/api/atlas/events/stream');
     const refresh = () => { void loadOverview(); };
-    stream.onmessage = refresh;
-    return () => stream.close();
+    const unsubscribe = subscribeToAtlasEvents(stream, refresh);
+    return () => {
+      unsubscribe();
+      stream.close();
+    };
   }, []);
 
   const activeCount = tasks.filter(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)).length;

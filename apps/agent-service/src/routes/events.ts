@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { EventBus } from '@atlas/events';
 import { SystemEventRepository } from '@atlas/database';
+import { SystemEvent, SystemEventSchema } from '@atlas/shared';
 
 export interface EventRouteOptions {
   eventBus: EventBus;
@@ -29,6 +30,12 @@ export function registerEventRoutes(app: FastifyInstance, options: EventRouteOpt
   });
 
   app.get('/api/v1/events/stream', async (req, reply) => {
+    const lastEventHeader = req.headers['last-event-id'];
+    const lastEventId = Array.isArray(lastEventHeader) ? lastEventHeader[0] : lastEventHeader;
+    if (lastEventId && !SystemEventSchema.shape.id.safeParse(lastEventId).success) {
+      return reply.status(400).send({ error: 'Last-Event-ID must be a valid event UUID.' });
+    }
+
     reply.hijack();
     const response = reply.raw;
     response.writeHead(200, {
@@ -39,13 +46,38 @@ export function registerEventRoutes(app: FastifyInstance, options: EventRouteOpt
     });
     response.write(': connected\n\n');
 
-    const send = (event: unknown) => {
+    const pendingLiveEvents: SystemEvent[] = [];
+    let replayComplete = !lastEventId || !options.eventRepo;
+    const send = (event: SystemEvent) => {
       if (!response.writableEnded) {
-        const typedEvent = event as { id?: string; type?: string };
-        response.write(`id: ${typedEvent.id || 'event'}\nevent: ${typedEvent.type || 'message'}\ndata: ${JSON.stringify(event)}\n\n`);
+        response.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
       }
     };
-    const unsubscribe = options.eventBus.subscribe('*', send);
+    const handleLiveEvent = (event: SystemEvent) => {
+      if (!replayComplete) {
+        pendingLiveEvents.push(event);
+        return;
+      }
+      send(event);
+    };
+    const unsubscribe = options.eventBus.subscribe('*', handleLiveEvent);
+
+    if (!replayComplete && lastEventId && options.eventRepo) {
+      try {
+        const replayedEvents = await options.eventRepo.listAfterId(lastEventId, 100);
+        const replayedIds = new Set(replayedEvents.map(event => event.id));
+        replayedEvents.forEach(send);
+        pendingLiveEvents
+          .filter(event => !replayedIds.has(event.id))
+          .forEach(send);
+      } catch {
+        response.write(': durable replay unavailable; live events remain connected\n\n');
+      } finally {
+        replayComplete = true;
+        pendingLiveEvents.length = 0;
+      }
+    }
+
     const heartbeat = setInterval(() => {
       if (!response.writableEnded) response.write(': heartbeat\n\n');
     }, 15000);
