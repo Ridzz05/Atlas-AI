@@ -148,6 +148,34 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
     await expect(delegator.executePlan(deepParentTask)).rejects.toThrow('exceeds maximum allowed depth');
   });
 
+  it('honors the configured global delegation depth limit', async () => {
+    const parentAtConfiguredLimit: Task = {
+      ...parentTask,
+      depth: 1
+    };
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: JSON.stringify({
+            goal: 'Configured depth task',
+            steps: [{ id: 'step_1', agent: 'ned', objective: 'Too deep for configured limit', depends_on: [] }],
+            approval_points: [],
+            estimated_cost_usd: 0.1
+          })
+        }
+      ]
+    });
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      maxDelegationDepth: 1
+    });
+
+    await expect(delegator.executePlan(parentAtConfiguredLimit)).rejects.toThrow('exceeds maximum allowed depth of 1');
+  });
+
   it('does not synthesize or complete a task when Argus blocks the result', async () => {
     const provider = new MockModelProvider({
       cannedResponses: [

@@ -154,6 +154,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     budgetRepo: options.budgetRepo,
     globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
     maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,
+    maxDelegationDepth: options.config.MAX_DELEGATION_DEPTH,
     cancellationStore: options.runRepo
   });
 

@@ -31,6 +31,7 @@ export interface MultiAgentDelegatorOptions {
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   maxConcurrency?: number;
+  maxDelegationDepth?: number;
   cancellationStore?: RunCancellationStore;
   workerId?: string;
   leaseSeconds?: number;
@@ -182,7 +183,8 @@ export class TaskDelegator {
         const depthValidation = DepthGuard.validateDelegation({
           parentAgentId: parentTask.assignedAgent,
           targetAgentId: step.agent,
-          currentDepth: parentTask.depth
+          currentDepth: parentTask.depth,
+          maxAllowedDepth: this.options.maxDelegationDepth
         });
 
         if (!depthValidation.allowed) {

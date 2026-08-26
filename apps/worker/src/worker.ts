@@ -150,6 +150,7 @@ export class AgentWorkerRunner {
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,
+      maxDelegationDepth: options.config.MAX_DELEGATION_DEPTH,
       cancellationStore: options.runRepo
     });
 
