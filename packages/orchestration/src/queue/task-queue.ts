@@ -22,6 +22,7 @@ export interface TaskQueue {
   enqueue(data: TaskJobData): Promise<string>;
   defer?(data: TaskJobData, delayMs?: number): Promise<string>;
   process(concurrency: number, handler: TaskJobHandler): void;
+  healthCheck(): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -31,6 +32,7 @@ export class InMemoryTaskQueue implements TaskQueue {
   private handler: TaskJobHandler | null = null;
   private activeCount = 0;
   private concurrency = 1;
+  private closed = false;
   private deferredTimers = new Map<string, NodeJS.Timeout>();
 
   public async enqueue(data: TaskJobData): Promise<string> {
@@ -60,6 +62,10 @@ export class InMemoryTaskQueue implements TaskQueue {
     this.dispatch();
   }
 
+  public async healthCheck(): Promise<boolean> {
+    return !this.closed;
+  }
+
   private async dispatch(): Promise<void> {
     if (!this.isProcessing || !this.handler) return;
 
@@ -82,6 +88,7 @@ export class InMemoryTaskQueue implements TaskQueue {
   }
 
   public async close(): Promise<void> {
+    this.closed = true;
     this.isProcessing = false;
     this.queue = [];
     for (const timer of this.deferredTimers.values()) clearTimeout(timer);

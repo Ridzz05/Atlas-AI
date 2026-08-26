@@ -70,6 +70,17 @@ export class BullMqTaskQueue implements TaskQueue {
     });
   }
 
+  public async healthCheck(): Promise<boolean> {
+    if (this.closed) return false;
+    try {
+      await this.queue.getJobCounts();
+      return true;
+    } catch (error) {
+      rootLogger.warn('BullMQ readiness check failed', { error: String(error) });
+      return false;
+    }
+  }
+
   public async close(): Promise<void> {
     if (this.closed) return;
     this.closed = true;

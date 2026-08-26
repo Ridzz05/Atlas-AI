@@ -56,6 +56,11 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   app.addHook('onRequest', async (req, reply) => {
     const requestPath = req.url.split('?')[0] || '';
     const isPublicHealthEndpoint = requestPath === '/health' || requestPath === '/ready';
+    const incomingRequestId = req.headers['x-request-id'];
+    const requestId = typeof incomingRequestId === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(incomingRequestId)
+      ? incomingRequestId
+      : crypto.randomUUID();
+    reply.header('x-request-id', requestId);
 
     if (!isPublicHealthEndpoint && requestPath.startsWith('/api/')) {
       const now = Date.now();
@@ -96,7 +101,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     rootLogger.debug('Incoming request', {
       method: req.method,
       url: req.url,
-      ip: req.ip
+      ip: req.ip,
+      requestId
     });
   });
 
@@ -186,9 +192,17 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
   app.get('/ready', async (_req, reply) => {
     const dbHealthy = options.db ? await options.db.healthCheck() : true;
-    return reply.status(dbHealthy ? 200 : 503).send({
-      status: dbHealthy ? 'ready' : 'degraded',
+    let queueHealthy = false;
+    try {
+      queueHealthy = await taskQueue.healthCheck();
+    } catch {
+      queueHealthy = false;
+    }
+    const ready = dbHealthy && queueHealthy;
+    return reply.status(ready ? 200 : 503).send({
+      status: ready ? 'ready' : 'degraded',
       database: dbHealthy ? 'connected' : 'disconnected',
+      queue: queueHealthy ? 'connected' : 'disconnected',
       timestamp: new Date().toISOString()
     });
   });

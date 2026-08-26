@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildServer } from '../src/server.js';
 import { EnvConfigSchema } from '@atlas/shared';
 
@@ -16,6 +16,7 @@ describe('agent-service health endpoints', () => {
     const body = JSON.parse(response.body);
     expect(body.status).toBe('ok');
     expect(body.service).toBe('agent-service');
+    expect(response.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
   it('GET /ready returns 200 and status ready', async () => {
@@ -27,6 +28,63 @@ describe('agent-service health endpoints', () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
     expect(body.status).toBe('ready');
+    expect(body.queue).toBe('connected');
+  });
+
+  it('returns degraded when the configured task queue is unavailable', async () => {
+    const unavailableQueue = {
+      enqueue: vi.fn(),
+      process: vi.fn(),
+      close: vi.fn(),
+      healthCheck: vi.fn().mockResolvedValue(false)
+    };
+    const degradedServer = buildServer({
+      config,
+      taskQueue: unavailableQueue as any,
+      processQueue: false
+    });
+
+    const response = await degradedServer.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body)).toMatchObject({ status: 'degraded', queue: 'disconnected' });
+  });
+
+  it('fails closed when the configured task queue cannot report health', async () => {
+    const unverifiableQueue = {
+      enqueue: vi.fn(),
+      process: vi.fn(),
+      close: vi.fn()
+    };
+    const degradedServer = buildServer({
+      config,
+      taskQueue: unverifiableQueue as any,
+      processQueue: false
+    });
+
+    const response = await degradedServer.inject({ method: 'GET', url: '/ready' });
+
+    expect(response.statusCode).toBe(503);
+    expect(JSON.parse(response.body)).toMatchObject({ status: 'degraded', queue: 'disconnected' });
+  });
+
+  it('preserves a valid incoming request id and replaces an unsafe one', async () => {
+    const validRequestId = 'owner-request-2026-08-26';
+    const unsafeRequestId = 'bad request\nwith-newline';
+
+    const valid = await server.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': validRequestId }
+    });
+    const unsafe = await server.inject({
+      method: 'GET',
+      url: '/health',
+      headers: { 'x-request-id': unsafeRequestId }
+    });
+
+    expect(valid.headers['x-request-id']).toBe(validRequestId);
+    expect(unsafe.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/i);
   });
 
   it('GET /api/v1/info returns 200', async () => {

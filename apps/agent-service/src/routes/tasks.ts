@@ -4,6 +4,21 @@ import { TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 
+function parseQueryInteger(
+  value: unknown,
+  label: string,
+  fallback: number,
+  minimum: number,
+  maximum: number
+): number | { error: string } {
+  if (value === undefined) return fallback;
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    return { error: `${label} must be an integer from ${minimum} to ${maximum}.` };
+  }
+  return parsed;
+}
+
 export interface TaskRouteOptions {
   taskRepo: TaskRepository;
   taskQueue: TaskQueue;
@@ -61,14 +76,34 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
 
   // List Tasks
   app.get('/api/v1/tasks', async (req, reply) => {
-    const query = req.query as any;
-    const status = query.status ? TaskStatusSchema.safeParse(query.status).data : undefined;
-    const assignedAgent = query.assignedAgent as string | undefined;
-    const limit = query.limit ? Number(query.limit) : 50;
-    const offset = query.offset ? Number(query.offset) : 0;
+    const query = req.query as {
+      status?: unknown;
+      assignedAgent?: unknown;
+      limit?: unknown;
+      offset?: unknown;
+    };
+    const statusResult = query.status === undefined ? null : TaskStatusSchema.safeParse(query.status);
+    if (query.status !== undefined && !statusResult?.success) {
+      return reply.status(400).send({ error: 'Invalid task status.' });
+    }
+
+    const assignedAgent = query.assignedAgent;
+    if (assignedAgent !== undefined && (typeof assignedAgent !== 'string' || assignedAgent.trim().length === 0 || assignedAgent.length > 64)) {
+      return reply.status(400).send({ error: 'assignedAgent must be a non-empty string up to 64 characters.' });
+    }
+
+    const limit = parseQueryInteger(query.limit, 'Task limit', 50, 1, 100);
+    if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const offset = parseQueryInteger(query.offset, 'Task offset', 0, 0, 100000);
+    if (typeof offset !== 'number') return reply.status(400).send(offset);
 
     try {
-      const tasks = await options.taskRepo.list({ status, assignedAgent, limit, offset });
+      const tasks = await options.taskRepo.list({
+        status: statusResult?.success ? statusResult.data : undefined,
+        assignedAgent: assignedAgent as string | undefined,
+        limit,
+        offset
+      });
       return reply.status(200).send({ data: tasks, count: tasks.length });
     } catch (err) {
       rootLogger.error('Failed to list tasks', { error: String(err) });

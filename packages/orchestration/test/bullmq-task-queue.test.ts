@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BullMqTaskQueue } from '../src/queue/bullmq-task-queue.js';
 
 const add = vi.fn().mockResolvedValue({ id: 'job-1' });
+const getJobCounts = vi.fn().mockResolvedValue({ waiting: 0, active: 0 });
 const queueClose = vi.fn().mockResolvedValue(undefined);
 const workerClose = vi.fn().mockResolvedValue(undefined);
 const workerOn = vi.fn();
@@ -9,6 +10,7 @@ const workerOn = vi.fn();
 vi.mock('bullmq', () => ({
   Queue: class FakeQueue {
     add = add;
+    getJobCounts = getJobCounts;
     close = queueClose;
   },
   Worker: class FakeWorker {
@@ -18,6 +20,21 @@ vi.mock('bullmq', () => ({
 }));
 
 describe('BullMqTaskQueue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('reports queue health while open and fails after close', async () => {
+    const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-health' });
+
+    await expect(queue.healthCheck()).resolves.toBe(true);
+    expect(getJobCounts).toHaveBeenCalled();
+
+    await queue.close();
+
+    await expect(queue.healthCheck()).resolves.toBe(false);
+  });
+
   it('enqueues a durable job with retry policy and starts a worker processor', async () => {
     const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas' });
     const handler = vi.fn().mockResolvedValue(undefined);

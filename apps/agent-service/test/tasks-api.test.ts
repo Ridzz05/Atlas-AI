@@ -198,6 +198,25 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     );
   });
 
+  it('rejects invalid task list filters and pagination before querying the repository', async () => {
+    const invalidStatus = await server.inject({
+      method: 'GET',
+      url: '/api/v1/tasks?status=not-a-task-status'
+    });
+    const invalidLimit = await server.inject({
+      method: 'GET',
+      url: '/api/v1/tasks?limit=not-a-number'
+    });
+    const invalidOffset = await server.inject({
+      method: 'GET',
+      url: '/api/v1/tasks?offset=-1'
+    });
+
+    expect(invalidStatus.statusCode).toBe(400);
+    expect(invalidLimit.statusCode).toBe(400);
+    expect(invalidOffset.statusCode).toBe(400);
+  });
+
   it('issues a one-time token and requeues a paused child through its parent task', async () => {
     const parentId = '123e4567-e89b-12d3-a456-426614174010';
     const childId = '123e4567-e89b-12d3-a456-426614174011';
