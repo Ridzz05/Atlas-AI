@@ -63,7 +63,7 @@
 
 ## Current execution checkpoint
 
-Implemented through commit `2c83b0e`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE, artifact/audit repositories, memory query API, and API-backed dashboard observability pages. Full local gates pass: typecheck 26/26, test 26/26, build 15/15. Docker-backed boot/recovery, real providers/connectors, full task/tool-call history, reconnect replay, backup restore, and CI lint gates remain open.
+Implemented through commit `9962053`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE, artifact/audit repositories, memory query API, API-backed dashboard observability pages, and CI build/Compose validation. Full local gates pass: typecheck 26/26, test 26/26, build 15/15. Docker-backed boot/recovery, real providers/connectors, full task/tool-call history, reconnect replay, backup restore, and CI lint gates remain open.
 
 ## Final release checkpoint
 

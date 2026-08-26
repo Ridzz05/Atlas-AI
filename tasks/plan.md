@@ -8,7 +8,7 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `2c83b0e`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `9962053`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions).
 - `pnpm lint`: exits 0 but executes **zero tasks**; no workspace package defines a real lint/format script. CI now runs typecheck, test, production build, and production Compose config validation.
@@ -148,7 +148,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `2c83b0e`. The full local gates pass: `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
+Execution is committed through `9962053`. The full local gates pass: `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
 
 Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, audit/memory metadata APIs, and API-backed dashboard observability pages.
 
