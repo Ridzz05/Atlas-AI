@@ -1,7 +1,14 @@
 import { TelegramBotConfig } from './config.js';
 import { TelegramSecurityGuard } from './security/guard.js';
 import { CommandRouter } from './handlers/commands.js';
-import { ApprovalRepository, BudgetRepository, RunRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
+import {
+  ApprovalRepository,
+  BudgetRepository,
+  MessageRepository,
+  RunRepository,
+  TaskRepository,
+  TelegramStateRepository
+} from '@atlas/database';
 import { AgentRegistry, defaultAgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
@@ -97,6 +104,7 @@ export class FetchTelegramApiClient implements TelegramApiClient {
 export interface AtlasTelegramBotOptions {
   config: TelegramBotConfig;
   taskRepo?: TaskRepository;
+  messageRepo?: MessageRepository;
   runRepo?: RunRepository;
   budgetRepo?: BudgetRepository;
   approvalRepo?: ApprovalRepository;
@@ -124,6 +132,7 @@ export class AtlasTelegramBot {
 
     this.router = new CommandRouter({
       taskRepo: options.taskRepo,
+      messageRepo: options.messageRepo,
       runRepo: options.runRepo,
       budgetRepo: options.budgetRepo,
       approvalRepo: options.approvalRepo,

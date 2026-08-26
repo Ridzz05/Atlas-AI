@@ -1,10 +1,11 @@
-import { ApprovalRepository, BudgetRepository, RunRepository, TaskRepository } from '@atlas/database';
+import { ApprovalRepository, BudgetRepository, MessageRepository, RunRepository, TaskRepository } from '@atlas/database';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 
 export interface CommandContext {
   taskRepo?: TaskRepository;
+  messageRepo?: MessageRepository;
   runRepo?: RunRepository;
   budgetRepo?: BudgetRepository;
   approvalRepo?: ApprovalRepository;
@@ -42,7 +43,7 @@ export class CommandRouter {
         return this.handleTaskDetail(args[0]);
 
       case 'new':
-        return this.handleNewTask(args.join(' '));
+        return this.handleNewTask(args.join(' '), actorId);
 
       case 'pause':
         await this.ctx.setPaused(true, actorId);
@@ -154,7 +155,7 @@ ${children.length > 0 ? `\n*Subtasks (${children.length}):*\n${childRows}` : ''}
 ${task.error ? `\n⚠️ *Error:* \`${task.error}\`` : ''}`;
   }
 
-  private async handleNewTask(goal: string): Promise<string> {
+  private async handleNewTask(goal: string, actorId: string): Promise<string> {
     if (!goal.trim()) {
       return '⚠️ Please provide a goal: `/new <description of what you want Chief to do>`';
     }
@@ -194,6 +195,20 @@ ${task.error ? `\n⚠️ *Error:* \`${task.error}\`` : ''}`;
         },
         taskId
       );
+    }
+
+    if (this.ctx.messageRepo) {
+      try {
+        await this.ctx.messageRepo.create({
+          taskId: task.id,
+          senderType: 'user',
+          senderId: actorId,
+          content: task.goal,
+          metadata: { source: 'telegram' }
+        });
+      } catch (error) {
+        rootLogger.error('Failed to persist Telegram task intake message', { taskId: task.id, error: String(error) });
+      }
     }
 
     if (this.ctx.taskQueue) {

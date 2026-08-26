@@ -74,6 +74,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
   const taskQueue = new InMemoryTaskQueue();
   const eventBus = new InMemoryEventBus();
   const publishedEvents: Array<{ type: string; taskId?: string; payload: Record<string, unknown> }> = [];
+  const messageRepo = { create: vi.fn().mockResolvedValue(undefined) } as any;
   eventBus.subscribe('*', event => {
     publishedEvents.push({ type: event.type, taskId: event.taskId, payload: event.payload });
   });
@@ -105,6 +106,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     provider,
     taskQueue,
     eventBus,
+    messageRepo,
     registry: defaultAgentRegistry,
     approvalRepo
   });
@@ -140,6 +142,14 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     expect(response.statusCode).toBe(201);
     const body = JSON.parse(response.body);
     expect(body.assignedAgent).toBe('chief');
+    expect(messageRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: body.id,
+        senderType: 'user',
+        senderId: 'api-owner',
+        content: 'Analyze CRM market and synthesize results'
+      })
+    );
     expect(publishedEvents).toContainEqual(
       expect.objectContaining({
         type: 'task.created',

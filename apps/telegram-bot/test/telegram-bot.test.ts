@@ -4,6 +4,7 @@ import { ApprovalCardRenderer } from '../src/cards/approval-card.js';
 import { defaultAgentRegistry } from '@atlas/agents';
 import { ApprovalRequest } from '@atlas/shared';
 import { TelegramApiClient } from '../src/bot.js';
+import { InMemoryTaskQueue } from '@atlas/orchestration';
 
 describe('@atlas/telegram-bot tests', () => {
   const allowedUser = 12345678;
@@ -276,6 +277,62 @@ describe('@atlas/telegram-bot tests', () => {
 
     const result = await bot.processUpdate(update);
     expect(result.responseText).toContain('EMERGENCY STOP ACTIVATED');
+  });
+
+  it('persists the originating Telegram message when creating a task', async () => {
+    const task = {
+      id: '123e4567-e89b-12d3-a456-426614174021',
+      parentId: null,
+      title: 'Find Palembang gyms',
+      goal: 'Find Palembang gyms',
+      assignedAgent: 'chief',
+      depth: 0,
+      status: 'queued',
+      priority: 'normal',
+      context: {},
+      plan: null,
+      result: null,
+      error: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null
+    };
+    const taskRepo = { create: vi.fn().mockResolvedValue(task) } as any;
+    const messageRepo = { create: vi.fn().mockResolvedValue(undefined) } as any;
+    const taskQueue = new InMemoryTaskQueue();
+    const durableBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      taskRepo,
+      messageRepo,
+      taskQueue
+    });
+
+    const result = await durableBot.processUpdate({
+      update_id: 109,
+      message: {
+        message_id: 9,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/new Find Palembang gyms',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('Task Created Successfully');
+    expect(messageRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: task.id,
+        senderType: 'user',
+        senderId: String(allowedUser),
+        content: task.goal,
+        metadata: { source: 'telegram' }
+      })
+    );
   });
 
   it('routes Telegram stop and emergency stop to durable run cancellation', async () => {

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition, Task } from '@atlas/shared';
-import { TaskRepository, TelegramStateRepository } from '@atlas/database';
+import { MessageRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
 import { createTaskLifecycleEvent, EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
@@ -21,6 +21,7 @@ export interface TaskRouteOptions {
   taskRepo: TaskRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
+  messageRepo?: MessageRepository;
   getAgentDefinition: (id: string) => AgentDefinition;
   controlStateRepo?: TelegramStateRepository;
 }
@@ -62,6 +63,7 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
 
     try {
       const task = await options.taskRepo.create(input);
+      await persistTaskIntake(options.messageRepo, task);
       await publishTaskCreated(options.eventBus, task);
 
       // Enqueue job for background processing
@@ -150,5 +152,21 @@ async function publishTaskCreated(eventBus: EventBus, task: Task): Promise<void>
     await eventBus.publish(event);
   } catch (error) {
     rootLogger.error('Failed to publish task.created event', { taskId: task.id, error: String(error) });
+  }
+}
+
+async function persistTaskIntake(messageRepo: MessageRepository | undefined, task: Task): Promise<void> {
+  if (!messageRepo) return;
+
+  try {
+    await messageRepo.create({
+      taskId: task.id,
+      senderType: 'user',
+      senderId: 'api-owner',
+      content: task.goal,
+      metadata: { source: 'api' }
+    });
+  } catch (error) {
+    rootLogger.error('Failed to persist task intake message', { taskId: task.id, error: String(error) });
   }
 }
