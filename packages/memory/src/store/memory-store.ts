@@ -33,7 +33,8 @@ export class InMemoryMemoryStore implements MemoryStore {
   }
 
   public async findById(id: string): Promise<MemoryItem | null> {
-    return this.items.get(id) || null;
+    const item = this.items.get(id);
+    return item && !isMemoryExpired(item) ? item : null;
   }
 
   public async search(params: {
@@ -127,7 +128,10 @@ export class DatabaseMemoryStore implements MemoryStore {
   }
 
   public async findById(id: string): Promise<MemoryItem | null> {
-    const res = await this.db.query('SELECT * FROM memory_items WHERE id = $1', [id]);
+    const res = await this.db.query(
+      'SELECT * FROM memory_items WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())',
+      [id]
+    );
     if (!res.rows[0]) return null;
     return this.mapRow(res.rows[0]);
   }

@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   InMemoryMemoryStore,
+  DatabaseMemoryStore,
   MemoryRetriever,
   MemoryProposalService,
   MemoryTools
@@ -198,8 +199,22 @@ describe('@atlas/memory tests', () => {
     const results = await retriever.retrieve({ query: 'CRM policy fact', status: 'verified' });
     expect(results.map(result => result.item.id)).toEqual([activeId]);
 
+    expect(await store.findById(expiredId)).toBeNull();
     const expired = await tools.get({ id: expiredId });
     expect(expired.item).toBeNull();
+  });
+
+  it('enforces expiry in direct database lookups', async () => {
+    const db = {
+      query: vi.fn(async (sql: string) => {
+        expect(sql).toContain('expires_at IS NULL OR expires_at > NOW()');
+        return { rows: [] };
+      })
+    };
+    const store = new DatabaseMemoryStore(db as any);
+
+    expect(await store.findById(crypto.randomUUID())).toBeNull();
+    expect(db.query).toHaveBeenCalledOnce();
   });
 
   it('allows a fresh proposal after an identical memory item expires', async () => {
