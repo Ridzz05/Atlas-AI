@@ -10,10 +10,14 @@ export interface ArtifactMeta {
   sizeBytes: number;
 }
 
+export interface ArtifactMetadataWriter {
+  record(input: ArtifactMeta & { taskId: string; runId?: string }): Promise<unknown>;
+}
+
 export class ArtifactService {
   private readonly storageDir: string;
 
-  constructor(storageDir = './data/artifacts') {
+  constructor(storageDir = './data/artifacts', private metadataWriter?: ArtifactMetadataWriter) {
     this.storageDir = path.resolve(storageDir);
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
@@ -48,6 +52,14 @@ export class ArtifactService {
     }
     if (!fs.existsSync(fullPath)) return null;
     return fs.readFileSync(fullPath, 'utf-8');
+  }
+
+  public async recordMetadata(
+    meta: ArtifactMeta,
+    context: { taskId: string; runId?: string }
+  ): Promise<void> {
+    if (!this.metadataWriter) return;
+    await this.metadataWriter.record({ ...meta, ...context });
   }
 
   private resolveArtifactPath(name: string): string {

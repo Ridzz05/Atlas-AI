@@ -41,8 +41,12 @@ export function createArtifactTools(artifactService: ArtifactService): ToolDefin
     riskLevel: 'low',
     requiresApproval: false,
     timeoutMs: 5000,
-    async execute(_ctx, input) {
+    async execute(ctx, input) {
       const meta = artifactService.save(input.name, input.content, input.mimeType);
+      await artifactService.recordMetadata(meta, {
+        taskId: ctx.taskId,
+        runId: ctx.runId
+      });
       return {
         name: meta.name,
         filePath: meta.filePath,

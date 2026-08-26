@@ -10,6 +10,7 @@
     { "path": "../shared" },
     { "path": "../events" },
     { "path": "../database" },
+    { "path": "../memory" },
     { "path": "../providers" },
     { "path": "../agents" },
     { "path": "../orchestration" }

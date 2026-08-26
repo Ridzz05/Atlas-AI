@@ -164,13 +164,16 @@ export class ToolRegistry {
       const durationMs = Date.now() - startTime;
 
       // 4. Audit execution
-      AuditService.format({
+      const auditRecord = AuditService.format({
         actor: context.agentId,
         action: `tool.${name}`,
         taskId: context.taskId,
         runId: context.runId,
         details: { durationMs, riskLevel: tool.riskLevel }
       });
+      if (context.auditSink) {
+        await context.auditSink.record(auditRecord);
+      }
 
       return {
         success: true,

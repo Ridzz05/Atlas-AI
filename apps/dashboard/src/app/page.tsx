@@ -51,6 +51,14 @@ export default function CommandCenterPage() {
 
   useEffect(() => { void loadOverview(); }, []);
 
+  useEffect(() => {
+    const stream = new EventSource('/api/atlas/events/stream');
+    const refresh = () => { void loadOverview(); };
+    stream.onmessage = refresh;
+    stream.onerror = () => stream.close();
+    return () => stream.close();
+  }, []);
+
   const activeCount = tasks.filter(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)).length;
   const completedCount = tasks.filter(task => task.status === 'completed').length;
   const costToday = tasks.reduce((total, task) => total + (typeof task.result?.totalCostUsd === 'number' ? task.result.totalCostUsd : 0), 0);

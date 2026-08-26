@@ -3,7 +3,8 @@ import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { ApprovalRepository, DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
+import { ApprovalRepository, ArtifactRepository, AuditRepository, DatabaseClient, SystemEventRepository, TaskRepository, RunRepository } from '@atlas/database';
+import { MemoryStore } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -16,6 +17,8 @@ import {
 import { registerTaskRoutes } from './routes/tasks.js';
 import { registerRunRoutes } from './routes/runs.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
+import { registerEventRoutes } from './routes/events.js';
+import { registerMetadataRoutes } from './routes/metadata.js';
 
 export interface ServerOptions {
   config: EnvConfig;
@@ -23,6 +26,10 @@ export interface ServerOptions {
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
   approvalRepo?: ApprovalRepository;
+  eventRepo?: SystemEventRepository;
+  artifactRepo?: ArtifactRepository;
+  auditRepo?: AuditRepository;
+  memoryStore?: MemoryStore;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -185,6 +192,17 @@ export function buildServer(options: ServerOptions): FastifyInstance {
       getAgentDefinition: (id: string) => registry.getOrThrow(id)
     });
   }
+
+  registerEventRoutes(app, {
+    eventBus,
+    eventRepo: options.eventRepo
+  });
+
+  registerMetadataRoutes(app, {
+    artifactRepo: options.artifactRepo,
+    auditRepo: options.auditRepo,
+    memoryStore: options.memoryStore
+  });
 
   return app;
 }

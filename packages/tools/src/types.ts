@@ -1,5 +1,6 @@
 import { z, ZodSchema } from 'zod';
 import { ApprovalToken, ToolRiskLevel } from '@atlas/shared';
+import type { AuditRecord } from '@atlas/observability';
 
 export interface CommunicationSendInput {
   recipient: string;
@@ -36,6 +37,10 @@ export type CommunicationSender = (
   context: ToolContext
 ) => Promise<CommunicationSendResult>;
 
+export interface AuditSink {
+  record(event: AuditRecord): Promise<unknown>;
+}
+
 export interface ApprovalExecutionStore {
   claimExecution(token: ApprovalToken, currentPayload: unknown): Promise<{ id: string } | null>;
   getExecutionStatus(id: string): Promise<string | null>;
@@ -70,6 +75,7 @@ export interface ToolContext {
   approvalExecutionStore?: ApprovalExecutionStore;
   approvalRequestStore?: ApprovalRequestStore;
   communicationSender?: CommunicationSender;
+  auditSink?: AuditSink;
   researchProvider?: ResearchProvider;
   signal?: AbortSignal;
 }

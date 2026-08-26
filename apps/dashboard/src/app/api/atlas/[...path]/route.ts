@@ -16,7 +16,7 @@ async function proxy(request: NextRequest, context: RouteContext): Promise<NextR
   const responseHeaders = new Headers();
   const contentType = response.headers.get('content-type');
   if (contentType) responseHeaders.set('content-type', contentType);
-  return new NextResponse(await response.arrayBuffer(), { status: response.status, headers: responseHeaders });
+  return new NextResponse(response.body, { status: response.status, headers: responseHeaders });
 }
 
 export const GET = proxy;

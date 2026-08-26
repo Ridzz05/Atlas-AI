@@ -19,6 +19,7 @@
   "dependencies": {
     "@atlas/agents": "workspace:*",
     "@atlas/database": "workspace:*",
+    "@atlas/memory": "workspace:*",
     "@atlas/events": "workspace:*",
     "@atlas/orchestration": "workspace:*",
     "@atlas/providers": "workspace:*",

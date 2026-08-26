@@ -4,11 +4,15 @@ import {
   DatabaseClient,
   Migrator,
   ApprovalRepository,
+  ArtifactRepository,
+  AuditRepository,
+  SystemEventRepository,
   TelegramStateRepository,
   RunRepository,
   seedAgents,
   TaskRepository
 } from '@atlas/database';
+import { DatabaseMemoryStore } from '@atlas/memory';
 import { EventBus, PostgresEventBus } from '@atlas/events';
 import { BullMqTaskQueue, TaskQueue } from '@atlas/orchestration';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
@@ -19,6 +23,10 @@ export interface AtlasRuntime {
   taskRepo: TaskRepository;
   runRepo: RunRepository;
   approvalRepo: ApprovalRepository;
+  artifactRepo: ArtifactRepository;
+  auditRepo: AuditRepository;
+  memoryStore: DatabaseMemoryStore;
+  eventRepo: SystemEventRepository;
   telegramStateRepo: TelegramStateRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
@@ -64,6 +72,10 @@ export async function createAtlasRuntime(
   const taskRepo = new TaskRepository(db);
   const runRepo = new RunRepository(db);
   const approvalRepo = new ApprovalRepository(db, config.ENCRYPTION_KEY);
+  const artifactRepo = new ArtifactRepository(db);
+  const auditRepo = new AuditRepository(db);
+  const memoryStore = new DatabaseMemoryStore(db);
+  const eventRepo = new SystemEventRepository(db);
   const telegramStateRepo = new TelegramStateRepository(db);
 
   return {
@@ -71,6 +83,10 @@ export async function createAtlasRuntime(
     taskRepo,
     runRepo,
     approvalRepo,
+    artifactRepo,
+    auditRepo,
+    memoryStore,
+    eventRepo,
     telegramStateRepo,
     taskQueue,
     eventBus,

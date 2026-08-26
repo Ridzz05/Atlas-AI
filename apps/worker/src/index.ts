@@ -12,6 +12,8 @@ async function main() {
     taskRepo: runtime.taskRepo,
     runRepo: runtime.runRepo,
     approvalRepo: runtime.approvalRepo,
+    artifactRepo: runtime.artifactRepo,
+    auditRepo: runtime.auditRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

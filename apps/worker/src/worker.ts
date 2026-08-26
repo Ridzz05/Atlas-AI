@@ -1,6 +1,13 @@
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { ApprovalRepository, DatabaseClient, TaskRepository, RunRepository } from '@atlas/database';
+import {
+  ApprovalRepository,
+  ArtifactRepository,
+  AuditRepository,
+  DatabaseClient,
+  TaskRepository,
+  RunRepository
+} from '@atlas/database';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -31,6 +38,8 @@ export interface WorkerRunnerOptions {
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
   approvalRepo?: ApprovalRepository;
+  artifactRepo?: ArtifactRepository;
+  auditRepo?: AuditRepository;
 }
 
 export class AgentWorkerRunner {
@@ -52,7 +61,11 @@ export class AgentWorkerRunner {
     toolRegistry.register(CompanyLookupTool);
     toolRegistry.register(CreateDraftTool);
     toolRegistry.register(SendApprovedCommunicationTool);
-    for (const tool of createArtifactTools(new ArtifactService(options.config.ARTIFACT_STORAGE_PATH))) {
+    const artifactService = new ArtifactService(
+      options.config.ARTIFACT_STORAGE_PATH,
+      options.artifactRepo ? { record: input => options.artifactRepo!.create(input) } : undefined
+    );
+    for (const tool of createArtifactTools(artifactService)) {
       toolRegistry.register(tool);
     }
     const toolExecutor = new ToolGatewayExecutor({
@@ -61,7 +74,8 @@ export class AgentWorkerRunner {
         externalWritesEnabled: options.config.EXTERNAL_WRITES_ENABLED,
         approvalSecretKey: options.config.ENCRYPTION_KEY,
         approvalExecutionStore: options.approvalRepo,
-        approvalRequestStore: options.approvalRepo
+        approvalRequestStore: options.approvalRepo,
+        auditSink: options.auditRepo ? { record: event => options.auditRepo!.create(event) } : undefined
       }
     });
 

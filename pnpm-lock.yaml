@@ -455,6 +455,9 @@ importers:
       '@atlas/events':
         specifier: workspace:*
         version: link:../events
+      '@atlas/memory':
+        specifier: workspace:*
+        version: link:../memory
       '@atlas/orchestration':
         specifier: workspace:*
         version: link:../orchestration
