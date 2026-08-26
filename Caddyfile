@@ -4,6 +4,12 @@
 
 # Set ATLAS_DOMAIN to the public hostname in production; localhost is suitable only for staging.
 {$ATLAS_DOMAIN} {
+    # Dashboard browser requests use the Next.js server proxy so the API token
+    # stays server-side. Keep this more-specific matcher before /api/*.
+    handle /api/atlas/* {
+        reverse_proxy dashboard:3000
+    }
+
     handle /api/* {
         reverse_proxy agent-service:4000
     }

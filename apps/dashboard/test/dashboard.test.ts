@@ -93,4 +93,14 @@ describe('@atlas/dashboard Integration Tests', () => {
     const compose = readFileSync(resolve(process.cwd(), '../../docker-compose.prod.yml'), 'utf8');
     expect(compose).toContain('ATLAS_API_BASE_URL: http://agent-service:4000/api/v1');
   });
+
+  it('routes the dashboard proxy path through Next.js before direct API paths in Caddy', () => {
+    const caddy = readFileSync(resolve(process.cwd(), '../../Caddyfile'), 'utf8');
+    const dashboardProxyIndex = caddy.indexOf('handle /api/atlas/*');
+    const directApiIndex = caddy.indexOf('handle /api/*');
+
+    expect(dashboardProxyIndex).toBeGreaterThanOrEqual(0);
+    expect(directApiIndex).toBeGreaterThan(dashboardProxyIndex);
+    expect(caddy.slice(dashboardProxyIndex, directApiIndex)).toContain('reverse_proxy dashboard:3000');
+  });
 });
