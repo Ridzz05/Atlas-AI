@@ -8,10 +8,10 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `844bec5`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `7f1d789`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions). API input validation, queue readiness, and request-ID correlation regressions also pass.
-- `pnpm lint`: runs a repository source-hygiene gate over 141 source files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
+- `pnpm lint`: runs a repository source-hygiene gate over 143 files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
 - Telegram polling, durable approval decisions, update claims, pause/emergency control state, and durable active-run cancellation are wired; cross-restart recovery still needs an integration drill.
 - Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, realtime refresh, and read-only environment-backed settings use authenticated APIs. Event reconnect replay is implemented; no sample operational data remains in the dashboard.
@@ -42,7 +42,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 | Phase 4 — Memory | Mostly implemented | Database/lexical stores, scoped MemoryTools, and authenticated dashboard query APIs are wired. Freshness jobs and canonical-memory audit remain. |
 | Phase 5 — Tools/workflow | Mostly implemented with safe gaps | Tool gateway, output schemas, artifact containment, durable approval request/claim/finalize/resume, and fail-closed unverified research are wired. Real research/enrichment adapters and an outbound connector remain intentionally disabled. |
 | Phase 6 — Dashboard | Mostly connected | Tasks, approvals, agents, overview, command intake, artifacts, audit, memory, cost/budget metrics, and read-only governance settings use API loading/error/empty states. Authenticated SSE refresh and durable event replay/reconnect semantics are wired; mutable configuration remains deployment-only. |
-| Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, fail-closed DB/queue readiness, request-ID correlation, runbook, and a repository lint gate exist. Rate limiting remains process-local; worker/Telegram health, Compose boot, recovery, backup restore, formatter enforcement, and alerting remain. |
+| Phase 7 — Hardening | Partially implemented | Auth, CORS, Redis-backed rate limiting with fail-closed outage behavior, secret checks, fail-closed DB/queue readiness, request-ID correlation, runbook, and a repository lint gate exist. Worker/Telegram health, Compose boot, recovery, backup restore, formatter enforcement, and alerting remain. |
 
 ## Findings ordered by leverage
 
@@ -53,8 +53,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 3. **No real outbound connector is configured.** Approved execution now mints an exact, durable, one-time token and resumes the paused task, but `EXTERNAL_WRITES_ENABLED` must remain false until a real connector, owner decision, and integration tests are approved.
 4. **Research is deliberately fail-closed rather than live.** Without an injected verified provider, search/company lookup returns no external facts. A real adapter with source, freshness, confidence, and prompt-injection boundaries is still required for the demo workflow.
 5. **Dashboard observability is intentionally read-only for governance.** Authenticated event SSE with replay, read-only artifact/memory/audit APIs, durable aggregate cost/budget metrics, and environment-backed settings are exposed. Mutable settings remain deployment-only by design.
-6. **Rate limiting is process-local.** API bearer auth and strict CORS are present, but rate-limit buckets do not coordinate across replicas; Telegram update/control state now uses PostgreSQL.
-7. **Operational gates are incomplete.** Lint is now a real CI gate, but there is no verified backup restore drill and Docker boot/recovery remains untested here.
+6. **Operational gates are incomplete.** Lint is now a real CI gate, but there is no verified backup restore drill and Docker boot/recovery remains untested here.
 
 ### Required / P1 — make the core system reliable
 
@@ -70,7 +69,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 1. Implement Telegram polling or webhook mode with secret verification, outbound response delivery, callback acknowledgement, persistent update deduplication, durable control state, and dependency injection into the command router. Active-run recovery still needs an environment drill.
 2. Route `/new`, `/status`, `/task`, `/stop`, `/pause`, `/resume`, `/emergency_stop`, and approval actions through the same control service as the web UI.
-3. API authentication suitable for the single-user MVP, strict CORS, rate limits, request IDs, and owner-only mutation checks are implemented. Rate limiting is still process-local and needs a cross-replica design before horizontal scaling.
+3. API authentication suitable for the single-user MVP, strict CORS, Redis-backed cross-replica rate limits, request IDs, and owner-only mutation checks are implemented. Redis rate-limit failures fail closed with HTTP 503.
 4. Dashboard tasks, approvals, agents, command intake, overview, artifacts, audit, memory, aggregate cost/budget metrics, and governance settings now use authenticated API queries with loading/error/empty states. Event replay/reconnect semantics are implemented; mutable configuration remains deployment-only.
 
 ### Required / P3 — make intelligence truthful and useful
@@ -148,9 +147,9 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `844bec5`. The full local gates pass: `pnpm.cmd lint` (141 source files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, and restart recovery remain unverified.
+Execution is committed through `7f1d789`. The full local gates pass: `pnpm.cmd lint` (143 files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, and restart recovery remain unverified.
 
-Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, explicit provider adapter routing with production configuration validation, and the CI lint/build/Compose gates.
+Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/Redis-backed rate limiting with fail-closed outage behavior, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, explicit provider adapter routing with production configuration validation, and the CI lint/build/Compose gates.
 
 Remaining release blockers: no approved outbound connector, no verified real research adapters, no Docker boot/recovery/backup drill, formatter enforcement, production recovery/lease observability, and a configured per-agent aggregate budget policy if required by the owner.
 
