@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, and API-backed dashboard task/approval/agent/artifact/audit/memory views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
+> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
 
 ---
 
@@ -88,12 +88,20 @@ Add to crontab (`crontab -e`):
 
 ### 4.1 Emergency Stop
 When an unexpected agent behavior or runaway task is detected:
-1. **Via Telegram**: Send `/emergency_stop` to the Telegram bot.
-2. **Via Shell**:
+1. **Via Dashboard**: Open **Command Center** and select **Emergency stop**, then confirm the action.
+2. **Via API** (with the configured owner token):
+   ```bash
+   curl -X POST https://<ATLAS_DOMAIN>/api/v1/control/emergency-stop \
+     -H "Authorization: Bearer <API_AUTH_TOKEN>" \
+     -H "Content-Type: application/json" \
+     -d '{"reason":"Incident response"}'
+   ```
+3. **Via Telegram**: Send `/emergency_stop` to the Telegram bot.
+4. **Via Shell**:
    ```bash
    docker compose -f docker-compose.prod.yml stop worker
    ```
-*Current limitation:* Telegram emergency stop is the supported control and its pause/emergency state plus active-run cancellation request are persisted. The dashboard has read-only observability but no emergency-stop mutation yet. Stopping the worker is an additional hard stop for new background execution; use the durable control first so the state is recorded.
+Dashboard, API, and Telegram use the same PostgreSQL-backed control state. Emergency stop persists the lock and requests cancellation for active runs; stopping the worker is an additional hard stop for new background execution.
 
 ### 4.2 System Recovery / Resume
 1. Inspect available audit records through the authenticated dashboard/API or directly in PostgreSQL:
@@ -101,7 +109,7 @@ When an unexpected agent behavior or runaway task is detected:
    SELECT * FROM audit_events ORDER BY timestamp DESC LIMIT 20;
    ```
 2. Verify token budgets and policy rules.
-3. In Telegram: Send `/resume` to unfreeze the engine.
+3. In the Dashboard, select **Resume system**, or in Telegram send `/resume` to unfreeze the engine.
 
 ---
 

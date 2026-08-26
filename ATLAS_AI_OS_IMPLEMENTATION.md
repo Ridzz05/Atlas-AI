@@ -11,7 +11,7 @@
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, Tool Gateway output-schema enforcement, durable Telegram `/cost` and `/status` telemetry, and fail-closed production model-provider configuration are implemented and locally tested through commit `22b88ae`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls, Tool Gateway output-schema enforcement, durable Telegram `/cost` and `/status` telemetry, and fail-closed production model-provider configuration are implemented and locally tested through commit `8e4ddd2`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -82,7 +82,7 @@ Chief kemudian:
 - Tidak ada external write action tanpa approval bila policy mewajibkannya.
 - Chief dapat mendelegasikan minimal tiga subtask dalam satu parent task.
 - Agent dapat dilanjutkan setelah aplikasi atau worker direstart.
-- User dapat menghentikan seluruh eksekusi melalui Telegram.
+- User dapat menghentikan seluruh eksekusi melalui Telegram atau dashboard.
 - Jawaban final memiliki tautan ke sumber atau artifact yang digunakan.
 
 ---
@@ -758,7 +758,7 @@ Approval message minimal menampilkan:
 - Setiap run memiliki timeout dan cost limit.
 - Audit logs append-only.
 - Emergency stop harus bekerja tanpa LLM.
-- Dashboard dan Telegram account memakai owner allowlist.
+- Dashboard dan Telegram account memakai owner authentication/allowlist.
 
 ### 17.2 Prompt injection defense
 
@@ -990,8 +990,8 @@ Tidak boleh ada credential asli dalam repository.
 - sandboxing;
 - security tests;
 - monitoring/alerts;
-- deployment runbook;
-- incident runbook;
+- full production deployment automation beyond Docker Compose;
+- automated incident response and alert routing;
 - retention policy.
 
 **Exit criteria:** threat-model checklist lulus dan recovery drill berhasil.
