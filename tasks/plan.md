@@ -8,9 +8,9 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `dfeb6ba`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `30c6504`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
-- Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions).
+- Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions). API input validation, queue readiness, and request-ID correlation regressions also pass.
 - `pnpm lint`: runs a repository source-hygiene gate over 141 source files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
 - Telegram polling, durable approval decisions, update claims, pause/emergency control state, and durable active-run cancellation are wired; cross-restart recovery still needs an integration drill.
@@ -35,14 +35,14 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 | Blueprint phase | Status | Evidence / gap |
 |---|---|---|
-| Phase 0 — Foundation | Implemented locally | Shared runtime, migrations, agent seeding, auth/CORS, environment validation, and readiness checks are wired. Clean Compose boot is still unverified because Docker is unavailable here. |
+| Phase 0 — Foundation | Implemented locally | Shared runtime, migrations, agent seeding, auth/CORS, environment validation, and DB/queue readiness checks are wired. Clean Compose boot is still unverified because Docker is unavailable here. |
 | Phase 1 — Task engine | Implemented locally | BullMQ/Redis, retries/idempotency, worker shutdown, PostgreSQL events, plans/runs/tasks, queue-backed execution, worker leases/heartbeats, and stale-run recovery are wired. Docker recovery drill remains. |
 | Phase 2 — Delegation | Implemented locally | Plan validation, depth guard, fail-closed QA, approval-pending propagation, parent resume, message history, tool-call history, and durable budget reservation/settlement across planner/specialist/QA/synthesis stages are wired. Production drill remains. |
 | Phase 3 — Telegram | Mostly implemented | Polling transport, allowlist, response delivery, callbacks, PostgreSQL update deduplication, durable pause/emergency state, and cross-process cancellation are wired. Recovery drills remain. |
 | Phase 4 — Memory | Mostly implemented | Database/lexical stores, scoped MemoryTools, and authenticated dashboard query APIs are wired. Freshness jobs and canonical-memory audit remain. |
 | Phase 5 — Tools/workflow | Mostly implemented with safe gaps | Tool gateway, output schemas, artifact containment, durable approval request/claim/finalize/resume, and fail-closed unverified research are wired. Real research/enrichment adapters and an outbound connector remain intentionally disabled. |
 | Phase 6 — Dashboard | Mostly connected | Tasks, approvals, agents, overview, command intake, artifacts, audit, memory, cost/budget metrics, and read-only governance settings use API loading/error/empty states. Authenticated SSE refresh and durable event replay/reconnect semantics are wired; mutable configuration remains deployment-only. |
-| Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, readiness, runbook, and a repository lint gate exist. Rate limiting remains process-local; Compose boot, recovery, backup restore, formatter enforcement, and alerting remain. |
+| Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, fail-closed DB/queue readiness, request-ID correlation, runbook, and a repository lint gate exist. Rate limiting remains process-local; worker/Telegram health, Compose boot, recovery, backup restore, formatter enforcement, and alerting remain. |
 
 ## Findings ordered by leverage
 
@@ -70,7 +70,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 1. Implement Telegram polling or webhook mode with secret verification, outbound response delivery, callback acknowledgement, persistent update deduplication, durable control state, and dependency injection into the command router. Active-run recovery still needs an environment drill.
 2. Route `/new`, `/status`, `/task`, `/stop`, `/pause`, `/resume`, `/emergency_stop`, and approval actions through the same control service as the web UI.
-3. Add API authentication suitable for the single-user MVP, strict CORS, rate limits, request IDs, and owner-only mutation checks.
+3. API authentication suitable for the single-user MVP, strict CORS, rate limits, request IDs, and owner-only mutation checks are implemented. Rate limiting is still process-local and needs a cross-replica design before horizontal scaling.
 4. Dashboard tasks, approvals, agents, command intake, overview, artifacts, audit, memory, aggregate cost/budget metrics, and governance settings now use authenticated API queries with loading/error/empty states. Event replay/reconnect semantics are implemented; mutable configuration remains deployment-only.
 
 ### Required / P3 — make intelligence truthful and useful
@@ -85,7 +85,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 1. Add formatter enforcement and extend CI with integration, migration, and Docker Compose recovery checks; CI now runs the repository lint gate, typecheck, unit tests, production build, and Compose configuration validation.
 2. Add integration/e2e tests for DB+Redis, restart recovery, duplicate Telegram updates, approval execute-once, rejected approval no-side-effect, malicious content, budget exhaustion, and emergency stop.
 3. Production Compose now passes the application’s `MODEL_PROVIDER`/`MODEL_API_KEY` names and requires database, Redis, API, Telegram, and encryption secrets. Verify the clean-environment secret policy in CI and remove any remaining non-production defaults before launch.
-4. Mount/persist artifact storage, add backup verification and restore drills, health checks for DB/Redis/worker/Telegram, alerting, retention policy, and rollback instructions.
+4. Mount/persist artifact storage, add backup verification and restore drills, extend health checks from the API’s DB/Redis probes to worker/Telegram, and add alerting, retention policy, and rollback instructions.
 5. Update blueprint status from “Draft siap implementasi” only after the corresponding exit criteria are demonstrated; record phase completion reports with commands and results.
 
 ## Suggested implementation slices
@@ -148,9 +148,9 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `dfeb6ba`. The full local gates pass: `pnpm.cmd lint` (141 source files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, and restart recovery remain unverified.
+Execution is committed through `30c6504`. The full local gates pass: `pnpm.cmd lint` (141 source files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, and restart recovery remain unverified.
 
-Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, and the CI lint/build/Compose gates.
+Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, and the CI lint/build/Compose gates.
 
 Remaining release blockers: no approved outbound connector, no verified real research adapters, no Docker boot/recovery/backup drill, formatter enforcement, production recovery/lease observability, and a configured per-agent aggregate budget policy if required by the owner.
 
