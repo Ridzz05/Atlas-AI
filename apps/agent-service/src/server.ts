@@ -19,6 +19,7 @@ import { registerRunRoutes } from './routes/runs.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
+import { registerControlRoutes } from './routes/control.js';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
 export interface ServerOptions {
@@ -277,6 +278,11 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     memoryStore: options.memoryStore,
     runRepo: options.runRepo,
     budgetRepo: options.budgetRepo
+  });
+
+  registerControlRoutes(app, {
+    controlStateRepo: options.controlStateRepo,
+    runRepo: options.runRepo
   });
 
   app.get('/api/v1/settings', async (_req, reply) => {

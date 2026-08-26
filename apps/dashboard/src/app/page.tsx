@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Clock, AlertCircle, DollarSign, ArrowUpRight, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Clock, AlertCircle, DollarSign, ArrowUpRight, RefreshCw, Pause, Play, OctagonAlert } from 'lucide-react';
 import Link from 'next/link';
 import { AgentGraph, AgentNodeData } from '../components/agent-graph';
 import { atlasFetch } from '../lib/atlas-api';
@@ -45,6 +45,14 @@ interface LeaseMetrics {
   cancellationRequestedCount: number;
 }
 interface RecoverySummaryResponse { data: LeaseMetrics | null; durable: boolean; }
+interface ControlState {
+  paused: boolean;
+  emergencyStop: boolean;
+  updatedBy: string | null;
+  updatedAt: string | null;
+}
+interface ControlResponse { data: ControlState; durable: boolean; }
+type ControlAction = 'pause' | 'resume' | 'emergency-stop';
 
 const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status'] => {
   const assigned = tasks.filter(task => task.assignedAgent === agentId);
@@ -59,6 +67,9 @@ export default function CommandCenterPage() {
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [costMetrics, setCostMetrics] = useState<CostSummaryResponse['data'] | null>(null);
   const [recoveryMetrics, setRecoveryMetrics] = useState<LeaseMetrics | null>(null);
+  const [controlState, setControlState] = useState<ControlState | null>(null);
+  const [controlBusy, setControlBusy] = useState(false);
+  const [controlError, setControlError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,7 +94,42 @@ export default function CommandCenterPage() {
     }
   };
 
+  const loadControl = async () => {
+    try {
+      const response = await atlasFetch<ControlResponse>('/control');
+      setControlState(response.data);
+      setControlError(null);
+    } catch (err) {
+      setControlError(err instanceof Error ? err.message : 'Durable control state is unavailable.');
+    }
+  };
+
+  const invokeControl = async (action: ControlAction) => {
+    const messages: Record<ControlAction, string> = {
+      pause: 'Pause task intake and worker dispatch?',
+      resume: 'Resume task intake and worker dispatch?',
+      'emergency-stop': 'Activate emergency stop? Active runs will receive cancellation signals.'
+    };
+    if (typeof window !== 'undefined' && !window.confirm(messages[action])) return;
+
+    setControlBusy(true);
+    try {
+      const response = await atlasFetch<ControlResponse>(`/control/${action}`, {
+        method: 'POST',
+        body: JSON.stringify({ reason: `Dashboard ${action}` })
+      });
+      setControlState(response.data);
+      setControlError(null);
+      await loadOverview();
+    } catch (err) {
+      setControlError(err instanceof Error ? err.message : 'Control action could not be completed.');
+    } finally {
+      setControlBusy(false);
+    }
+  };
+
   useEffect(() => { void loadOverview(); }, []);
+  useEffect(() => { void loadControl(); }, []);
 
   useEffect(() => {
     const stream = new EventSource('/api/atlas/events/stream');
@@ -121,6 +167,24 @@ export default function CommandCenterPage() {
       </div>
 
       {error && <div role="alert" className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">{error}</div>}
+      <section className="p-5 bg-[#111827] rounded-xl border border-gray-800" aria-label="System control">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <p className="text-[11px] font-mono text-gray-400">SYSTEM CONTROL</p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`w-2 h-2 rounded-full ${controlState?.emergencyStop ? 'bg-rose-400' : controlState?.paused ? 'bg-amber-400' : controlState ? 'bg-emerald-400' : 'bg-gray-500'}`} aria-hidden="true" />
+              <h2 className="text-sm font-semibold text-white">{controlState?.emergencyStop ? 'Emergency stop active' : controlState?.paused ? 'Intake paused' : controlState ? 'System active' : 'State unavailable'}</h2>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">{controlState ? 'Durable state shared with Telegram and worker dispatch.' : controlError || 'Loading durable control state…'}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {controlState && !controlState.emergencyStop && (controlState.paused ? <button disabled={controlBusy} onClick={() => void invokeControl('resume')} className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"><Play className="w-3.5 h-3.5" />Resume intake</button> : <button disabled={controlBusy} onClick={() => void invokeControl('pause')} className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"><Pause className="w-3.5 h-3.5" />Pause intake</button>)}
+            {controlState && !controlState.emergencyStop && <button disabled={controlBusy} onClick={() => void invokeControl('emergency-stop')} className="px-3 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"><OctagonAlert className="w-3.5 h-3.5" />Emergency stop</button>}
+            {controlState?.emergencyStop && <button disabled={controlBusy} onClick={() => void invokeControl('resume')} className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"><Play className="w-3.5 h-3.5" />Resume system</button>}
+          </div>
+        </div>
+        {controlError && <p role="alert" className="mt-3 text-xs text-rose-300">{controlError}</p>}
+      </section>
       {loading ? <div className="p-12 text-center text-xs text-gray-400" role="status" aria-busy="true">Loading live control-plane metrics…</div> : <>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
           <Metric label="ACTIVE TASKS" value={String(activeCount)} icon={<Clock className="w-5 h-5" />} tone="indigo" />

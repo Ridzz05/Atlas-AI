@@ -38,7 +38,7 @@ export function Sidebar() {
       <div className="p-4 border-t border-gray-800">
         <div className="w-full flex items-start gap-2 px-3 py-2 rounded-lg bg-rose-600/10 text-rose-300 border border-rose-500/20 text-[11px]">
           <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          <span>Emergency stop is controlled through Telegram until a durable API action is available.</span>
+          <span>Emergency stop is available here and through Telegram. Both use the same durable control state.</span>
         </div>
       </div>
     </aside>
