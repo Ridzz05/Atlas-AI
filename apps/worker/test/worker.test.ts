@@ -81,6 +81,28 @@ describe('worker lifecycle and task execution tests', () => {
     await runner.stop();
   });
 
+  it('requeues persisted queued tasks when a prior enqueue was interrupted', async () => {
+    const taskRepo = {
+      list: vi.fn().mockResolvedValue([mockTask])
+    } as any;
+    const taskQueue = {
+      enqueue: vi.fn().mockResolvedValue(mockTask.id),
+      process: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({ config, taskRepo, taskQueue });
+
+    await runner.start();
+
+    expect(taskRepo.list).toHaveBeenCalledWith({ status: 'queued', limit: 1000 });
+    expect(taskQueue.enqueue).toHaveBeenCalledWith({
+      task: mockTask,
+      agent: expect.objectContaining({ id: 'chief' }),
+      prompt: mockTask.goal
+    });
+    await runner.stop();
+  });
+
   it('runs memory maintenance when the worker starts', async () => {
     const memoryStore = new InMemoryMemoryStore();
     const expiredId = crypto.randomUUID();

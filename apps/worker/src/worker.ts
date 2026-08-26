@@ -62,12 +62,14 @@ export class AgentWorkerRunner {
   private runner: AgentRunner;
   private delegator: TaskDelegator;
   private taskQueue: TaskQueue;
+  private readonly registry: AgentRegistry;
   private readonly workerId: string;
 
   constructor(private options: WorkerRunnerOptions) {
     this.workerId = options.workerId || `${process.env.HOSTNAME || 'atlas-worker'}:${process.pid}`;
     const eventBus = options.eventBus || new InMemoryEventBus();
-    const registry = options.registry || defaultAgentRegistry;
+    this.registry = options.registry || defaultAgentRegistry;
+    const registry = this.registry;
     const provider =
       options.provider ||
       createModelProvider({
@@ -162,6 +164,8 @@ export class AgentWorkerRunner {
         rootLogger.warn('Recovered stale runs from expired worker leases', { recovered });
       }
     }
+
+    await this.recoverQueuedTasks();
 
     if (this.memoryMaintenance) {
       await this.runMemoryMaintenance();
@@ -272,6 +276,32 @@ export class AgentWorkerRunner {
     });
     if (result.deprecated > 0 || result.deleted > 0) {
       rootLogger.info('Memory maintenance completed', { ...result });
+    }
+  }
+
+  private async recoverQueuedTasks(): Promise<void> {
+    if (!this.options.taskRepo) return;
+
+    const queuedTasks = await this.options.taskRepo.list({ status: 'queued', limit: 1000 });
+    for (const task of queuedTasks) {
+      const agent = this.registry.get(task.assignedAgent);
+      if (!agent) {
+        rootLogger.error('Cannot requeue persisted task with an unknown agent', {
+          taskId: task.id,
+          agentId: task.assignedAgent
+        });
+        continue;
+      }
+
+      await this.taskQueue.enqueue({
+        task,
+        agent,
+        prompt: task.goal
+      });
+    }
+
+    if (queuedTasks.length > 0) {
+      rootLogger.info('Requeued persisted tasks awaiting worker delivery', { count: queuedTasks.length });
     }
   }
 }
