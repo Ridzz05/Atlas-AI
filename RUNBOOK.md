@@ -39,6 +39,8 @@ docker compose -f docker-compose.prod.yml up -d --build
 ./scripts/healthcheck.sh
 ```
 
+The repository `.dockerignore` excludes local credentials, Git metadata, dependencies, generated output, and runtime/test data from image build contexts. Keep production secrets in the deployment environment, not in the build context.
+
 For a clean-host verification that also exercises image builds, dependency-aware worker/Telegram readiness, agent seeding, and PostgreSQL backup/restore, run:
 
 ```bash
