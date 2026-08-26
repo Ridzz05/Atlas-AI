@@ -26,6 +26,11 @@ export interface ResearchEvidence {
   confidence: number;
 }
 
+/**
+ * Implementations must apply their own DNS, redirect, response-size, and timeout
+ * controls. Tool-level URL validation rejects obvious local targets but cannot
+ * pin a hostname's resolved address across the provider's network request.
+ */
 export interface ResearchProvider {
   fetchSafe?(url: string): Promise<{
     content: string;
