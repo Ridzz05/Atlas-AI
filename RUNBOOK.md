@@ -8,7 +8,7 @@ This document provides operational instructions, deployment guidelines, disaster
 
 > Dashboard realtime checkpoint (26 August 2026): commit `53f771f` adds authenticated SSE refresh to the Tasks page, matching the durable Communications feed. Both pages close the connection and remove all listeners on unmount.
 
-> Compose verification checkpoint (26 August 2026): commits `2b109c5` and `3411cf5` isolate smoke-test container names using `ATLAS_CONTAINER_PREFIX` and verify that API task intake creates a durable message record. Run the smoke test on a Docker-capable host before release.
+> Compose verification checkpoint (26 August 2026): commits `2b109c5` and `3411cf5` isolate smoke-test container names using `ATLAS_CONTAINER_PREFIX` and verify that API task intake creates a durable message record. Commit `ef7694e` makes backup/restore scripts use the same prefix while preserving the default production container name. Run the smoke test on a Docker-capable host before release.
 
 ## 1. System Architecture & Inventory
 
