@@ -514,6 +514,9 @@ export class AgentRunner {
 
       if (this.options.runRepo) {
         await this.options.runRepo.updateStatus(runId, status as any, errorMessage);
+        if (status === 'waiting_approval' && typeof (this.options.runRepo as any).releaseLease === 'function') {
+          await (this.options.runRepo as any).releaseLease(runId, this.workerId);
+        }
       }
       if (this.options.taskRepo) {
         await this.options.taskRepo.updateStatus(taskId, status === 'waiting_approval' ? 'approval_pending' : status as any, { error: errorMessage });

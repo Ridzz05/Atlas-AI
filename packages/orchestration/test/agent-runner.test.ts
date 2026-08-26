@@ -352,6 +352,50 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
   });
 
+  it('releases the worker lease while a run waits for human approval', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [{
+        content: 'Requesting approval.',
+        toolCalls: [{ id: 'tc-approval-lease', name: 'communication.send_approved', arguments: {} }]
+      }]
+    });
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({
+        success: false,
+        approvalPending: true,
+        approvalId: '123e4567-e89b-12d3-a456-426614174013',
+        error: 'Action requires human approval.'
+      })
+    };
+    const runRepo = {
+      create: vi.fn(),
+      acquireLease: vi.fn(async () => ({ id: 'run-approval-lease' })),
+      releaseLease: vi.fn().mockResolvedValue(true),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      workerId: 'worker-a',
+      toolExecutor
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174014',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Request protected action'
+    });
+
+    expect(summary.status).toBe('waiting_approval');
+    expect(runRepo.releaseLease).toHaveBeenCalledWith(
+      '123e4567-e89b-12d3-a456-426614174014',
+      'worker-a'
+    );
+  });
+
   it('resumes an existing run and refuses completion until approval is finalized', async () => {
     const provider = new MockModelProvider({ cannedResponses: [{ content: 'Protected action completed.' }] });
     const runRepo = {
