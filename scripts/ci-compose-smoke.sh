@@ -11,11 +11,13 @@ export COMPOSE_PROJECT_NAME
 : "${ENCRYPTION_KEY:=ci-encryption-key-32-characters-long}"
 : "${TELEGRAM_BOT_TOKEN:=ci-telegram-token}"
 : "${TELEGRAM_ALLOWED_USER_IDS:=1}"
-: "${MODEL_PROVIDER:=openai}"
-: "${MODEL_API_KEY:=ci-model-api-key}"
+: "${MODEL_PROVIDER:=ollama}"
+: "${MODEL_API_KEY:=}"
+: "${MODEL_BASE_URL:=http://127.0.0.1:9/v1}"
+: "${MODEL_NAME:=ci-smoke}"
 : "${ATLAS_DOMAIN:=localhost}"
 export POSTGRES_PASSWORD REDIS_PASSWORD API_AUTH_TOKEN ENCRYPTION_KEY
-export TELEGRAM_BOT_TOKEN TELEGRAM_ALLOWED_USER_IDS MODEL_PROVIDER MODEL_API_KEY ATLAS_DOMAIN
+export TELEGRAM_BOT_TOKEN TELEGRAM_ALLOWED_USER_IDS MODEL_PROVIDER MODEL_API_KEY MODEL_BASE_URL MODEL_NAME ATLAS_DOMAIN
 
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
 CI_BACKUP_FILE=""
@@ -67,18 +69,43 @@ assert_api_authentication() {
   "${COMPOSE[@]}" exec -T agent-service node -e "Promise.all([fetch('http://127.0.0.1:4000/api/v1/agents'), fetch('http://127.0.0.1:4000/api/v1/agents', { headers: { authorization: 'Bearer ' + process.env.API_AUTH_TOKEN } })]).then(async ([unauthorized, authorized]) => { if (unauthorized.status !== 401 || !authorized.ok) { console.error('API authentication assertion failed:', unauthorized.status, authorized.status, await unauthorized.text(), await authorized.text()); process.exit(1); } }).catch(error => { console.error(error); process.exit(1); });"
 }
 
+assert_task_recovered() {
+  local task_id="$1"
+  local status=""
+
+  for _ in $(seq 1 60); do
+    status="$("${COMPOSE[@]}" exec -T agent-service node -e "fetch('http://127.0.0.1:4000/api/v1/tasks/${task_id}', { headers: { authorization: 'Bearer ' + process.env.API_AUTH_TOKEN } }).then(async response => { if (!response.ok) { console.error(await response.text()); process.exit(1); } const task = await response.json(); process.stdout.write(task.status); }).catch(error => { console.error(error); process.exit(1); });")"
+    if [[ "$status" != "queued" ]]; then
+      echo "queued task ${task_id} recovered with status: ${status}"
+      return 0
+    fi
+    sleep 1
+  done
+
+  echo "queued task ${task_id} was not recovered by the worker" >&2
+  return 1
+}
+
 echo "==> Building application images used by the smoke test..."
 "${COMPOSE[@]}" build agent-service worker telegram-bot dashboard
 
-echo "==> Starting PostgreSQL, Redis, agent-service, and worker..."
-"${COMPOSE[@]}" up -d postgres redis agent-service worker
+echo "==> Starting PostgreSQL, Redis, and agent-service..."
+"${COMPOSE[@]}" up -d postgres redis agent-service
 wait_for_health postgres
 wait_for_health redis
 wait_for_health agent-service
-wait_for_health worker
 assert_ready agent-service http://127.0.0.1:4000/ready
-assert_ready worker http://127.0.0.1:8081/ready
 assert_api_authentication
+
+echo "==> Verifying recovery of a durable queued task before worker startup..."
+recovery_task_id="00000000-0000-4000-8000-000000000001"
+"${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-atlas_admin}" -d "${POSTGRES_DB:-atlas_os}" -v ON_ERROR_STOP=1 -c "INSERT INTO tasks (id, title, goal, assigned_agent, status) VALUES ('${recovery_task_id}', 'CI queued recovery', 'CI queued task recovery check', 'ned', 'queued');" >/dev/null
+
+echo "==> Starting worker and verifying queued-task recovery..."
+"${COMPOSE[@]}" up -d worker
+wait_for_health worker
+assert_ready worker http://127.0.0.1:8081/ready
+assert_task_recovered "$recovery_task_id"
 
 echo "==> Verifying service restart readiness..."
 "${COMPOSE[@]}" restart agent-service worker
