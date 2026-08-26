@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Plus, ArrowRight, RefreshCw } from 'lucide-react';
 import { atlasFetch } from '../../lib/atlas-api';
+import { subscribeToAtlasEvents } from '../../lib/event-stream';
 
 interface ApiTask {
   id: string;
@@ -23,9 +24,10 @@ export default function TasksPage() {
   const [showModal, setShowModal] = useState(false);
   const [newGoal, setNewGoal] = useState('');
   const [loading, setLoading] = useState(true);
+  const [realtime, setRealtime] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const loadTasks = async () => {
+  const loadTasks = useCallback(async () => {
     setLoading(true);
     try {
       const response = await atlasFetch<TaskListResponse>('/tasks');
@@ -36,11 +38,24 @@ export default function TasksPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void loadTasks();
-  }, []);
+    const stream = new EventSource('/api/atlas/events/stream');
+    const unsubscribe = subscribeToAtlasEvents(stream, () => void loadTasks());
+    const handleOpen = () => setRealtime(true);
+    const handleError = () => setRealtime(false);
+    stream.addEventListener('open', handleOpen);
+    stream.addEventListener('error', handleError);
+
+    return () => {
+      unsubscribe();
+      stream.removeEventListener('open', handleOpen);
+      stream.removeEventListener('error', handleError);
+      stream.close();
+    };
+  }, [loadTasks]);
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -63,7 +78,13 @@ export default function TasksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white tracking-tight">Task Orchestration</h1>
-          <p className="text-xs text-gray-400">Live tasks from the authenticated ATLAS API.</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs text-gray-400">Live tasks from the authenticated ATLAS API.</p>
+            <span className="flex items-center gap-1 text-[10px] font-mono text-gray-500">
+              <span className={`w-1.5 h-1.5 rounded-full ${realtime ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+              {realtime ? 'live' : 'reconnecting'}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => void loadTasks()} className="p-2 rounded-lg text-gray-400 hover:bg-gray-800" aria-label="Refresh tasks">
