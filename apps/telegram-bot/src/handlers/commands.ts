@@ -1,4 +1,4 @@
-import { ApprovalRepository, RunRepository, TaskRepository } from '@atlas/database';
+import { ApprovalRepository, BudgetRepository, RunRepository, TaskRepository } from '@atlas/database';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
@@ -6,6 +6,7 @@ import { rootLogger } from '@atlas/observability';
 export interface CommandContext {
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
+  budgetRepo?: BudgetRepository;
   approvalRepo?: ApprovalRepository;
   registry: AgentRegistry;
   taskQueue?: TaskQueue;
@@ -103,20 +104,32 @@ _Or simply send any natural message to talk with Chief._`;
 
   private async handleStatus(): Promise<string> {
     if (!this.ctx.taskRepo) {
-      return `ℹ️ *System Status:* Online (State persistence in-memory)\nPaused: ${this.ctx.isPaused ? 'Yes' : 'No'}`;
+      return `ℹ️ *System Status:* Durable task database is unavailable; only in-process control state is available.\nPaused: ${this.ctx.isPaused ? 'Yes' : 'No'}`;
     }
 
-    const running = await this.ctx.taskRepo.findByStatus('running');
-    const queued = await this.ctx.taskRepo.findByStatus('queued');
-    const review = await this.ctx.taskRepo.findByStatus('review_pending');
+    try {
+      const [planning, running, queued, review, approval] = await Promise.all([
+        this.ctx.taskRepo.findByStatus('planning'),
+        this.ctx.taskRepo.findByStatus('running'),
+        this.ctx.taskRepo.findByStatus('queued'),
+        this.ctx.taskRepo.findByStatus('review_pending'),
+        this.ctx.taskRepo.findByStatus('approval_pending')
+      ]);
+      const activeTasks = [...planning, ...running, ...review, ...approval];
 
-    return `📊 *ATLAS Task Status:*
+      return `📊 *ATLAS Task Status:*
+• 🧠 *Planning:* ${planning.length}
 • 🏃 *Running:* ${running.length}
 • ⏳ *Queued:* ${queued.length}
 • 📝 *Review Pending:* ${review.length}
+• 🔐 *Approval Pending:* ${approval.length}
 • ⏸️ *System Paused:* ${this.ctx.isPaused ? 'Yes' : 'No'}
 
-${running.length > 0 ? `*Active Tasks:*\n` + running.map(t => `- \`${t.id.slice(0, 8)}\`: ${t.title} (${t.assignedAgent})`).join('\n') : '_No tasks currently running._'}`;
+${activeTasks.length > 0 ? `*Active Tasks:*\n` + activeTasks.map(t => `- \`${t.id.slice(0, 8)}\`: ${t.title} (${t.assignedAgent})`).join('\n') : '_No non-terminal tasks currently active._'}`;
+    } catch (error) {
+      rootLogger.error('Telegram task status query failed', { error: String(error) });
+      return '⚠️ *Task status temporarily unavailable.* Retry after the database service is ready.';
+    }
   }
 
   private async handleTaskDetail(taskId?: string): Promise<string> {
@@ -234,12 +247,47 @@ Chief is preparing the multi-agent execution plan. You can check status with \`/
 Use \`/resume\` to unfreeze the system when ready.`;
   }
 
-  private handleCost(): string {
-    return `💰 *ATLAS Budget & Token Telemetry:*
-• *Daily Budget:* $5.00 USD
-• *Estimated Usage Today:* $0.12 USD
-• *Remaining Allowance:* $4.88 USD
-• *Active Runs Cost Ceiling:* $1.00 USD / run max`;
+  private async handleCost(): Promise<string> {
+    if (!this.ctx.runRepo && !this.ctx.budgetRepo) {
+      return 'ℹ️ *Cost telemetry unavailable.* Durable cost and budget repositories are not configured; no estimates are shown.';
+    }
+
+    try {
+      const [costs, budget] = await Promise.all([
+        this.ctx.runRepo?.getCostSummary(),
+        this.ctx.budgetRepo?.getGlobalDailySummary()
+      ]);
+
+      if (!costs && !budget) {
+        return 'ℹ️ *Cost telemetry unavailable.* No durable cost or budget record is available yet.';
+      }
+
+      const lines = ['💰 *ATLAS Budget & Token Telemetry:*'];
+      if (budget) {
+        lines.push(
+          `• *Daily Budget:* ${this.formatUsd(budget.limitUsd)} USD`,
+          `• *Used Today:* ${this.formatUsd(budget.usedUsd)} USD`,
+          `• *Reserved:* ${this.formatUsd(budget.reservedUsd)} USD`,
+          `• *Remaining Allowance:* ${this.formatUsd(budget.availableUsd)} USD`
+        );
+        if (budget.resetAt) lines.push(`• *Budget Resets:* ${new Date(budget.resetAt).toISOString()}`);
+      }
+      if (costs) {
+        lines.push(
+          `• *Run Cost Today:* ${this.formatUsd(costs.periodCostUsd)} USD`,
+          `• *Total Run Cost:* ${this.formatUsd(costs.totalCostUsd)} USD`,
+          `• *Runs:* ${costs.runCount} total (${costs.activeRunCount} active, ${costs.completedRunCount} completed, ${costs.failedRunCount} failed/cancelled/timed out)`
+        );
+      }
+      return lines.join('\n');
+    } catch (error) {
+      rootLogger.error('Telegram cost telemetry query failed', { error: String(error) });
+      return '⚠️ *Cost telemetry temporarily unavailable.* Retry after the database and budget services are ready.';
+    }
+  }
+
+  private formatUsd(value: number): string {
+    return `$${(Number.isFinite(value) ? Math.max(0, value) : 0).toFixed(4)}`;
   }
 
   private async handleApproveDurable(requestId: string | undefined, actorId: string): Promise<string> {

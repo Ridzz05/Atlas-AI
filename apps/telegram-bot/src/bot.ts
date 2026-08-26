@@ -1,7 +1,7 @@
 import { TelegramBotConfig } from './config.js';
 import { TelegramSecurityGuard } from './security/guard.js';
 import { CommandRouter } from './handlers/commands.js';
-import { ApprovalRepository, RunRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
+import { ApprovalRepository, BudgetRepository, RunRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { AgentRegistry, defaultAgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
@@ -98,6 +98,7 @@ export interface AtlasTelegramBotOptions {
   config: TelegramBotConfig;
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
+  budgetRepo?: BudgetRepository;
   approvalRepo?: ApprovalRepository;
   stateRepo?: TelegramStateRepository;
   registry?: AgentRegistry;
@@ -124,6 +125,7 @@ export class AtlasTelegramBot {
     this.router = new CommandRouter({
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
+      budgetRepo: options.budgetRepo,
       approvalRepo: options.approvalRepo,
       registry: options.registry || defaultAgentRegistry,
       taskQueue: options.taskQueue,

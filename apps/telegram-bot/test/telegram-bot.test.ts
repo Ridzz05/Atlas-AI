@@ -126,6 +126,142 @@ describe('@atlas/telegram-bot tests', () => {
     expect(result.responseText).toContain('Cari 10 prospek gym di Palembang');
   });
 
+  it('reports durable cost and budget telemetry instead of hardcoded estimates', async () => {
+    const runRepo = {
+      getCostSummary: vi.fn().mockResolvedValue({
+        periodStart: '2026-08-26T00:00:00.000Z',
+        periodEnd: '2026-08-27T00:00:00.000Z',
+        periodCostUsd: 2.5,
+        totalCostUsd: 9.75,
+        runCount: 12,
+        activeRunCount: 2,
+        completedRunCount: 8,
+        failedRunCount: 2,
+        byAgent: []
+      })
+    } as any;
+    const budgetRepo = {
+      getGlobalDailySummary: vi.fn().mockResolvedValue({
+        limitUsd: 5,
+        usedUsd: 2.5,
+        reservedUsd: 0.75,
+        availableUsd: 1.75,
+        resetAt: '2026-08-27T00:00:00.000Z'
+      })
+    } as any;
+    const costBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      runRepo,
+      budgetRepo
+    });
+
+    const result = await costBot.processUpdate({
+      update_id: 109,
+      message: {
+        message_id: 9,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/cost',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('$5.0000');
+    expect(result.responseText).toContain('$2.5000');
+    expect(result.responseText).toContain('$1.7500');
+    expect(result.responseText).toContain('$9.7500');
+    expect(result.responseText).not.toContain('$0.1200');
+    expect(runRepo.getCostSummary).toHaveBeenCalledTimes(1);
+    expect(budgetRepo.getGlobalDailySummary).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not invent cost telemetry when durable repositories are unavailable', async () => {
+    const result = await bot.processUpdate({
+      update_id: 110,
+      message: {
+        message_id: 10,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/cost',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('Cost telemetry unavailable');
+    expect(result.responseText).not.toContain('$0.12');
+  });
+
+  it('includes planning and approval-pending tasks in durable status', async () => {
+    const tasksByStatus: Record<string, unknown[]> = {
+      planning: [{ id: 'planning-task', title: 'Planning task', assignedAgent: 'chief' }],
+      running: [{ id: 'running-task', title: 'Running task', assignedAgent: 'ned' }],
+      queued: [],
+      review_pending: [],
+      approval_pending: [{ id: 'approval-task', title: 'Approval task', assignedAgent: 'hermes' }]
+    };
+    const taskRepo = {
+      findByStatus: vi.fn(async (status: string) => tasksByStatus[status] || [])
+    } as any;
+    const statusBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      taskRepo
+    });
+
+    const result = await statusBot.processUpdate({
+      update_id: 111,
+      message: {
+        message_id: 11,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/status',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('Planning:* 1');
+    expect(result.responseText).toContain('Approval Pending:* 1');
+    expect(taskRepo.findByStatus).toHaveBeenCalledWith('planning');
+    expect(taskRepo.findByStatus).toHaveBeenCalledWith('approval_pending');
+  });
+
+  it('fails closed when durable status telemetry cannot be queried', async () => {
+    const taskRepo = {
+      findByStatus: vi.fn().mockRejectedValue(new Error('database offline'))
+    } as any;
+    const statusBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      taskRepo
+    });
+
+    const result = await statusBot.processUpdate({
+      update_id: 112,
+      message: {
+        message_id: 12,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/status',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('Task status temporarily unavailable');
+  });
+
   it('handles /emergency_stop without LLM', async () => {
     const update = {
       update_id: 105,

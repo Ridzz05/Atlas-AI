@@ -13,6 +13,7 @@ async function main() {
     config,
     taskRepo: runtime.taskRepo,
     runRepo: runtime.runRepo,
+    budgetRepo: runtime.budgetRepo,
     approvalRepo: runtime.approvalRepo,
     stateRepo: runtime.telegramStateRepo,
     registry: runtime.registry,
