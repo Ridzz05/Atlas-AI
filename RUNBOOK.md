@@ -41,7 +41,7 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 The repository `.dockerignore` excludes local credentials, Git metadata, dependencies, generated output, and runtime/test data from image build contexts. Keep production secrets in the deployment environment, not in the build context.
 
-For a clean-host verification that also exercises image builds, dependency-aware worker/Telegram readiness, agent seeding, and PostgreSQL backup/restore, run:
+For a clean-host verification that also exercises image builds, dependency-aware worker/Telegram readiness, agent seeding, durable queued-task recovery, and PostgreSQL backup/restore, run:
 
 ```bash
 bash ./scripts/ci-compose-smoke.sh
@@ -122,6 +122,9 @@ Dashboard, API, and Telegram use the same PostgreSQL-backed control state. Emerg
    ```
 2. Verify token budgets and policy rules.
 3. In the Dashboard, select **Resume system**, or in Telegram send `/resume` to unfreeze the engine.
+
+### 4.3 Queued task recovery
+The worker scans persisted tasks with status `queued` in pages before accepting new queue work and repeats the scan every `QUEUE_RECOVERY_INTERVAL_SECONDS` (default: 30). It re-enqueues each task with the task/run identifier as the durable idempotency key. This repairs both the startup failure window and a later PostgreSQL/Redis enqueue interruption. Review worker logs for `Requeued persisted tasks awaiting worker delivery` after a restart or queue outage, and verify the task reaches a terminal state during the recovery drill.
 
 ---
 

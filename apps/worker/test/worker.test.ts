@@ -134,7 +134,10 @@ describe('worker lifecycle and task execution tests', () => {
 
   it('scans additional queued-task pages beyond the recovery batch size', async () => {
     const secondPageTask = { ...mockTask, id: '123e4567-e89b-12d3-a456-426614174010' };
-    const firstPage = Array.from({ length: 1000 }, (_, index) => ({ ...mockTask, id: `123e4567-e89b-12d3-a456-${String(index).padStart(12, '0')}` }));
+    const firstPage = Array.from({ length: 1000 }, (_, index) => ({
+      ...mockTask,
+      id: `123e4567-e89b-12d3-a456-${String(index).padStart(12, '0')}`
+    }));
     const taskRepo = {
       list: vi.fn().mockResolvedValueOnce(firstPage).mockResolvedValueOnce([secondPageTask])
     } as any;
