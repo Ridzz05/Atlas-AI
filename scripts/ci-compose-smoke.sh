@@ -63,6 +63,10 @@ assert_ready() {
   "${COMPOSE[@]}" exec -T "$service" node -e "fetch('${endpoint}').then(async response => { if (!response.ok) { console.error(await response.text()); process.exit(1); } }).catch(error => { console.error(error); process.exit(1); });"
 }
 
+assert_api_authentication() {
+  "${COMPOSE[@]}" exec -T agent-service node -e "Promise.all([fetch('http://127.0.0.1:4000/api/v1/agents'), fetch('http://127.0.0.1:4000/api/v1/agents', { headers: { authorization: 'Bearer ' + process.env.API_AUTH_TOKEN } })]).then(async ([unauthorized, authorized]) => { if (unauthorized.status !== 401 || !authorized.ok) { console.error('API authentication assertion failed:', unauthorized.status, authorized.status, await unauthorized.text(), await authorized.text()); process.exit(1); } }).catch(error => { console.error(error); process.exit(1); });"
+}
+
 echo "==> Building application images used by the smoke test..."
 "${COMPOSE[@]}" build agent-service worker telegram-bot dashboard
 
@@ -74,6 +78,7 @@ wait_for_health agent-service
 wait_for_health worker
 assert_ready agent-service http://127.0.0.1:4000/ready
 assert_ready worker http://127.0.0.1:8081/ready
+assert_api_authentication
 
 echo "==> Verifying service restart readiness..."
 "${COMPOSE[@]}" restart agent-service worker
