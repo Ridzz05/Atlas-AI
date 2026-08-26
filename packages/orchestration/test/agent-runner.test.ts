@@ -462,6 +462,36 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(provider.run).not.toHaveBeenCalled();
   });
 
+  it('fails closed when a resumed run has no remaining per-run budget', async () => {
+    const provider = { run: vi.fn() } as any;
+    const runRepo = {
+      create: vi.fn(),
+      findById: vi.fn().mockResolvedValue({ costUsd: mockAgent.limits.maxCostUsd }),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const budgetRepo = { reserve: vi.fn() } as any;
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      budgetRepo,
+      globalDailyBudgetUsd: 5
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174012',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Should not resume beyond the cap'
+    });
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toContain('BUDGET_EXCEEDED');
+    expect(provider.run).not.toHaveBeenCalled();
+    expect(budgetRepo.reserve).not.toHaveBeenCalled();
+  });
+
   it('acquires a durable worker lease before executing a run', async () => {
     const provider = new MockModelProvider({ cannedResponses: [{ content: 'Leased result' }] });
     const runRepo = {

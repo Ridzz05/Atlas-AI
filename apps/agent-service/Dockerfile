@@ -13,6 +13,7 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 atlas
+RUN mkdir -p /app/data/artifacts && chown -R atlas:nodejs /app/data
 USER atlas
 
 COPY --from=builder /app/package.json ./package.json

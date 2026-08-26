@@ -240,20 +240,21 @@ export class AgentRunner {
           priorRunCost = Number((await this.options.runRepo.findById(runId))?.costUsd || 0);
         }
         const reserveAmount = Math.max(0, maxCostUsd - priorRunCost);
-        if (reserveAmount > 0) {
-          const reservation = await this.options.budgetRepo.reserve({
-            runId,
-            taskId,
-            agentId,
-            amountUsd: reserveAmount,
-            globalDailyLimitUsd: this.options.globalDailyBudgetUsd,
-            perRunLimitUsd: maxCostUsd
-          });
-          if (!reservation) {
-            throw new Error(`BUDGET_EXCEEDED: durable budget is unavailable for run ${runId}.`);
-          }
-          budgetReservationId = reservation.id;
+        if (reserveAmount <= 0) {
+          throw new Error(`BUDGET_EXCEEDED: run ${runId} has no remaining per-run budget.`);
         }
+        const reservation = await this.options.budgetRepo.reserve({
+          runId,
+          taskId,
+          agentId,
+          amountUsd: reserveAmount,
+          globalDailyLimitUsd: this.options.globalDailyBudgetUsd,
+          perRunLimitUsd: maxCostUsd
+        });
+        if (!reservation) {
+          throw new Error(`BUDGET_EXCEEDED: durable budget is unavailable for run ${runId}.`);
+        }
+        budgetReservationId = reservation.id;
       }
 
       if (this.options.taskRepo) {
