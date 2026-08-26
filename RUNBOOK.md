@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
+> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools with scheduled expiry/deprecation cleanup and canonical-memory audit records, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
 
 ---
 
@@ -83,6 +83,10 @@ Add to crontab (`crontab -e`):
 ```bash
 ./scripts/restore-db.sh ./backups/atlas_db_backup_YYYYMMDD_HHMMSS.sql.gz
 ```
+
+### 3.4 Memory Lifecycle Maintenance
+
+The worker runs memory maintenance before accepting queue work and then on the configured interval. Expired records are first marked `deprecated` and audited; deprecated records are deleted after the configured grace period. Defaults are `MEMORY_MAINTENANCE_INTERVAL_SECONDS=3600` and `MEMORY_DELETION_GRACE_DAYS=7`. Keep these values in the deployment environment when a different retention window is required.
 
 ---
 

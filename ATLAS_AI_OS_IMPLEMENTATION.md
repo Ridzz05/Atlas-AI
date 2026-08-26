@@ -11,7 +11,7 @@
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement at search and direct lookup boundaries, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls and versioned server-side proxy routing, Tool Gateway output-schema enforcement, durable Telegram `/cost` and `/status` telemetry, and fail-closed production model-provider configuration are implemented and locally tested through commit `54d30b2`. Docker build contexts now exclude local secrets and generated/runtime data through `.dockerignore`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement at search and direct lookup boundaries, scheduled expiry/deprecation/deletion maintenance with canonical-memory audit records, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls and versioned server-side proxy routing, Tool Gateway output-schema enforcement, durable Telegram `/cost` and `/status` telemetry, and fail-closed production model-provider configuration are implemented and locally tested through commit `faf0dfb`. Docker build contexts now exclude local secrets and generated/runtime data through `.dockerignore`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -1000,40 +1000,42 @@ Tidak boleh ada credential asli dalam repository.
 
 ## 22. MVP Acceptance Criteria
 
+Status convention: `[x]` means the behavior is implemented and covered by local automated verification; `[ ]` means end-to-end proof or a production dependency is still pending.
+
 ### Task dan orchestration
 
 - [ ] User dapat membuat task dari Telegram.
-- [ ] Chief menyimpan plan sebelum delegasi.
-- [ ] Child tasks memiliki parent dan dependency yang benar.
-- [ ] Maksimal delegation depth diterapkan oleh kode.
-- [ ] Concurrency limit diterapkan oleh queue.
-- [ ] Chief menghasilkan final synthesis.
-- [ ] Argus memeriksa final artifact.
+- [x] Chief menyimpan plan sebelum delegasi.
+- [x] Child tasks memiliki parent dan dependency yang benar.
+- [x] Maksimal delegation depth diterapkan oleh kode.
+- [x] Concurrency limit diterapkan oleh queue.
+- [x] Chief menghasilkan final synthesis.
+- [x] Argus memeriksa final artifact.
 
 ### Memory
 
 - [ ] Conversation tetap tersedia setelah restart.
-- [ ] Artifact dapat ditelusuri ke task asal.
-- [ ] Retrieved memory dicatat pada run.
-- [ ] Knowledge memiliki source, confidence, dan freshness.
-- [ ] Unverified information tidak tersimpan sebagai canonical fact.
+- [x] Artifact dapat ditelusuri ke task asal.
+- [x] Retrieved memory dicatat pada run.
+- [x] Knowledge memiliki source, confidence, dan freshness.
+- [x] Unverified information tidak tersimpan sebagai canonical fact.
 
 ### Approval dan security
 
-- [ ] External write tidak dapat dilakukan tanpa approval token.
-- [ ] Perubahan payload membatalkan approval.
-- [ ] Duplicate webhook tidak mengeksekusi tindakan dua kali.
-- [ ] Secret tidak muncul di logs atau prompts.
-- [ ] Emergency stop membatalkan active runs.
-- [ ] Agent tidak memiliki arbitrary shell access.
+- [x] External write tidak dapat dilakukan tanpa approval token.
+- [x] Perubahan payload membatalkan approval.
+- [x] Duplicate webhook tidak mengeksekusi tindakan dua kali.
+- [x] Secret tidak muncul di logs atau prompts.
+- [x] Emergency stop membatalkan active runs.
+- [x] Agent tidak memiliki arbitrary shell access.
 
 ### Dashboard
 
-- [ ] Agent status sesuai dengan real backend state.
-- [ ] Delegation line berasal dari real delegation event.
-- [ ] Task detail menampilkan messages, tool calls, dan artifacts.
-- [ ] Audit log dapat difilter berdasarkan task, agent, dan action.
-- [ ] Cost dapat dilihat per task dan per agent.
+- [x] Agent status sesuai dengan real backend state.
+- [x] Delegation line berasal dari real delegation event.
+- [x] Task detail menampilkan messages, tool calls, dan artifacts.
+- [x] Audit log dapat difilter berdasarkan task, agent, dan action.
+- [x] Cost dapat dilihat per task dan per agent.
 
 ---
 
