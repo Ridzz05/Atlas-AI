@@ -15,7 +15,7 @@
 
 > Research provider checkpoint (26 August 2026): commits `98ea6f6` and `a083c83` add an opt-in Brave adapter for `web.search`, `web.fetch_safe`, `company.lookup`, and `lead.enrich`, including strict environment validation, public-DNS/redirect/size/timeout controls, DNS-pinned Node transport, untrusted-content evidence, runtime/worker wiring, and provider-to-Tool-Gateway regression coverage. The default remains `RESEARCH_PROVIDER=none`; live API verification and clean-host operations testing remain release criteria.
 
-> Task integrity and communications checkpoint (26 August 2026): commits `0d25fb7` and `6279440` normalize watchdog timeouts to valid task `failed` state, publish task lifecycle events for API/plan execution, and add a database status constraint with migration repair. Commit `bac3083` persists API and Telegram task-intake messages and replaces the dashboard's browser-local command log with a durable messages/tool-call feed that refreshes from authenticated SSE events. Commit `53f771f` adds the same live SSE refresh behavior to the Tasks page. Tool payload input/output is intentionally not rendered in the dashboard.
+> Task integrity and communications checkpoint (26 August 2026): commits `0d25fb7` and `6279440` normalize watchdog timeouts to valid task `failed` state, publish task lifecycle events for API/plan execution, and add a database status constraint with migration repair. Commit `bac3083` persists API and Telegram task-intake messages and replaces the dashboard's browser-local command log with a durable messages/tool-call feed that refreshes from authenticated SSE events. Commit `53f771f` adds the same live SSE refresh behavior to the Tasks page. Commit `4a7c262` makes production API and Telegram intake persist the task and originating message through one PostgreSQL transaction and prevents queue dispatch when that transaction fails. Tool payload input/output is intentionally not rendered in the dashboard.
 
 > Compose verification checkpoint (26 August 2026): commits `2b109c5` and `3411cf5` make CI container names prefix-driven while preserving production defaults, and extend the Compose smoke test to verify API task intake is persisted in durable message history. Commit `ef7694e` aligns backup/restore defaults with the same `ATLAS_CONTAINER_PREFIX` setting. Docker execution remains pending on a Docker-capable host.
 
@@ -24,6 +24,8 @@
 ---
 
 > Queue recovery integrity checkpoint (26 August 2026): commit `784394e` prevents queued-task recovery from creating a second execution when a base or deferred BullMQ job is already pending, replaces terminal queue records before recovery requeue, and uses stable removable deferred-job IDs. The queue/worker regression slice passes 18/18 tests; cross-process behavior still requires the Docker smoke run.
+
+> Intake durability checkpoint (26 August 2026): commit `4a7c262` adds transaction-executor support to task/message repositories and wires the production API and Telegram `/new` paths to persist the task plus originating conversation message atomically. The focused database/API/Telegram slice passes 31/31 tests. The PostgreSQL rollback and restart behavior still require the Docker smoke run.
 
 ## 1. Ringkasan Eksekutif
 
