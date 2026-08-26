@@ -120,7 +120,12 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     const inputTokens = data.usage?.prompt_tokens ?? 0;
     const outputTokens = data.usage?.completion_tokens ?? 0;
-    const finishReason = choice?.finish_reason === 'tool_calls' ? 'tool_calls' : choice?.finish_reason === 'length' ? 'length' : 'stop';
+    let finishReason: ModelRunResult['finishReason'] = 'stop';
+    if (choice?.finish_reason === 'tool_calls') {
+      finishReason = 'tool_calls';
+    } else if (choice?.finish_reason === 'length') {
+      finishReason = 'length';
+    }
 
     return {
       content: message?.content || '',
