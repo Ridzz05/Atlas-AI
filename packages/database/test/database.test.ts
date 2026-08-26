@@ -13,12 +13,17 @@ describe('@atlas/database tests', () => {
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
-      expect(content).toContain('CREATE TABLE IF NOT EXISTS');
       if (file === '001_initial_schema.sql') {
+        expect(content).toContain('CREATE TABLE IF NOT EXISTS');
         expect(content).toContain('tasks');
         expect(content).toContain('runs');
         expect(content).toContain('approvals');
         expect(content).toContain('memory_items');
+      }
+      if (file === '003_durable_approval_execution.sql') {
+        expect(content).toContain('ALTER TABLE approvals');
+        expect(content).toContain('execution_token_signature');
+        expect(content).toContain('idx_approvals_active_request_dedup');
       }
     }
   });
