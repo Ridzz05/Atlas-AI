@@ -130,6 +130,32 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.error).toContain('User stopped');
   });
 
+  it('classifies the watchdog abort as timed out when the provider rejects', async () => {
+    const provider = {
+      run: vi.fn(
+        ({ signal }: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            signal?.addEventListener('abort', () => reject(new Error('This operation was aborted')), { once: true });
+          })
+      )
+    } as any;
+    const shortTimeoutAgent: AgentDefinition = {
+      ...mockAgent,
+      limits: { ...mockAgent.limits, timeoutSeconds: 0.01 }
+    };
+    const runner = new AgentRunner({ provider, eventBus: new InMemoryEventBus() });
+
+    const summary = await runner.run({
+      runId: 'run-timeout-test',
+      task: mockTask,
+      agent: shortTimeoutAgent,
+      initialPrompt: 'Timeout test'
+    });
+
+    expect(summary.status).toBe('timed_out');
+    expect(summary.error).toBe('Execution timed out');
+  });
+
   it('honors a cancellation request written by another process before calling the provider', async () => {
     const provider = {
       run: vi.fn().mockResolvedValue({

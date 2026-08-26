@@ -135,7 +135,9 @@ export class AgentRunner {
 
     // Set timeout watchdog
     const timeoutSeconds = input.agent.limits.timeoutSeconds || 180;
+    let timedOut = false;
     const timeoutTimer = setTimeout(() => {
+      timedOut = true;
       controller.abort(`Timeout after ${timeoutSeconds} seconds`);
     }, timeoutSeconds * 1000);
     const leaseSeconds = this.options.leaseSeconds || 60;
@@ -472,7 +474,7 @@ export class AgentRunner {
       });
     } catch (err: any) {
       const isAbort = controller.signal.aborted || String(err?.message || '').includes('aborted');
-      const isTimeout = String(err?.message || '').includes('Timeout');
+      const isTimeout = timedOut || String(err?.message || '').includes('Timeout');
       const isApprovalPending = err?.approvalPending === true;
 
       if (isTimeout) {
