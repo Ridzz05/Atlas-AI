@@ -378,6 +378,13 @@ describe('@atlas/memory tests', () => {
     expect(propResult.id).toBeDefined();
     expect(propResult.status).toBe('unverified');
 
+    const hiddenBeforeVerification = await tools.search({
+      query: 'playbook rule respond'
+    });
+    expect(hiddenBeforeVerification.results).toEqual([]);
+
+    await proposalService.verify(propResult.id);
+
     // Search tool
     const searchResult = await tools.search({
       query: 'playbook rule respond'
@@ -385,5 +392,35 @@ describe('@atlas/memory tests', () => {
 
     expect(searchResult.results.length).toBe(1);
     expect(searchResult.results[0]?.content).toContain('CRM playbook rule #1');
+  });
+
+  it('does not expose unverified memory through the agent search tool', async () => {
+    const store = new InMemoryMemoryStore();
+    const tools = new MemoryTools(
+      new MemoryRetriever(store),
+      new MemoryProposalService(store),
+      store
+    );
+
+    await store.save({
+      id: crypto.randomUUID(),
+      type: 'semantic',
+      status: 'unverified',
+      content: 'Unverified customer claim',
+      scope: 'global',
+      author: 'ned',
+      source: 'research',
+      confidence: 0.2,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const result = await tools.search({ query: 'customer claim' });
+
+    expect(result.results).toEqual([]);
   });
 });

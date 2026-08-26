@@ -20,6 +20,7 @@ export class MemoryTools {
       query: input.query,
       allowedScopes: input.allowedScopes,
       types: input.types,
+      status: 'verified',
       limit: input.limit || 5
     });
 
