@@ -147,6 +147,38 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(fetchSafe).not.toHaveBeenCalled();
   });
 
+  it('rejects localhost and literal IP web targets before provider access', async () => {
+    const registry = new ToolRegistry();
+    registry.register(WebFetchTool);
+    const fetchSafe = vi.fn();
+    const context = {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      allowedTools: ['web.fetch_safe'],
+      researchProvider: { fetchSafe }
+    } as any;
+
+    const localHostResult = await registry.execute('web.fetch_safe', {
+      url: 'https://localhost/admin'
+    }, context);
+    const privateIpResult = await registry.execute('web.fetch_safe', {
+      url: 'http://192.168.1.10/metadata'
+    }, context);
+    const linkLocalResult = await registry.execute('web.fetch_safe', {
+      url: 'http://169.254.169.254/latest/meta-data'
+    }, context);
+    const ipv6LoopbackResult = await registry.execute('web.fetch_safe', {
+      url: 'http://[::1]/admin'
+    }, context);
+
+    expect(localHostResult.success).toBe(false);
+    expect(privateIpResult.success).toBe(false);
+    expect(linkLocalResult.success).toBe(false);
+    expect(ipv6LoopbackResult.success).toBe(false);
+    expect(fetchSafe).not.toHaveBeenCalled();
+  });
+
   it('lets Argus inspect policy without bypassing the runtime write flag', async () => {
     const registry = new ToolRegistry();
     registry.register(PolicyVerifyTool);

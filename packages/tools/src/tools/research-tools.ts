@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isIP } from 'node:net';
 import { ToolDefinition } from '../types.js';
 
 const ResearchEvidenceSchema = z.object({
@@ -9,12 +10,38 @@ const ResearchEvidenceSchema = z.object({
   confidence: z.number().min(0).max(1)
 });
 
-const SafeWebUrlSchema = z.string().trim().max(2048).url().refine(value => {
-  const parsed = new URL(value);
-  return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
-    && !parsed.username
-    && !parsed.password;
-}, 'Only credential-free HTTP(S) URLs are allowed.');
+function isSafePublicWebUrl(value: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return false;
+  }
+
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
+    || parsed.username
+    || parsed.password) {
+    return false;
+  }
+
+  const hostname = parsed.hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '');
+  if (!hostname || isIP(hostname) !== 0) {
+    return false;
+  }
+
+  return hostname !== 'localhost'
+    && !hostname.endsWith('.localhost')
+    && !hostname.endsWith('.local')
+    && !hostname.endsWith('.internal');
+}
+
+const SafeWebUrlSchema = z.string().trim().max(2048).url().refine(
+  isSafePublicWebUrl,
+  'Only credential-free HTTP(S) URLs with a public hostname are allowed.'
+);
 
 const WebFetchUnavailableSchema = z.object({
   configured: z.literal(false),
