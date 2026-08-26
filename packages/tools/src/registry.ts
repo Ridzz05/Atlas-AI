@@ -153,12 +153,19 @@ export class ToolRegistry {
 
     // 4. Execute with timeout
     try {
-      const output = await Promise.race([
+      const rawOutput = await Promise.race([
         tool.execute(context, parseResult.data),
         new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error(`Tool '${name}' timed out after ${tool.timeoutMs}ms`)), tool.timeoutMs)
         )
       ]);
+      const outputValidation = tool.outputSchema.safeParse(rawOutput);
+      if (!outputValidation.success) {
+        throw new Error(
+          `Invalid output from tool '${name}': ${JSON.stringify(outputValidation.error.errors)}`
+        );
+      }
+      const output = outputValidation.data;
 
       if (durableApprovalId && context.approvalExecutionStore) {
         const finalized = await context.approvalExecutionStore.finalizeExecution(durableApprovalId, {

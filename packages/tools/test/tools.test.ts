@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { z } from 'zod';
 import {
   ToolRegistry,
   WebSearchTool,
@@ -16,6 +17,31 @@ import { TokenVerifier } from '@atlas/policy';
 import { InMemoryMemoryStore, MemoryRetriever, MemoryProposalService, MemoryTools } from '@atlas/memory';
 
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
+  it('rejects malformed tool output before returning it to orchestration', async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: 'test.malformed_output',
+      description: 'Test-only tool with a strict output contract.',
+      inputSchema: z.object({}),
+      outputSchema: z.object({ verified: z.boolean() }),
+      riskLevel: 'read',
+      requiresApproval: false,
+      timeoutMs: 1000,
+      async execute() {
+        return { verified: 'yes' };
+      }
+    });
+
+    const result = await registry.execute('test.malformed_output', {}, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'argus'
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid output from tool 'test.malformed_output'");
+  });
+
   it('registers and executes read research tools safely', async () => {
     const registry = new ToolRegistry();
     registry.register(WebSearchTool);
