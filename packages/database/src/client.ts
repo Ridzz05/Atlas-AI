@@ -6,6 +6,10 @@ export interface DatabaseConfig {
   maxConnections?: number;
 }
 
+export interface DatabaseQueryExecutor {
+  query<T extends pg.QueryResultRow = any>(sql: string, params?: any[]): Promise<pg.QueryResult<T>>;
+}
+
 export class DatabaseClient {
   private pool: pg.Pool;
 

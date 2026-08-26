@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition, Task } from '@atlas/shared';
-import { MessageRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
+import { DatabaseClient, MessageRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
 import { createTaskLifecycleEvent, EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
@@ -21,6 +21,7 @@ export interface TaskRouteOptions {
   taskRepo: TaskRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
+  db?: DatabaseClient;
   messageRepo?: MessageRepository;
   getAgentDefinition: (id: string) => AgentDefinition;
   controlStateRepo?: TelegramStateRepository;
@@ -62,8 +63,7 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
     }
 
     try {
-      const task = await options.taskRepo.create(input);
-      await persistTaskIntake(options.messageRepo, task);
+      const task = await createTaskWithIntake(options, input);
       await publishTaskCreated(options.eventBus, task);
 
       // Enqueue job for background processing
@@ -137,6 +137,30 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
       return reply.status(500).send({ error: 'Failed to fetch task' });
     }
   });
+}
+
+async function createTaskWithIntake(options: TaskRouteOptions, input: Parameters<TaskRepository['create']>[0]): Promise<Task> {
+  if (options.db && options.messageRepo) {
+    return options.db.transaction(async transactionClient => {
+      const task = await options.taskRepo.create(input, undefined, transactionClient);
+      await options.messageRepo!.create(
+        {
+          taskId: task.id,
+          senderType: 'user',
+          senderId: 'api-owner',
+          content: task.goal,
+          metadata: { source: 'api' }
+        },
+        undefined,
+        transactionClient
+      );
+      return task;
+    });
+  }
+
+  const task = await options.taskRepo.create(input);
+  await persistTaskIntake(options.messageRepo, task);
+  return task;
 }
 
 async function publishTaskCreated(eventBus: EventBus, task: Task): Promise<void> {

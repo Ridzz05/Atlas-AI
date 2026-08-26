@@ -163,6 +163,106 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     expect(fakeTaskRepo.create).toHaveBeenCalled();
   });
 
+  it('creates the task and API intake message in one transaction when durable DB is configured', async () => {
+    const task = {
+      id: '123e4567-e89b-12d3-a456-426614174050',
+      parentId: null,
+      title: 'Atomic intake',
+      goal: 'Keep task and conversation history consistent',
+      assignedAgent: 'chief',
+      depth: 0,
+      status: 'queued',
+      priority: 'normal',
+      context: {},
+      plan: null,
+      result: null,
+      error: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null
+    };
+    const transactionClient = { query: vi.fn() };
+    const db = {
+      transaction: vi.fn(async (callback: (client: unknown) => Promise<unknown>) => callback(transactionClient))
+    };
+    const taskRepo = { create: vi.fn().mockResolvedValue(task) } as any;
+    const messageRepo = { create: vi.fn().mockResolvedValue(undefined) } as any;
+    const taskQueue = { enqueue: vi.fn().mockResolvedValue(task.id), process: vi.fn(), close: vi.fn() } as any;
+    const atomicServer = buildServer({
+      config,
+      db: db as any,
+      taskRepo,
+      messageRepo,
+      taskQueue,
+      eventBus: new InMemoryEventBus(),
+      registry: defaultAgentRegistry,
+      processQueue: false
+    });
+
+    const response = await atomicServer.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: {
+        title: task.title,
+        goal: task.goal,
+        assignedAgent: 'chief'
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(taskRepo.create).toHaveBeenCalledWith(expect.anything(), undefined, transactionClient);
+    expect(messageRepo.create).toHaveBeenCalledWith(expect.objectContaining({ taskId: task.id }), undefined, transactionClient);
+    expect(taskQueue.enqueue).toHaveBeenCalledOnce();
+  });
+
+  it('does not enqueue or return success when atomic API intake history fails', async () => {
+    const task = {
+      id: '123e4567-e89b-12d3-a456-426614174051',
+      parentId: null,
+      title: 'Atomic failure',
+      goal: 'Do not dispatch without history',
+      assignedAgent: 'chief',
+      depth: 0,
+      status: 'queued',
+      priority: 'normal',
+      context: {},
+      plan: null,
+      result: null,
+      error: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null
+    };
+    const db = {
+      transaction: vi.fn(async (callback: (client: unknown) => Promise<unknown>) => callback({ query: vi.fn() }))
+    };
+    const taskQueue = { enqueue: vi.fn(), process: vi.fn(), close: vi.fn() } as any;
+    const atomicServer = buildServer({
+      config,
+      db: db as any,
+      taskRepo: { create: vi.fn().mockResolvedValue(task) } as any,
+      messageRepo: { create: vi.fn().mockRejectedValue(new Error('history unavailable')) } as any,
+      taskQueue,
+      eventBus: new InMemoryEventBus(),
+      registry: defaultAgentRegistry,
+      processQueue: false
+    });
+
+    const response = await atomicServer.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: {
+        title: task.title,
+        goal: task.goal,
+        assignedAgent: 'chief'
+      }
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(taskQueue.enqueue).not.toHaveBeenCalled();
+  });
+
   it('rejects an unknown assigned agent before creating a durable task', async () => {
     const invalidTaskRepo: any = { create: vi.fn() };
     const invalidServer = buildServer({

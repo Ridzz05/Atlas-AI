@@ -1,4 +1,4 @@
-import { DatabaseClient } from '../client.js';
+import { DatabaseClient, DatabaseQueryExecutor } from '../client.js';
 import { Task, CreateTaskInput, TaskStatus, TaskPlan, TaskStatusSchema } from '@atlas/shared';
 
 export interface TaskFilter {
@@ -12,7 +12,7 @@ export interface TaskFilter {
 export class TaskRepository {
   constructor(private db: DatabaseClient) {}
 
-  public async create(input: CreateTaskInput, id?: string): Promise<Task> {
+  public async create(input: CreateTaskInput, id?: string, executor: DatabaseQueryExecutor = this.db): Promise<Task> {
     const taskId = id || crypto.randomUUID();
     const query = `
       INSERT INTO tasks (
@@ -21,7 +21,7 @@ export class TaskRepository {
       RETURNING *;
     `;
 
-    const res = await this.db.query(query, [
+    const res = await executor.query(query, [
       taskId,
       input.parentId || null,
       input.title,

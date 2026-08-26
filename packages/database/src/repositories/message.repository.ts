@@ -1,4 +1,4 @@
-import { DatabaseClient } from '../client.js';
+import { DatabaseClient, DatabaseQueryExecutor } from '../client.js';
 
 export type MessageSenderType = 'user' | 'agent' | 'system' | 'tool';
 
@@ -27,8 +27,12 @@ export interface MessageCreateInput {
 export class MessageRepository {
   constructor(private db: DatabaseClient) {}
 
-  public async create(input: MessageCreateInput, id = crypto.randomUUID()): Promise<MessageRecord> {
-    const result = await this.db.query(
+  public async create(
+    input: MessageCreateInput,
+    id = crypto.randomUUID(),
+    executor: DatabaseQueryExecutor = this.db
+  ): Promise<MessageRecord> {
+    const result = await executor.query(
       `
       INSERT INTO messages (id, task_id, run_id, sender_type, sender_id, recipient_id, content, metadata)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)

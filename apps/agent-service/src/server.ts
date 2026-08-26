@@ -258,6 +258,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
       taskRepo: options.taskRepo,
       taskQueue,
       eventBus,
+      db: options.db,
       messageRepo: options.messageRepo,
       getAgentDefinition: (id: string) => registry.getOrThrow(id),
       controlStateRepo: options.controlStateRepo

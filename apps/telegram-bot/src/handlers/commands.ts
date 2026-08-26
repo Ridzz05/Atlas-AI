@@ -1,9 +1,10 @@
-import { ApprovalRepository, BudgetRepository, MessageRepository, RunRepository, TaskRepository } from '@atlas/database';
+import { ApprovalRepository, BudgetRepository, DatabaseClient, MessageRepository, RunRepository, TaskRepository } from '@atlas/database';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 
 export interface CommandContext {
+  db?: DatabaseClient;
   taskRepo?: TaskRepository;
   messageRepo?: MessageRepository;
   runRepo?: RunRepository;
@@ -184,30 +185,47 @@ ${task.error ? `\n⚠️ *Error:* \`${task.error}\`` : ''}`;
       completedAt: null
     };
 
-    if (this.ctx.taskRepo) {
-      task = await this.ctx.taskRepo.create(
-        {
-          title,
-          goal,
-          assignedAgent: 'chief',
-          priority: 'normal',
-          context: {}
-        },
-        taskId
-      );
-    }
+    const taskInput = {
+      title,
+      goal,
+      assignedAgent: 'chief' as const,
+      priority: 'normal' as const,
+      context: {}
+    };
 
-    if (this.ctx.messageRepo) {
-      try {
-        await this.ctx.messageRepo.create({
-          taskId: task.id,
-          senderType: 'user',
-          senderId: actorId,
-          content: task.goal,
-          metadata: { source: 'telegram' }
-        });
-      } catch (error) {
-        rootLogger.error('Failed to persist Telegram task intake message', { taskId: task.id, error: String(error) });
+    if (this.ctx.db && this.ctx.taskRepo && this.ctx.messageRepo) {
+      task = await this.ctx.db.transaction(async transactionClient => {
+        const createdTask = await this.ctx.taskRepo!.create(taskInput, taskId, transactionClient);
+        await this.ctx.messageRepo!.create(
+          {
+            taskId: createdTask.id,
+            senderType: 'user',
+            senderId: actorId,
+            content: createdTask.goal,
+            metadata: { source: 'telegram' }
+          },
+          undefined,
+          transactionClient
+        );
+        return createdTask;
+      });
+    } else {
+      if (this.ctx.taskRepo) {
+        task = await this.ctx.taskRepo.create(taskInput, taskId);
+      }
+
+      if (this.ctx.messageRepo) {
+        try {
+          await this.ctx.messageRepo.create({
+            taskId: task.id,
+            senderType: 'user',
+            senderId: actorId,
+            content: task.goal,
+            metadata: { source: 'telegram' }
+          });
+        } catch (error) {
+          rootLogger.error('Failed to persist Telegram task intake message', { taskId: task.id, error: String(error) });
+        }
       }
     }
 

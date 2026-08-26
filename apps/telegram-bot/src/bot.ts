@@ -4,6 +4,7 @@ import { CommandRouter } from './handlers/commands.js';
 import {
   ApprovalRepository,
   BudgetRepository,
+  DatabaseClient,
   MessageRepository,
   RunRepository,
   TaskRepository,
@@ -103,6 +104,7 @@ export class FetchTelegramApiClient implements TelegramApiClient {
 
 export interface AtlasTelegramBotOptions {
   config: TelegramBotConfig;
+  db?: DatabaseClient;
   taskRepo?: TaskRepository;
   messageRepo?: MessageRepository;
   runRepo?: RunRepository;
@@ -131,6 +133,7 @@ export class AtlasTelegramBot {
     this.apiClient = options.apiClient || new FetchTelegramApiClient(options.config.botToken);
 
     this.router = new CommandRouter({
+      db: options.db,
       taskRepo: options.taskRepo,
       messageRepo: options.messageRepo,
       runRepo: options.runRepo,

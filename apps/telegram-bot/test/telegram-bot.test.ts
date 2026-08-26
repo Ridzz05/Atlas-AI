@@ -335,6 +335,62 @@ describe('@atlas/telegram-bot tests', () => {
     );
   });
 
+  it('creates the Telegram task and originating message in one transaction when durable DB is configured', async () => {
+    const task = {
+      id: '123e4567-e89b-12d3-a456-426614174022',
+      parentId: null,
+      title: 'Find Palembang gyms',
+      goal: 'Find Palembang gyms atomically',
+      assignedAgent: 'chief',
+      depth: 0,
+      status: 'queued',
+      priority: 'normal',
+      context: {},
+      plan: null,
+      result: null,
+      error: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null
+    };
+    const transactionClient = { query: vi.fn() };
+    const db = {
+      transaction: vi.fn(async (callback: (client: unknown) => Promise<unknown>) => callback(transactionClient))
+    };
+    const taskRepo = { create: vi.fn().mockResolvedValue(task) } as any;
+    const messageRepo = { create: vi.fn().mockResolvedValue(undefined) } as any;
+    const taskQueue = { enqueue: vi.fn().mockResolvedValue(task.id) } as any;
+    const durableBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      db: db as any,
+      taskRepo,
+      messageRepo,
+      taskQueue
+    });
+
+    const result = await durableBot.processUpdate({
+      update_id: 113,
+      message: {
+        message_id: 13,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/new Find Palembang gyms atomically',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(result.responseText).toContain('Task Created Successfully');
+    expect(db.transaction).toHaveBeenCalledOnce();
+    expect(taskRepo.create).toHaveBeenCalledWith(expect.anything(), expect.any(String), transactionClient);
+    expect(messageRepo.create).toHaveBeenCalledWith(expect.objectContaining({ taskId: task.id }), undefined, transactionClient);
+    expect(taskQueue.enqueue).toHaveBeenCalledOnce();
+  });
+
   it('routes Telegram stop and emergency stop to durable run cancellation', async () => {
     const runRepo = {
       requestCancellationForTask: vi.fn().mockResolvedValue(1),
