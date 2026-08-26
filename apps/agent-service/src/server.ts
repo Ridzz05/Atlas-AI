@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { ApprovalRepository, ArtifactRepository, AuditRepository, BudgetRepository, DatabaseClient, SystemEventRepository, TaskRepository, RunRepository, TelegramStateRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
+import { ApprovalRepository, ArtifactRepository, AuditRepository, BudgetRepository, DatabaseClient, LeadRubricRepository, SystemEventRepository, TaskRepository, RunRepository, TelegramStateRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import { MemoryStore } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
@@ -20,6 +20,7 @@ import { registerApprovalRoutes } from './routes/approvals.js';
 import { registerEventRoutes } from './routes/events.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
 import { registerControlRoutes } from './routes/control.js';
+import { registerRubricRoutes } from './routes/rubrics.js';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
 export interface ServerOptions {
@@ -36,6 +37,7 @@ export interface ServerOptions {
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
+  rubricRepo?: LeadRubricRepository;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -284,6 +286,10 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   registerControlRoutes(app, {
     controlStateRepo: options.controlStateRepo,
     runRepo: options.runRepo
+  });
+
+  registerRubricRoutes(app, {
+    rubricRepo: options.rubricRepo
   });
 
   app.get('/api/v1/settings', async (_req, reply) => {

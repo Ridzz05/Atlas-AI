@@ -20,6 +20,7 @@ async function main() {
     messageRepo: runtime.messageRepo,
     toolCallRepo: runtime.toolCallRepo,
     budgetRepo: runtime.budgetRepo,
+    rubricRepo: runtime.rubricRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,
