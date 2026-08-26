@@ -14,6 +14,7 @@ async function main() {
     approvalRepo: runtime.approvalRepo,
     artifactRepo: runtime.artifactRepo,
     auditRepo: runtime.auditRepo,
+    controlStateRepo: runtime.telegramStateRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

@@ -34,6 +34,20 @@ export class BullMqTaskQueue implements TaskQueue {
     return String(job.id);
   }
 
+  public async defer(data: TaskJobData, delayMs = 5000): Promise<string> {
+    if (this.closed) throw new Error(`Queue '${this.queueName}' is closed`);
+    const job = await this.queue.add('agent-task', data, {
+      jobId: `deferred:${data.runId || data.task.id}:${crypto.randomUUID()}`,
+      delay: delayMs,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { age: 86400, count: 1000 },
+      removeOnFail: { age: 604800, count: 5000 }
+    });
+
+    return String(job.id);
+  }
+
   public process(concurrency: number, handler: TaskJobHandler): void {
     if (this.closed) throw new Error(`Queue '${this.queueName}' is closed`);
     if (this.worker) {

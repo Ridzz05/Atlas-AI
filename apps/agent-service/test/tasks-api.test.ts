@@ -141,6 +141,40 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     expect(fakeTaskRepo.create).toHaveBeenCalled();
   });
 
+  it('rejects task intake while durable control state is paused', async () => {
+    const frozenTaskRepo: any = { create: vi.fn() };
+    const controlStateRepo: any = {
+      getControlState: vi.fn().mockResolvedValue({
+        paused: true,
+        emergencyStop: false,
+        updatedBy: 'telegram-owner',
+        updatedAt: new Date()
+      })
+    };
+    const frozenServer = buildServer({
+      config,
+      taskRepo: frozenTaskRepo,
+      taskQueue: new InMemoryTaskQueue(),
+      registry: defaultAgentRegistry,
+      controlStateRepo,
+      processQueue: false
+    });
+
+    const response = await frozenServer.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: {
+        title: 'Must remain queued',
+        goal: 'Do not dispatch while paused',
+        assignedAgent: 'chief'
+      }
+    });
+
+    expect(response.statusCode).toBe(423);
+    expect(JSON.parse(response.body).state).toBe('paused');
+    expect(frozenTaskRepo.create).not.toHaveBeenCalled();
+  });
+
   it('lists pending approvals and records a durable decision', async () => {
     const approvals = await server.inject({
       method: 'GET',

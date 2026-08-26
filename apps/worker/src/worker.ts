@@ -6,7 +6,8 @@ import {
   AuditRepository,
   DatabaseClient,
   TaskRepository,
-  RunRepository
+  RunRepository,
+  TelegramStateRepository
 } from '@atlas/database';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
@@ -40,6 +41,7 @@ export interface WorkerRunnerOptions {
   approvalRepo?: ApprovalRepository;
   artifactRepo?: ArtifactRepository;
   auditRepo?: AuditRepository;
+  controlStateRepo?: TelegramStateRepository;
 }
 
 export class AgentWorkerRunner {
@@ -110,6 +112,31 @@ export class AgentWorkerRunner {
 
     // Start queue processor
     this.taskQueue.process(concurrency, async (job) => {
+      if (this.options.controlStateRepo) {
+        try {
+          const controlState = await this.options.controlStateRepo.getControlState();
+          if (controlState.paused || controlState.emergencyStop) {
+            if (this.taskQueue.defer) {
+              await this.taskQueue.defer(job, 5000);
+            }
+            rootLogger.warn('Deferring task while execution control state is locked', {
+              taskId: job.task.id,
+              state: controlState.emergencyStop ? 'emergency_stop' : 'paused'
+            });
+            return { status: 'deferred' };
+          }
+        } catch (err) {
+          if (this.taskQueue.defer) {
+            await this.taskQueue.defer(job, 5000);
+          }
+          rootLogger.error('Execution control state unavailable; task deferred', {
+            taskId: job.task.id,
+            error: String(err)
+          });
+          return { status: 'deferred' };
+        }
+      }
+
       rootLogger.info(`Worker processing job for task ${job.task.id} (Agent: ${job.agent.id}, Role: ${job.agent.role})`);
 
       if (job.agent.role === 'orchestrator') {

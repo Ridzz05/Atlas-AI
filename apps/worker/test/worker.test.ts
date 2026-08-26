@@ -62,4 +62,44 @@ describe('worker lifecycle and task execution tests', () => {
     await runner.stop();
     expect(runner.getStatus().isRunning).toBe(false);
   });
+
+  it.each([
+    { name: 'paused', paused: true, emergencyStop: false },
+    { name: 'emergency stop', paused: true, emergencyStop: true }
+  ])('does not start a provider run while control state is $name', async ({ paused, emergencyStop }) => {
+    const provider = { run: vi.fn() } as any;
+    const controlStateRepo = {
+      getControlState: vi.fn().mockResolvedValue({
+        paused,
+        emergencyStop,
+        updatedBy: 'telegram-owner',
+        updatedAt: new Date()
+      })
+    };
+    let handler: ((job: any) => Promise<unknown>) | undefined;
+    const taskQueue = {
+      enqueue: vi.fn().mockResolvedValue('job-1'),
+      defer: vi.fn().mockResolvedValue('deferred-job-1'),
+      process: vi.fn((_concurrency: number, jobHandler: (job: any) => Promise<unknown>) => {
+        handler = jobHandler;
+      }),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({
+      config,
+      provider,
+      taskQueue,
+      controlStateRepo
+    });
+
+    await runner.start();
+    await handler!({ task: mockTask, agent: mockAgent, prompt: 'must be deferred' });
+
+    expect(provider.run).not.toHaveBeenCalled();
+    expect(taskQueue.defer).toHaveBeenCalledWith(
+      expect.objectContaining({ task: mockTask }),
+      expect.any(Number)
+    );
+    await runner.stop();
+  });
 });

@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { ApprovalRepository, ArtifactRepository, AuditRepository, DatabaseClient, SystemEventRepository, TaskRepository, RunRepository } from '@atlas/database';
+import { ApprovalRepository, ArtifactRepository, AuditRepository, DatabaseClient, SystemEventRepository, TaskRepository, RunRepository, TelegramStateRepository } from '@atlas/database';
 import { MemoryStore } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
@@ -30,6 +30,7 @@ export interface ServerOptions {
   artifactRepo?: ArtifactRepository;
   auditRepo?: AuditRepository;
   memoryStore?: MemoryStore;
+  controlStateRepo?: TelegramStateRepository;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -124,6 +125,31 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   const taskQueue = options.taskQueue || new InMemoryTaskQueue();
   if (options.processQueue !== false) {
     taskQueue.process(options.config.MAX_CONCURRENT_AGENT_RUNS, async (job) => {
+      if (options.controlStateRepo) {
+        try {
+          const controlState = await options.controlStateRepo.getControlState();
+          if (controlState.paused || controlState.emergencyStop) {
+            if (taskQueue.defer) {
+              await taskQueue.defer(job, 5000);
+            }
+            rootLogger.warn('Deferring task while execution control state is locked', {
+              taskId: job.task.id,
+              state: controlState.emergencyStop ? 'emergency_stop' : 'paused'
+            });
+            return { status: 'deferred' };
+          }
+        } catch (err) {
+          if (taskQueue.defer) {
+            await taskQueue.defer(job, 5000);
+          }
+          rootLogger.error('Execution control state unavailable; task deferred', {
+            taskId: job.task.id,
+            error: String(err)
+          });
+          return { status: 'deferred' };
+        }
+      }
+
       if (job.agent.role === 'orchestrator') {
         return delegator.executePlan(job.task);
       }
@@ -177,7 +203,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     registerTaskRoutes(app, {
       taskRepo: options.taskRepo,
       taskQueue,
-      getAgentDefinition: (id: string) => registry.getOrThrow(id)
+      getAgentDefinition: (id: string) => registry.getOrThrow(id),
+      controlStateRepo: options.controlStateRepo
     });
   }
 

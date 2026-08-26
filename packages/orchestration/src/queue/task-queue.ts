@@ -20,6 +20,7 @@ export type TaskJobHandler = (data: TaskJobData) => Promise<unknown>;
 
 export interface TaskQueue {
   enqueue(data: TaskJobData): Promise<string>;
+  defer?(data: TaskJobData, delayMs?: number): Promise<string>;
   process(concurrency: number, handler: TaskJobHandler): void;
   close(): Promise<void>;
 }
@@ -30,12 +31,25 @@ export class InMemoryTaskQueue implements TaskQueue {
   private handler: TaskJobHandler | null = null;
   private activeCount = 0;
   private concurrency = 1;
+  private deferredTimers = new Map<string, NodeJS.Timeout>();
 
   public async enqueue(data: TaskJobData): Promise<string> {
     const jobId = data.runId || crypto.randomUUID();
     this.queue.push(data);
     rootLogger.debug(`Task enqueued: ${data.task.id}, queue length: ${this.queue.length}`);
     this.dispatch();
+    return jobId;
+  }
+
+  public async defer(data: TaskJobData, delayMs = 5000): Promise<string> {
+    const jobId = `deferred:${data.runId || data.task.id}`;
+    if (!this.deferredTimers.has(jobId)) {
+      const timer = setTimeout(() => {
+        this.deferredTimers.delete(jobId);
+        void this.enqueue(data);
+      }, delayMs);
+      this.deferredTimers.set(jobId, timer);
+    }
     return jobId;
   }
 
@@ -70,5 +84,7 @@ export class InMemoryTaskQueue implements TaskQueue {
   public async close(): Promise<void> {
     this.isProcessing = false;
     this.queue = [];
+    for (const timer of this.deferredTimers.values()) clearTimeout(timer);
+    this.deferredTimers.clear();
   }
 }

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition } from '@atlas/shared';
-import { TaskRepository } from '@atlas/database';
+import { TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 
@@ -8,6 +8,7 @@ export interface TaskRouteOptions {
   taskRepo: TaskRepository;
   taskQueue: TaskQueue;
   getAgentDefinition: (id: string) => AgentDefinition;
+  controlStateRepo?: TelegramStateRepository;
 }
 
 export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptions): void {
@@ -22,6 +23,24 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
     }
 
     const input = parseResult.data;
+
+    if (options.controlStateRepo) {
+      try {
+        const controlState = await options.controlStateRepo.getControlState();
+        if (controlState.emergencyStop || controlState.paused) {
+          return reply.status(423).send({
+            error: controlState.emergencyStop
+              ? 'Task intake is locked by emergency stop'
+              : 'Task intake is paused',
+            state: controlState.emergencyStop ? 'emergency_stop' : 'paused'
+          });
+        }
+      } catch (err) {
+        rootLogger.error('Failed to read execution control state', { error: String(err) });
+        return reply.status(503).send({ error: 'Execution control state unavailable' });
+      }
+    }
+
     try {
       const task = await options.taskRepo.create(input);
       const agent = options.getAgentDefinition(task.assignedAgent);
