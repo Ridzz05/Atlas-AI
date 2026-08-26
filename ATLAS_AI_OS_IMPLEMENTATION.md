@@ -11,7 +11,7 @@
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls, Tool Gateway output-schema enforcement, durable Telegram `/cost` and `/status` telemetry, and fail-closed production model-provider configuration are implemented and locally tested through commit `8e4ddd2`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement at search and direct lookup boundaries, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls, Tool Gateway output-schema enforcement, durable Telegram `/cost` and `/status` telemetry, and fail-closed production model-provider configuration are implemented and locally tested through commit `5fcb651`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, real research adapters, clean-environment recovery drills, backup verification, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -180,7 +180,7 @@ flowchart TD
 | Queue | Redis + BullMQ | Retry, concurrency, delayed jobs, recovery |
 | Database | PostgreSQL | Transaksi, durability, dan skalabilitas |
 | Semantic retrieval | pgvector | Menyimpan embedding di database yang sama |
-| Realtime | WebSocket atau Socket.IO | Kompatibel untuk event dashboard dan tunnel |
+| Realtime | PostgreSQL-backed Server-Sent Events (SSE) | Event stream terautentikasi dengan reconnect replay melalui `Last-Event-ID` |
 | Validation | Zod | Shared runtime schemas |
 | Telegram | Telegram Bot API | Command interface utama dari ponsel |
 | Agent tools | MCP-compatible tool gateway | Kontrak tool terstandar dan dapat dikembangkan |
@@ -216,7 +216,7 @@ Untuk eksperimen lokal, runtime berbasis CLI dapat disediakan sebagai adapter te
 
 Agent run dapat berlangsung lama, membutuhkan retry, cancellation, concurrency control, dan pemulihan setelah restart. Karena itu:
 
-- Next.js menangani dashboard dan control API;
+- Next.js menangani dashboard dan proxy terautentikasi; Fastify agent-service menangani control API;
 - agent worker berjalan sebagai service terpisah;
 - queue menjadi boundary antara request singkat dan pekerjaan jangka panjang.
 
@@ -1057,7 +1057,7 @@ Tidak boleh ada credential asli dalam repository.
 - provider adapter mock;
 - tool gateway;
 - Telegram update handling;
-- WebSocket events;
+- authenticated SSE events with reconnect replay;
 - artifact storage;
 - retry and cancellation.
 
