@@ -57,13 +57,13 @@
 
 - [x] Add a repository lint gate and run it in CI; full formatter enforcement remains a follow-up.
 - [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
-- [x] Align production environment variable names and remove insecure production Compose fallbacks.
+- [x] Align production environment variable names, remove insecure production Compose fallbacks, and fail closed on incomplete/unsupported model-provider configuration.
 - [x] Persist artifact metadata and expose read-only artifact, memory, and audit APIs; backup/restore verification remains open.
 - [x] Update implementation blueprint and runbook with current phase status and known limitations.
 
 ## Current execution checkpoint
 
-Implemented through commit `30c6504`: durable runtime, plan validation, fail-closed research, validated task filters/pagination, fail-closed DB/queue readiness, request-ID correlation, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE with reconnect replay, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement across planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker leases/heartbeats/stale-run recovery, artifact/audit repositories, memory query API, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, and CI lint/build/Compose validation. Full local gates pass: lint 141 files, typecheck 26/26, test 26/26, and build 15/15. Docker-backed boot/recovery, real providers/connectors, backup restore, and full formatter enforcement remain open.
+Implemented through commit `844bec5`: durable runtime, plan validation, fail-closed research, validated task filters/pagination, fail-closed DB/queue readiness, request-ID correlation, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE with reconnect replay, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement across planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker leases/heartbeats/stale-run recovery, artifact/audit repositories, memory query API, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, explicit provider adapter routing with production configuration validation, and CI lint/build/Compose validation. Full local gates pass: lint 141 files, typecheck 26/26, test 26/26, and build 15/15. Docker-backed boot/recovery, real providers/connectors, backup restore, and full formatter enforcement remain open.
 
 ## Final release checkpoint
 
