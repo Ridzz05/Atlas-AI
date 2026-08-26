@@ -19,7 +19,7 @@
 
 ## Checkpoint: Durable core
 
-- [ ] Empty Compose environment boots cleanly (Docker Desktop is installed, but its Linux engine is unavailable because WSL is not installed).
+- [ ] Empty Compose environment boots cleanly (WSL 2.7.12 is installed; Windows/Docker restart and Linux-engine health verification are still pending).
 - [x] API and worker share the runtime queue configuration.
 - [ ] Task survives API/worker restart (requires Docker/PostgreSQL/Redis drill).
 - [x] DB readiness fails closed when the configured database is unavailable.
