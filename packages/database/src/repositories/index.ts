@@ -7,3 +7,4 @@ export * from './artifact.repository.js';
 export * from './audit.repository.js';
 export * from './message.repository.js';
 export * from './tool-call.repository.js';
+export * from './budget.repository.js';

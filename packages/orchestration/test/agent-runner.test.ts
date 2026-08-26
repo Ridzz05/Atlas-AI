@@ -391,4 +391,74 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(runRepo.updateStatus).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174005', 'active');
     expect(approvalExecutionStore.getExecutionStatus).toHaveBeenCalledWith(approvalToken.requestId);
   });
+
+  it('reserves durable global and per-run budget before execution and settles actual cost', async () => {
+    const provider = new MockModelProvider({ cannedResponses: [{ content: 'Budgeted result' }] });
+    const runRepo = {
+      create: vi.fn(),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const budgetRepo = {
+      reserve: vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174009' }),
+      commit: vi.fn().mockResolvedValue({
+        id: '123e4567-e89b-12d3-a456-426614174009',
+        status: 'committed'
+      })
+    } as any;
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      budgetRepo,
+      globalDailyBudgetUsd: 5
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174008',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Use durable budget'
+    });
+
+    expect(summary.status).toBe('completed');
+    expect(budgetRepo.reserve).toHaveBeenCalledWith(expect.objectContaining({
+      runId: '123e4567-e89b-12d3-a456-426614174008',
+      amountUsd: mockAgent.limits.maxCostUsd,
+      globalDailyLimitUsd: 5,
+      perRunLimitUsd: mockAgent.limits.maxCostUsd
+    }));
+    expect(budgetRepo.commit).toHaveBeenCalledWith(
+      '123e4567-e89b-12d3-a456-426614174009',
+      summary.totalCostUsd
+    );
+  });
+
+  it('fails closed and does not call the provider when durable budget is exhausted', async () => {
+    const provider = { run: vi.fn() } as any;
+    const runRepo = {
+      create: vi.fn(),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const budgetRepo = { reserve: vi.fn().mockResolvedValue(null) } as any;
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      budgetRepo,
+      globalDailyBudgetUsd: 5
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174010',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Should be rejected by budget'
+    });
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toContain('BUDGET_EXCEEDED');
+    expect(provider.run).not.toHaveBeenCalled();
+  });
 });

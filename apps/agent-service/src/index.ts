@@ -19,6 +19,7 @@ async function main() {
     controlStateRepo: runtime.telegramStateRepo,
     messageRepo: runtime.messageRepo,
     toolCallRepo: runtime.toolCallRepo,
+    budgetRepo: runtime.budgetRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

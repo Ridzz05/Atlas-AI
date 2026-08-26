@@ -9,7 +9,8 @@ import {
   RunRepository,
   TelegramStateRepository,
   MessageRepository,
-  ToolCallRepository
+  ToolCallRepository,
+  BudgetRepository
 } from '@atlas/database';
 import { MemoryProposalService, MemoryRetriever, MemoryStore, MemoryTools } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
@@ -49,6 +50,7 @@ export interface WorkerRunnerOptions {
   memoryStore?: MemoryStore;
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
+  budgetRepo?: BudgetRepository;
 }
 
 export class AgentWorkerRunner {
@@ -105,6 +107,8 @@ export class AgentWorkerRunner {
       runRepo: options.runRepo,
       messageRepo: options.messageRepo,
       toolCallRepo: options.toolCallRepo,
+      budgetRepo: options.budgetRepo,
+      globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       cancellationStore: options.runRepo
@@ -118,6 +122,8 @@ export class AgentWorkerRunner {
       runRepo: options.runRepo,
       messageRepo: options.messageRepo,
       toolCallRepo: options.toolCallRepo,
+      budgetRepo: options.budgetRepo,
+      globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,

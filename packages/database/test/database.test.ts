@@ -10,6 +10,7 @@ describe('@atlas/database tests', () => {
     const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql'));
     expect(files.length).toBeGreaterThan(0);
     expect(files).toContain('001_initial_schema.sql');
+    expect(files).toContain('006_durable_budget_reservations.sql');
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
@@ -28,6 +29,10 @@ describe('@atlas/database tests', () => {
       if (file === '005_durable_run_cancellation.sql') {
         expect(content).toContain('cancel_requested');
         expect(content).toContain('cancel_reason');
+      }
+      if (file === '006_durable_budget_reservations.sql') {
+        expect(content).toContain('reserved_usd');
+        expect(content).toContain('budget_reservations');
       }
     }
   });

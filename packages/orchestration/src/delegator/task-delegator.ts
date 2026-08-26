@@ -9,7 +9,7 @@ import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { DepthGuard } from '@atlas/policy';
 import { AgentRegistry } from '@atlas/agents';
-import { TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
+import { BudgetRepository, TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import { AgentRunner, RunCancellationStore, ToolExecutor } from '../engine/agent-runner.js';
 import { TaskPlanner } from '../planner/task-planner.js';
 import { TaskSynthesizer } from '../synthesizer/task-synthesizer.js';
@@ -26,6 +26,8 @@ export interface MultiAgentDelegatorOptions {
   runRepo?: RunRepository;
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
+  budgetRepo?: BudgetRepository;
+  globalDailyBudgetUsd?: number;
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   maxConcurrency?: number;
@@ -58,6 +60,8 @@ export class TaskDelegator {
       runRepo: options.runRepo,
       messageRepo: options.messageRepo,
       toolCallRepo: options.toolCallRepo,
+      budgetRepo: options.budgetRepo,
+      globalDailyBudgetUsd: options.globalDailyBudgetUsd,
       toolExecutor: options.toolExecutor,
       approvalExecutionStore: options.approvalExecutionStore,
       cancellationStore: options.cancellationStore

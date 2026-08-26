@@ -11,6 +11,7 @@ import {
   RunRepository,
   MessageRepository,
   ToolCallRepository,
+  BudgetRepository,
   seedAgents,
   TaskRepository
 } from '@atlas/database';
@@ -32,6 +33,7 @@ export interface AtlasRuntime {
   telegramStateRepo: TelegramStateRepository;
   messageRepo: MessageRepository;
   toolCallRepo: ToolCallRepository;
+  budgetRepo: BudgetRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -83,6 +85,11 @@ export async function createAtlasRuntime(
   const telegramStateRepo = new TelegramStateRepository(db);
   const messageRepo = new MessageRepository(db);
   const toolCallRepo = new ToolCallRepository(db);
+  const budgetRepo = new BudgetRepository(db);
+
+  if (typeof (db as any).query === 'function') {
+    await budgetRepo.recoverStaleReservations();
+  }
 
   return {
     db,
@@ -96,6 +103,7 @@ export async function createAtlasRuntime(
     telegramStateRepo,
     messageRepo,
     toolCallRepo,
+    budgetRepo,
     taskQueue,
     eventBus,
     provider,

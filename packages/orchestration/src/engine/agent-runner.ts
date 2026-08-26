@@ -8,7 +8,7 @@ import {
 import { ModelProvider, ChatMessage, ToolCallRequest } from '@atlas/providers';
 import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
-import { TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
+import { BudgetRepository, TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import type { ApprovalExecutionStore } from '@atlas/tools';
 
 export interface ToolExecutor {
@@ -33,6 +33,8 @@ export interface AgentRunnerOptions {
   runRepo?: RunRepository;
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
+  budgetRepo?: BudgetRepository;
+  globalDailyBudgetUsd?: number;
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   cancellationStore?: RunCancellationStore;
@@ -146,6 +148,10 @@ export class AgentRunner {
     let status: 'completed' | 'failed' | 'cancelled' | 'timed_out' | 'waiting_approval' = 'completed';
     let errorMessage: string | undefined;
     let approvalId: string | undefined;
+    const maxTurns = input.agent.limits.maxTurns || 10;
+    const maxCostUsd = input.agent.limits.maxCostUsd || 1.0;
+    let budgetReservationId: string | undefined;
+    let budgetSettled = false;
 
     const messages: ChatMessage[] = [
       { role: 'user', content: input.initialPrompt }
@@ -174,6 +180,13 @@ export class AgentRunner {
       }
     };
 
+    const settleBudget = async (): Promise<void> => {
+      if (!budgetReservationId || budgetSettled || !this.options.budgetRepo) return;
+      const settled = await this.options.budgetRepo.commit(budgetReservationId, totalCostUsd);
+      if (!settled) throw new Error('Durable budget reservation could not be settled.');
+      budgetSettled = true;
+    };
+
     try {
       // 1. Create Run in DB if repo provided
       if (this.options.runRepo) {
@@ -183,6 +196,29 @@ export class AgentRunner {
           await this.options.runRepo.create({ taskId, agentId }, runId);
         }
       }
+
+      if (this.options.budgetRepo && this.options.runRepo && this.options.globalDailyBudgetUsd) {
+        let priorRunCost = 0;
+        if (input.runId && typeof this.options.runRepo.findById === 'function') {
+          priorRunCost = Number((await this.options.runRepo.findById(runId))?.costUsd || 0);
+        }
+        const reserveAmount = Math.max(0, maxCostUsd - priorRunCost);
+        if (reserveAmount > 0) {
+          const reservation = await this.options.budgetRepo.reserve({
+            runId,
+            taskId,
+            agentId,
+            amountUsd: reserveAmount,
+            globalDailyLimitUsd: this.options.globalDailyBudgetUsd,
+            perRunLimitUsd: maxCostUsd
+          });
+          if (!reservation) {
+            throw new Error(`BUDGET_EXCEEDED: durable budget is unavailable for run ${runId}.`);
+          }
+          budgetReservationId = reservation.id;
+        }
+      }
+
       if (this.options.taskRepo) {
         await this.options.taskRepo.updateStatus(taskId, 'running');
       }
@@ -203,9 +239,6 @@ export class AgentRunner {
         payload: { prompt: input.initialPrompt },
         timestamp: new Date().toISOString()
       });
-
-      const maxTurns = input.agent.limits.maxTurns || 10;
-      const maxCostUsd = input.agent.limits.maxCostUsd || 1.0;
 
       while (turnsCount < maxTurns) {
         await refreshDurableCancellation();
@@ -384,6 +417,8 @@ export class AgentRunner {
         throw new Error(String(controller.signal.reason || 'Run aborted'));
       }
 
+      await settleBudget();
+
       // Update terminal status in DB
       if (this.options.runRepo) {
         await this.options.runRepo.updateStatus(runId, 'completed');
@@ -428,6 +463,13 @@ export class AgentRunner {
       } else {
         status = 'failed';
         errorMessage = String(err?.message || 'Execution failed');
+      }
+
+      try {
+        await settleBudget();
+      } catch (budgetError) {
+        status = 'failed';
+        errorMessage = `Durable budget settlement failed: ${String(budgetError)}`;
       }
 
       rootLogger.error(`Run ${runId} ended with status: ${status}`, { error: errorMessage });
