@@ -2,7 +2,7 @@
 
 > Multi-agent Personal AI Operating System controlled via Telegram, powered by shared memory, controlled task delegation, human approval gates, and real-time observability.
 
-> Release status (26 August 2026): local lint, typecheck, tests, and production build pass. Fail-closed DB/queue readiness, request-ID correlation, validated task pagination, Redis-backed rate limiting, Compose service healthchecks, authenticated event replay, durable global/per-run budget accounting, worker lease recovery, aggregate cost/budget metrics, read-only governance settings, and fail-closed production model-provider configuration are implemented; real PostgreSQL/Redis boot, backup/restore, and restart recovery still require a Docker environment. External writes remain disabled until approved connectors and providers are verified.
+> Release status (26 August 2026): local lint, typecheck, tests, and production build pass. Fail-closed DB/queue readiness, request-ID correlation, validated task pagination, Redis-backed rate limiting, dependency-aware worker/Telegram readiness, Compose service healthchecks, authenticated event replay, durable global/per-run budget accounting, worker lease recovery, aggregate cost/budget metrics, read-only governance settings, and fail-closed production model-provider configuration are implemented; real PostgreSQL/Redis boot, backup/restore, and restart recovery still require a Docker environment. External writes remain disabled until approved connectors and providers are verified.
 
 ## Architecture Highlights
 - **Single Root Entry**: Human talks to **Chief**, who plans, delegates, reviews, and synthesizes.
