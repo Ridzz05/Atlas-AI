@@ -118,11 +118,15 @@ export class TaskDelegator {
     approvalResume?: ApprovalResumeContext
   ): Promise<DelegationResult> {
     rootLogger.info(`Starting multi-agent delegation for parent task ${parentTask.id}`);
+    let totalCostUsd = 0;
+    const addCost = (costUsd: number): void => {
+      if (Number.isFinite(costUsd) && costUsd >= 0) totalCostUsd += costUsd;
+    };
 
     // 1. Generate Structured Plan if not already attached
     let plan = parentTask.plan;
     if (!plan) {
-      plan = await this.planner.plan(parentTask, signal);
+      plan = await this.planner.plan(parentTask, signal, addCost);
       if (this.options.taskRepo) {
         await this.options.taskRepo.updatePlan(parentTask.id, plan);
       }
@@ -135,8 +139,6 @@ export class TaskDelegator {
       ? await this.options.taskRepo.findChildren(parentTask.id)
       : [];
     const existingChildrenByStep = new Map<string, Task>();
-    let totalCostUsd = 0;
-
     for (const child of existingChildren) {
       const stepId = typeof child.context.stepId === 'string' ? child.context.stepId : undefined;
       if (!stepId) continue;
@@ -306,7 +308,7 @@ export class TaskDelegator {
     // 3. Argus QA Gate Verification
     let qaResult: QAResult | undefined;
     try {
-      qaResult = await this.qaGate.evaluate(parentTask, subtaskResults, signal);
+      qaResult = await this.qaGate.evaluate(parentTask, subtaskResults, signal, addCost);
       rootLogger.info(`QA Gate result for task ${parentTask.id}: ${qaResult.verdict}`);
     } catch (err) {
       rootLogger.error('QA Gate execution failed; task is blocked', { error: String(err) });
@@ -320,7 +322,7 @@ export class TaskDelegator {
 
     // 4. Chief Final Synthesis
     const finalSynthesis = qaResult.passed
-      ? await this.synthesizer.synthesize(parentTask, subtaskResults, qaResult, signal)
+      ? await this.synthesizer.synthesize(parentTask, subtaskResults, qaResult, signal, addCost)
       : `Task blocked by Argus QA gate (${qaResult.verdict}). ${qaResult.findings.join(' ')}`;
 
     // 5. Update Parent Task only after a passing QA gate.

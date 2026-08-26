@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { TaskDelegator } from '../src/index.js';
 import { defaultAgentRegistry } from '@atlas/agents';
-import { MockModelProvider } from '@atlas/providers';
+import { MockModelProvider, ModelProvider } from '@atlas/providers';
 import { InMemoryEventBus } from '@atlas/events';
 import { Task, TaskPlan } from '@atlas/shared';
 
@@ -77,6 +77,46 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
     expect(result.subtaskResults.get('step_3')?.agentId).toBe('hermes');
     expect(result.qaResult?.verdict).toBe('PASS');
     expect(result.finalSynthesis).toContain('Chief Executive Summary');
+  });
+
+  it('reports planner, specialist, QA, and synthesis costs in the delegation result', async () => {
+    const responses = [
+      JSON.stringify({
+        goal: 'Cost reporting task',
+        steps: [{ id: 'step_1', agent: 'ned', objective: 'Return evidence', depends_on: [] }],
+        approval_points: [],
+        estimated_cost_usd: 0.1
+      }),
+      'Evidence with citations.',
+      JSON.stringify({ verdict: 'PASS', findings: [], recommendations: [] }),
+      'Synthesis.'
+    ];
+    const costs = [0.01, 0.02, 0.03, 0.04];
+    let callIndex = 0;
+    const provider: ModelProvider = {
+      id: 'cost-test',
+      name: 'Cost Test Provider',
+      estimateCost: vi.fn(() => 0),
+      run: vi.fn(async () => ({
+        content: responses[callIndex],
+        toolCalls: [],
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: costs[callIndex++],
+        finishReason: 'stop' as const
+      }))
+    };
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus()
+    });
+
+    const result = await delegator.executePlan(parentTask);
+
+    expect(result.status).toBe('completed');
+    expect(result.totalCostUsd).toBeCloseTo(0.1, 8);
   });
 
   it('rejects child delegation if parent depth is already at max limit', async () => {

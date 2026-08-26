@@ -19,7 +19,8 @@ export class TaskSynthesizer {
     parentTask: Task,
     specialistResults: Map<string, { agentId: string; content: string }>,
     qaResult?: QAResult,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onCost?: (costUsd: number) => void
   ): Promise<string> {
     rootLogger.info(`Synthesizing results for task ${parentTask.id}`);
 
@@ -50,15 +51,24 @@ INSTRUCTIONS:
 3. If human approval is required for next actions (such as sending messages), state this explicitly.
 4. Keep the presentation concise, structured, and easy to read.`;
 
-    const resultContent = this.options.runner
-      ? await this.runThroughDurableRunner(parentTask, prompt, signal)
-      : (await this.options.provider.run({
+    let resultContent: string;
+    let costUsd = 0;
+    if (this.options.runner) {
+      const result = await this.runThroughDurableRunner(parentTask, prompt, signal);
+      resultContent = result.content;
+      costUsd = result.costUsd;
+    } else {
+      const result = await this.options.provider.run({
         runId: crypto.randomUUID(),
         agentId: 'chief',
         messages: [{ role: 'user', content: prompt }],
         systemPrompt: this.options.chiefAgent.systemPrompt,
         signal
-      })).content;
+      });
+      resultContent = result.content;
+      costUsd = result.costUsd;
+    }
+    onCost?.(costUsd);
 
     if (this.options.messageRepo) {
       await this.options.messageRepo.create({
@@ -80,7 +90,11 @@ INSTRUCTIONS:
     return resultContent;
   }
 
-  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<string> {
+  private async runThroughDurableRunner(
+    task: Task,
+    prompt: string,
+    signal?: AbortSignal
+  ): Promise<{ content: string; costUsd: number }> {
     const summary = await this.options.runner!.run({
       task,
       agent: this.options.chiefAgent,
@@ -90,6 +104,6 @@ INSTRUCTIONS:
     if (summary.status !== 'completed') {
       throw new Error(`Synthesis run failed: ${summary.error || summary.status}`);
     }
-    return summary.finalContent;
+    return { content: summary.finalContent, costUsd: summary.totalCostUsd };
   }
 }

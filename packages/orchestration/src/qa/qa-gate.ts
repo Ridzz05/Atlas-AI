@@ -26,7 +26,8 @@ export class QAGate {
   public async evaluate(
     parentTask: Task,
     specialistResults: Map<string, { agentId: string; content: string }>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onCost?: (costUsd: number) => void
   ): Promise<QAResult> {
     rootLogger.info(`Running Argus QA verification for task ${parentTask.id}`);
 
@@ -63,15 +64,24 @@ RULES:
 - If numbers or claims are dubious, choose REVISION_REQUIRED.
 - If policy or forbidden actions are attempted, choose BLOCKED.`;
 
-    const modelContent = this.options.runner
-      ? await this.runThroughDurableRunner(parentTask, prompt, signal)
-      : (await this.options.provider.run({
+    let modelContent: string;
+    let costUsd = 0;
+    if (this.options.runner) {
+      const result = await this.runThroughDurableRunner(parentTask, prompt, signal);
+      modelContent = result.content;
+      costUsd = result.costUsd;
+    } else {
+      const result = await this.options.provider.run({
         runId: crypto.randomUUID(),
         agentId: 'argus',
         messages: [{ role: 'user', content: prompt }],
         systemPrompt: this.options.argusAgent.systemPrompt,
         signal
-      })).content;
+      });
+      modelContent = result.content;
+      costUsd = result.costUsd;
+    }
+    onCost?.(costUsd);
 
     if (this.options.messageRepo) {
       await this.options.messageRepo.create({
@@ -136,7 +146,11 @@ RULES:
     }
   }
 
-  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<string> {
+  private async runThroughDurableRunner(
+    task: Task,
+    prompt: string,
+    signal?: AbortSignal
+  ): Promise<{ content: string; costUsd: number }> {
     const summary = await this.options.runner!.run({
       task,
       agent: this.options.argusAgent,
@@ -146,6 +160,6 @@ RULES:
     if (summary.status !== 'completed') {
       throw new Error(`QA run failed: ${summary.error || summary.status}`);
     }
-    return summary.finalContent;
+    return { content: summary.finalContent, costUsd: summary.totalCostUsd };
   }
 }

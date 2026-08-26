@@ -16,7 +16,7 @@ export interface TaskPlannerOptions {
 export class TaskPlanner {
   constructor(private options: TaskPlannerOptions) {}
 
-  public async plan(task: Task, signal?: AbortSignal): Promise<TaskPlan> {
+  public async plan(task: Task, signal?: AbortSignal, onCost?: (costUsd: number) => void): Promise<TaskPlan> {
     rootLogger.info(`Planning subtasks for task ${task.id}: "${task.goal}"`);
 
     const availableAgents = this.options.registry.list().map(a => `- ${a.id} (${a.name}, ${a.role}): ${a.description}`).join('\n');
@@ -56,14 +56,23 @@ RULES:
 4. If outreach or external mutation is needed, add it to approval_points.
 5. Return ONLY the JSON object.`;
 
-    const resultContent = this.options.runner
-      ? await this.runThroughDurableRunner(task, prompt, signal)
-      : (await this.options.provider.run({
+    let resultContent: string;
+    let costUsd = 0;
+    if (this.options.runner) {
+      const result = await this.runThroughDurableRunner(task, prompt, signal);
+      resultContent = result.content;
+      costUsd = result.costUsd;
+    } else {
+      const result = await this.options.provider.run({
         runId: crypto.randomUUID(),
         agentId: 'chief',
         messages: [{ role: 'user', content: prompt }],
         signal
-      })).content;
+      });
+      resultContent = result.content;
+      costUsd = result.costUsd;
+    }
+    onCost?.(costUsd);
 
     if (this.options.messageRepo) {
       await this.options.messageRepo.create({
@@ -167,7 +176,11 @@ RULES:
     };
   }
 
-  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<string> {
+  private async runThroughDurableRunner(
+    task: Task,
+    prompt: string,
+    signal?: AbortSignal
+  ): Promise<{ content: string; costUsd: number }> {
     const chiefAgent = this.options.registry.getOrThrow('chief');
     const summary = await this.options.runner!.run({
       task,
@@ -178,6 +191,6 @@ RULES:
     if (summary.status !== 'completed') {
       throw new Error(`Planning run failed: ${summary.error || summary.status}`);
     }
-    return summary.finalContent;
+    return { content: summary.finalContent, costUsd: summary.totalCostUsd };
   }
 }
