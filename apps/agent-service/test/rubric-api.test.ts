@@ -71,6 +71,24 @@ describe('agent-service rubric control API', () => {
     expect(rubricRepo.create).not.toHaveBeenCalled();
   });
 
+  it('fails closed before mutation when audit storage is unavailable', async () => {
+    const rubricRepo = createRepository();
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      rubricRepo,
+      processQueue: false
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/v1/rubrics',
+      payload: { definition: DEFAULT_LEAD_RUBRIC, activate: false }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(rubricRepo.create).not.toHaveBeenCalled();
+  });
+
   it('creates a validated version and refreshes the active engine after activation', async () => {
     const definition = {
       ...DEFAULT_LEAD_RUBRIC,
@@ -79,12 +97,14 @@ describe('agent-service rubric control API', () => {
     };
     const createdRow = { ...activeRow, version: definition.version, definition };
     const rubricRepo = createRepository();
+    const auditCreate = vi.fn().mockResolvedValue({});
     rubricRepo.create.mockResolvedValue(createdRow);
     rubricRepo.list.mockResolvedValue([createdRow]);
     rubricRepo.getActive.mockResolvedValue(createdRow);
     const server = buildServer({
       config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
       rubricRepo,
+      auditRepo: { create: auditCreate } as any,
       processQueue: false
     });
 
@@ -101,15 +121,22 @@ describe('agent-service rubric control API', () => {
       createdBy: 'owner-api',
       activate: true
     });
+    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+      actor: 'owner-api',
+      action: 'rubric.created',
+      target: definition.version
+    }));
     expect(RubricEngine.getRubric().version).toBe(definition.version);
   });
 
   it('returns not found and preserves the active version when activation misses', async () => {
     const rubricRepo = createRepository();
+    const auditCreate = vi.fn().mockResolvedValue({});
     rubricRepo.activate.mockResolvedValue(null);
     const server = buildServer({
       config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
       rubricRepo,
+      auditRepo: { create: auditCreate } as any,
       processQueue: false
     });
 
@@ -121,5 +148,39 @@ describe('agent-service rubric control API', () => {
     expect(response.statusCode).toBe(404);
     expect(RubricEngine.getRubric().version).toBe(DEFAULT_LEAD_RUBRIC.version);
     expect(rubricRepo.list).not.toHaveBeenCalled();
+    expect(auditCreate).not.toHaveBeenCalled();
+  });
+
+  it('audits a successful version activation after refreshing the engine', async () => {
+    const definition = {
+      ...DEFAULT_LEAD_RUBRIC,
+      version: 'v2-activated',
+      thresholds: { qualified: 70, needsReview: 40 }
+    };
+    const activatedRow = { ...activeRow, version: definition.version, definition };
+    const rubricRepo = createRepository();
+    const auditCreate = vi.fn().mockResolvedValue({});
+    rubricRepo.activate.mockResolvedValue(activatedRow);
+    rubricRepo.list.mockResolvedValue([activatedRow]);
+    rubricRepo.getActive.mockResolvedValue(activatedRow);
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      rubricRepo,
+      auditRepo: { create: auditCreate } as any,
+      processQueue: false
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: `/api/v1/rubrics/${definition.version}/activate`
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
+      actor: 'owner-api',
+      action: 'rubric.activated',
+      target: definition.version
+    }));
+    expect(RubricEngine.getRubric().version).toBe(definition.version);
   });
 });

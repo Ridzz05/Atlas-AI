@@ -289,7 +289,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   });
 
   registerRubricRoutes(app, {
-    rubricRepo: options.rubricRepo
+    rubricRepo: options.rubricRepo,
+    auditRepo: options.auditRepo
   });
 
   app.get('/api/v1/settings', async (_req, reply) => {

@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { LeadRubricRepository } from '@atlas/database';
+import { AuditRepository, LeadRubricRepository } from '@atlas/database';
+import { AuditService } from '@atlas/observability';
 import {
   LeadRubricDefinitionSchema,
   RubricEngine
@@ -31,6 +32,7 @@ async function hydrateActiveRubric(repository: LeadRubricRepository) {
 
 export interface RubricRouteOptions {
   rubricRepo?: LeadRubricRepository;
+  auditRepo?: AuditRepository;
 }
 
 export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteOptions): void {
@@ -69,6 +71,9 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
         details: parsed.error.flatten()
       });
     }
+    if (!options.auditRepo) {
+      return reply.status(503).send({ error: 'Audit storage is unavailable for rubric mutation.' });
+    }
 
     try {
       const created = await options.rubricRepo.create({
@@ -78,6 +83,16 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
         activate: parsed.data.activate
       });
       const active = await hydrateActiveRubric(options.rubricRepo);
+      await options.auditRepo.create(AuditService.format({
+        actor: 'owner-api',
+        action: 'rubric.created',
+        target: created.version,
+        ipAddress: req.ip,
+        details: {
+          version: created.version,
+          activated: parsed.data.activate
+        }
+      }));
       return reply.status(201).send({
         data: created,
         activeVersion: active.version,
@@ -92,6 +107,9 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
     if (!options.rubricRepo) {
       return reply.status(503).send({ error: 'Lead rubric storage is unavailable.' });
     }
+    if (!options.auditRepo) {
+      return reply.status(503).send({ error: 'Audit storage is unavailable for rubric mutation.' });
+    }
 
     const { version: rawVersion } = req.params as { version?: string };
     const parsedVersion = RubricVersionSchema.safeParse(rawVersion);
@@ -105,6 +123,13 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
         return reply.status(404).send({ error: 'Lead rubric version not found.' });
       }
       const active = await hydrateActiveRubric(options.rubricRepo);
+      await options.auditRepo.create(AuditService.format({
+        actor: 'owner-api',
+        action: 'rubric.activated',
+        target: activated.version,
+        ipAddress: req.ip,
+        details: { version: activated.version }
+      }));
       return reply.status(200).send({
         data: activated,
         activeVersion: active.version,
