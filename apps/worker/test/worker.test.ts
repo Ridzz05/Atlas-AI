@@ -103,6 +103,56 @@ describe('worker lifecycle and task execution tests', () => {
     await runner.stop();
   });
 
+  it('retries queued-task recovery while the worker remains online', async () => {
+    vi.useFakeTimers();
+    try {
+      const taskRepo = {
+        list: vi.fn().mockResolvedValue([])
+      } as any;
+      const taskQueue = {
+        enqueue: vi.fn().mockResolvedValue('job-1'),
+        process: vi.fn(),
+        close: vi.fn().mockResolvedValue(undefined)
+      } as any;
+      const runner = new AgentWorkerRunner({
+        config: { ...config, QUEUE_RECOVERY_INTERVAL_SECONDS: 1 },
+        taskRepo,
+        taskQueue
+      });
+
+      await runner.start();
+      expect(taskRepo.list).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(taskRepo.list).toHaveBeenCalledTimes(2);
+      await runner.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('scans additional queued-task pages beyond the recovery batch size', async () => {
+    const secondPageTask = { ...mockTask, id: '123e4567-e89b-12d3-a456-426614174010' };
+    const firstPage = Array.from({ length: 1000 }, (_, index) => ({ ...mockTask, id: `123e4567-e89b-12d3-a456-${String(index).padStart(12, '0')}` }));
+    const taskRepo = {
+      list: vi.fn().mockResolvedValueOnce(firstPage).mockResolvedValueOnce([secondPageTask])
+    } as any;
+    const taskQueue = {
+      enqueue: vi.fn().mockResolvedValue('job-1'),
+      process: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({ config, taskRepo, taskQueue });
+
+    await runner.start();
+
+    expect(taskRepo.list).toHaveBeenNthCalledWith(1, { status: 'queued', limit: 1000 });
+    expect(taskRepo.list).toHaveBeenNthCalledWith(2, { status: 'queued', limit: 1000, offset: 1000 });
+    expect(taskQueue.enqueue).toHaveBeenCalledTimes(1001);
+    await runner.stop();
+  });
+
   it('runs memory maintenance when the worker starts', async () => {
     const memoryStore = new InMemoryMemoryStore();
     const expiredId = crypto.randomUUID();

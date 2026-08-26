@@ -33,6 +33,7 @@ export const EnvConfigSchema = z
     ENCRYPTION_KEY: z.string().min(32).default(DEFAULT_ENCRYPTION_KEY),
     ARTIFACT_STORAGE_PATH: z.string().default('./data/artifacts'),
     MEMORY_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(3600),
+    QUEUE_RECOVERY_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
     MEMORY_DELETION_GRACE_DAYS: z.coerce.number().int().nonnegative().default(7),
     GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(5.0),
     MAX_CONCURRENT_AGENT_RUNS: z.coerce.number().int().positive().default(3),

@@ -58,6 +58,8 @@ export class AgentWorkerRunner {
   private isRunning = false;
   private heartbeatTimer: NodeJS.Timeout | null = null;
   private memoryMaintenanceTimer: NodeJS.Timeout | null = null;
+  private queueRecoveryTimer: NodeJS.Timeout | null = null;
+  private queueRecoveryInFlight = false;
   private memoryMaintenance?: MemoryMaintenanceService;
   private runner: AgentRunner;
   private delegator: TaskDelegator;
@@ -228,6 +230,12 @@ export class AgentWorkerRunner {
       nodeEnv: this.options.config.NODE_ENV
     });
 
+    const queueRecoveryIntervalSeconds = this.options.config.QUEUE_RECOVERY_INTERVAL_SECONDS || 30;
+    this.queueRecoveryTimer = setInterval(() => {
+      void this.recoverQueuedTasksInBackground();
+    }, queueRecoveryIntervalSeconds * 1000);
+    this.queueRecoveryTimer.unref?.();
+
     this.heartbeatTimer = setInterval(() => {
       if (this.isRunning) {
         rootLogger.debug('Agent Worker heartbeat', {
@@ -243,6 +251,10 @@ export class AgentWorkerRunner {
     if (this.memoryMaintenanceTimer) {
       clearInterval(this.memoryMaintenanceTimer);
       this.memoryMaintenanceTimer = null;
+    }
+    if (this.queueRecoveryTimer) {
+      clearInterval(this.queueRecoveryTimer);
+      this.queueRecoveryTimer = null;
     }
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
@@ -282,26 +294,50 @@ export class AgentWorkerRunner {
   private async recoverQueuedTasks(): Promise<void> {
     if (!this.options.taskRepo) return;
 
-    const queuedTasks = await this.options.taskRepo.list({ status: 'queued', limit: 1000 });
-    for (const task of queuedTasks) {
-      const agent = this.registry.get(task.assignedAgent);
-      if (!agent) {
-        rootLogger.error('Cannot requeue persisted task with an unknown agent', {
-          taskId: task.id,
-          agentId: task.assignedAgent
+    const pageSize = 1000;
+    let offset = 0;
+    let requeuedCount = 0;
+
+    while (true) {
+      const filter = offset === 0 ? { status: 'queued' as const, limit: pageSize } : { status: 'queued' as const, limit: pageSize, offset };
+      const queuedTasks = await this.options.taskRepo.list(filter);
+      for (const task of queuedTasks) {
+        const agent = this.registry.get(task.assignedAgent);
+        if (!agent) {
+          rootLogger.error('Cannot requeue persisted task with an unknown agent', {
+            taskId: task.id,
+            agentId: task.assignedAgent
+          });
+          continue;
+        }
+
+        await this.taskQueue.enqueue({
+          task,
+          agent,
+          prompt: task.goal
         });
-        continue;
+        requeuedCount += 1;
       }
 
-      await this.taskQueue.enqueue({
-        task,
-        agent,
-        prompt: task.goal
-      });
+      if (queuedTasks.length < pageSize) break;
+      offset += queuedTasks.length;
     }
 
-    if (queuedTasks.length > 0) {
-      rootLogger.info('Requeued persisted tasks awaiting worker delivery', { count: queuedTasks.length });
+    if (requeuedCount > 0) {
+      rootLogger.info('Requeued persisted tasks awaiting worker delivery', { count: requeuedCount });
+    }
+  }
+
+  private async recoverQueuedTasksInBackground(): Promise<void> {
+    if (!this.isRunning || this.queueRecoveryInFlight) return;
+
+    this.queueRecoveryInFlight = true;
+    try {
+      await this.recoverQueuedTasks();
+    } catch (error) {
+      rootLogger.error('Queued task recovery failed; will retry on the next interval', { error: String(error) });
+    } finally {
+      this.queueRecoveryInFlight = false;
     }
   }
 }
