@@ -10,6 +10,7 @@ const ApprovalDecisionSchema = z.object({
   status: z.enum(['approved', 'rejected', 'revision_requested']),
   decisionNote: z.string().max(2000).optional()
 });
+const ApprovalIdSchema = z.string().uuid();
 
 export interface ApprovalRouteOptions {
   approvalRepo: ApprovalRepository;
@@ -42,6 +43,9 @@ export function registerApprovalRoutes(app: FastifyInstance, options: ApprovalRo
 
   app.post('/api/v1/approvals/:id/decision', async (req, reply) => {
     const { id } = req.params as { id: string };
+    if (!ApprovalIdSchema.safeParse(id).success) {
+      return reply.status(400).send({ error: 'Approval id must be a UUID.' });
+    }
     const parsed = ApprovalDecisionSchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.status(400).send({ error: 'Invalid approval decision.', details: parsed.error.errors });

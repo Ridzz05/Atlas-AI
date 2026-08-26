@@ -3,6 +3,9 @@ import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition } from '@atlas
 import { TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
+import { z } from 'zod';
+
+const TaskIdSchema = z.string().uuid();
 
 function parseQueryInteger(
   value: unknown,
@@ -114,6 +117,9 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
   // Get Task by ID
   app.get('/api/v1/tasks/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
+    if (!TaskIdSchema.safeParse(id).success) {
+      return reply.status(400).send({ error: 'Task id must be a UUID.' });
+    }
     try {
       const task = await options.taskRepo.findById(id);
       if (!task) {

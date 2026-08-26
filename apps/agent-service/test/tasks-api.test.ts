@@ -217,6 +217,27 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     expect(invalidOffset.statusCode).toBe(400);
   });
 
+  it('rejects invalid task and approval resource IDs before repository access', async () => {
+    const invalidTask = await server.inject({
+      method: 'GET',
+      url: '/api/v1/tasks/not-a-uuid'
+    });
+    const invalidApproval = await server.inject({
+      method: 'POST',
+      url: '/api/v1/approvals/not-a-uuid/decision',
+      payload: { status: 'rejected' }
+    });
+
+    expect(invalidTask.statusCode).toBe(400);
+    expect(invalidApproval.statusCode).toBe(400);
+    expect(approvalRepo.decide).not.toHaveBeenCalledWith(
+      'not-a-uuid',
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
   it('issues a one-time token and requeues a paused child through its parent task', async () => {
     const parentId = '123e4567-e89b-12d3-a456-426614174010';
     const childId = '123e4567-e89b-12d3-a456-426614174011';

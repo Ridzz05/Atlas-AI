@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { ArtifactRepository, AuditRepository, BudgetRepository, MessageRepository, RunRepository, ToolCallRepository } from '@atlas/database';
 import type { MemoryStore } from '@atlas/memory';
 import { MemoryStatusSchema, MemoryTypeSchema } from '@atlas/shared';
+import { z } from 'zod';
 
 export interface MetadataRouteOptions {
   artifactRepo?: ArtifactRepository;
@@ -19,6 +20,18 @@ function parseLimit(value: string | undefined, label: string): number | { error:
     return { error: `${label} limit must be an integer from 1 to 100.` };
   }
   return limit;
+}
+
+function parseOptionalUuid(value: unknown, label: string): string | undefined | { error: string } {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || !z.string().uuid().safeParse(value).success) {
+    return { error: `${label} must be a UUID.` };
+  }
+  return value;
+}
+
+function isValidationError(value: unknown): value is { error: string } {
+  return typeof value === 'object' && value !== null && 'error' in value;
 }
 
 export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRouteOptions): void {
@@ -45,9 +58,11 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     const query = req.query as { taskId?: string; limit?: string };
     const limit = parseLimit(query.limit, 'Artifact');
     if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const taskId = parseOptionalUuid(query.taskId, 'taskId');
+    if (isValidationError(taskId)) return reply.status(400).send(taskId);
     if (!options.artifactRepo) return reply.status(200).send({ data: [], count: 0, durable: false });
 
-    const records = await options.artifactRepo.list({ taskId: query.taskId, limit });
+    const records = await options.artifactRepo.list({ taskId, limit });
     const data = records.map(({ filePath: _filePath, ...record }) => record);
     return reply.status(200).send({ data, count: data.length, durable: true });
   });
@@ -62,13 +77,17 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     };
     const limit = parseLimit(query.limit, 'Audit');
     if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const taskId = parseOptionalUuid(query.taskId, 'taskId');
+    if (isValidationError(taskId)) return reply.status(400).send(taskId);
+    const runId = parseOptionalUuid(query.runId, 'runId');
+    if (isValidationError(runId)) return reply.status(400).send(runId);
     if (!options.auditRepo) return reply.status(200).send({ data: [], count: 0, durable: false });
 
     const data = await options.auditRepo.list({
       actor: query.actor,
       action: query.action,
-      taskId: query.taskId,
-      runId: query.runId,
+      taskId,
+      runId,
       limit
     });
     return reply.status(200).send({ data, count: data.length, durable: true });
@@ -78,11 +97,15 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     const query = req.query as { taskId?: string; runId?: string; limit?: string };
     const limit = parseLimit(query.limit, 'Message');
     if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const taskId = parseOptionalUuid(query.taskId, 'taskId');
+    if (isValidationError(taskId)) return reply.status(400).send(taskId);
+    const runId = parseOptionalUuid(query.runId, 'runId');
+    if (isValidationError(runId)) return reply.status(400).send(runId);
     if (!options.messageRepo) return reply.status(200).send({ data: [], count: 0, durable: false });
 
     const data = await options.messageRepo.list({
-      taskId: query.taskId,
-      runId: query.runId,
+      taskId,
+      runId,
       limit
     });
     return reply.status(200).send({ data, count: data.length, durable: true });
@@ -92,11 +115,15 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     const query = req.query as { taskId?: string; runId?: string; limit?: string };
     const limit = parseLimit(query.limit, 'Tool call');
     if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const taskId = parseOptionalUuid(query.taskId, 'taskId');
+    if (isValidationError(taskId)) return reply.status(400).send(taskId);
+    const runId = parseOptionalUuid(query.runId, 'runId');
+    if (isValidationError(runId)) return reply.status(400).send(runId);
     if (!options.toolCallRepo) return reply.status(200).send({ data: [], count: 0, durable: false });
 
     const data = await options.toolCallRepo.list({
-      taskId: query.taskId,
-      runId: query.runId,
+      taskId,
+      runId,
       limit
     });
     return reply.status(200).send({ data, count: data.length, durable: true });

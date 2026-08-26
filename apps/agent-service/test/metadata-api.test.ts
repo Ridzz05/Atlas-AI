@@ -35,8 +35,8 @@ describe('agent-service metadata endpoints', () => {
     const [artifacts, audit, messages, toolCalls, memory] = await Promise.all([
       server.inject({ method: 'GET', url: '/api/v1/artifacts?limit=10' }),
       server.inject({ method: 'GET', url: '/api/v1/audit?limit=10' }),
-      server.inject({ method: 'GET', url: '/api/v1/messages?taskId=task-1' }),
-      server.inject({ method: 'GET', url: '/api/v1/tool-calls?runId=run-1' }),
+      server.inject({ method: 'GET', url: '/api/v1/messages?taskId=123e4567-e89b-12d3-a456-426614174000' }),
+      server.inject({ method: 'GET', url: '/api/v1/tool-calls?runId=123e4567-e89b-12d3-a456-426614174001' }),
       server.inject({ method: 'GET', url: '/api/v1/memory?status=verified' })
     ]);
 
@@ -96,5 +96,32 @@ describe('agent-service metadata endpoints', () => {
 
     expect(invalidStatus.statusCode).toBe(400);
     expect(invalidId.statusCode).toBe(400);
+  });
+
+  it('rejects invalid UUID filters before querying metadata repositories', async () => {
+    const artifactList = vi.fn().mockResolvedValue([]);
+    const auditList = vi.fn().mockResolvedValue([]);
+    const messageList = vi.fn().mockResolvedValue([]);
+    const toolCallList = vi.fn().mockResolvedValue([]);
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      artifactRepo: { list: artifactList } as any,
+      auditRepo: { list: auditList } as any,
+      messageRepo: { list: messageList } as any,
+      toolCallRepo: { list: toolCallList } as any
+    });
+
+    const responses = await Promise.all([
+      server.inject({ method: 'GET', url: '/api/v1/artifacts?taskId=not-a-uuid' }),
+      server.inject({ method: 'GET', url: '/api/v1/audit?runId=not-a-uuid' }),
+      server.inject({ method: 'GET', url: '/api/v1/messages?taskId=not-a-uuid' }),
+      server.inject({ method: 'GET', url: '/api/v1/tool-calls?runId=not-a-uuid' })
+    ]);
+
+    expect(responses.every(response => response.statusCode === 400)).toBe(true);
+    expect(artifactList).not.toHaveBeenCalled();
+    expect(auditList).not.toHaveBeenCalled();
+    expect(messageList).not.toHaveBeenCalled();
+    expect(toolCallList).not.toHaveBeenCalled();
   });
 });
