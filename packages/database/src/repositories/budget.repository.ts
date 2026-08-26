@@ -80,9 +80,7 @@ export class BudgetRepository {
         states.push(await this.getOrCreateBudget(client, scope));
       }
 
-      const exceedsLimit = states.some(state =>
-        state.usedUsd + state.reservedUsd + input.amountUsd > state.limitUsd + Number.EPSILON
-      );
+      const exceedsLimit = states.some(state => state.usedUsd + state.reservedUsd + input.amountUsd > state.limitUsd + Number.EPSILON);
       if (exceedsLimit) return null;
 
       const reservationId = crypto.randomUUID();
@@ -90,18 +88,14 @@ export class BudgetRepository {
         await this.adjustReservation(client, state, input.amountUsd, 0);
       }
 
-      const result = await client.query(`
+      const result = await client.query(
+        `
         INSERT INTO budget_reservations (
           id, run_id, task_id, agent_id, amount_usd, global_reset_at, status
         ) VALUES ($1, $2, $3, $4, $5, $6, 'reserved')
-        RETURNING *`, [
-        reservationId,
-        input.runId,
-        input.taskId,
-        input.agentId,
-        input.amountUsd,
-        globalResetAt.toISOString()
-      ]);
+        RETURNING *`,
+        [reservationId, input.runId, input.taskId, input.agentId, input.amountUsd, globalResetAt.toISOString()]
+      );
 
       return this.mapReservation(result.rows[0]);
     });
@@ -118,13 +112,16 @@ export class BudgetRepository {
 
   public async getGlobalDailySummary(now = new Date()): Promise<GlobalDailyBudgetSummary | null> {
     const resetAt = this.nextUtcDay(now).toISOString();
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT limit_usd, used_usd, reserved_usd, reset_at
       FROM budgets
       WHERE scope = 'global_daily'
         AND target_id IS NULL
         AND period = 'daily'
-        AND reset_at = $1`, [resetAt]);
+        AND reset_at = $1`,
+      [resetAt]
+    );
     const row = result.rows[0];
     if (!row) return null;
 
@@ -145,12 +142,15 @@ export class BudgetRepository {
     const cutoff = new Date(now.getTime() - olderThanSeconds * 1000);
 
     return this.db.transaction(async client => {
-      const result = await client.query(`
+      const result = await client.query(
+        `
         SELECT *
         FROM budget_reservations
         WHERE status = 'reserved'
           AND created_at < $1
-        FOR UPDATE SKIP LOCKED`, [cutoff.toISOString()]);
+        FOR UPDATE SKIP LOCKED`,
+        [cutoff.toISOString()]
+      );
 
       for (const row of result.rows) {
         const scopeStates = this.reservationScopes(row);
@@ -158,10 +158,13 @@ export class BudgetRepository {
           await this.lockScope(client, scope);
           await this.adjustReservation(client, scope, -Number(row.amount_usd || 0), 0);
         }
-        await client.query(`
+        await client.query(
+          `
           UPDATE budget_reservations
           SET status = 'released', committed_cost_usd = 0, updated_at = NOW()
-          WHERE id = $1`, [row.id]);
+          WHERE id = $1`,
+          [row.id]
+        );
       }
 
       return result.rows.length;
@@ -174,10 +177,7 @@ export class BudgetRepository {
     actualCostUsd: number
   ): Promise<BudgetReservation | null> {
     return this.db.transaction(async client => {
-      const result = await client.query(
-        'SELECT * FROM budget_reservations WHERE id = $1 FOR UPDATE',
-        [reservationId]
-      );
+      const result = await client.query('SELECT * FROM budget_reservations WHERE id = $1 FOR UPDATE', [reservationId]);
       const row = result.rows[0];
       if (!row) return null;
       if (row.status !== 'reserved') return this.mapReservation(row);
@@ -188,36 +188,39 @@ export class BudgetRepository {
         await this.adjustReservation(client, scope, -Number(row.amount_usd || 0), actualCostUsd);
       }
 
-      const updated = await client.query(`
+      const updated = await client.query(
+        `
         UPDATE budget_reservations
         SET status = $1, committed_cost_usd = $2, updated_at = NOW()
         WHERE id = $3
-        RETURNING *`, [status, actualCostUsd, reservationId]);
+        RETURNING *`,
+        [status, actualCostUsd, reservationId]
+      );
       return this.mapReservation(updated.rows[0]);
     });
   }
 
   private async getOrCreateBudget(client: any, scope: BudgetScope): Promise<BudgetState> {
     const resetAt = scope.resetAt?.toISOString() || null;
-    const result = await client.query(`
+    const result = await client.query(
+      `
       SELECT scope, target_id, period, reset_at, limit_usd, used_usd, reserved_usd
       FROM budgets
       WHERE scope = $1
         AND target_id IS NOT DISTINCT FROM $2
         AND period = $3
         AND reset_at IS NOT DISTINCT FROM $4
-      FOR UPDATE`, [scope.scope, scope.targetId, scope.period, resetAt]);
+      FOR UPDATE`,
+      [scope.scope, scope.targetId, scope.period, resetAt]
+    );
     const row = result.rows[0];
     if (!row) {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO budgets (scope, target_id, period, limit_usd, used_usd, reserved_usd, reset_at)
-        VALUES ($1, $2, $3, $4, 0, 0, $5)`, [
-        scope.scope,
-        scope.targetId,
-        scope.period,
-        scope.limitUsd,
-        resetAt
-      ]);
+        VALUES ($1, $2, $3, $4, 0, 0, $5)`,
+        [scope.scope, scope.targetId, scope.period, scope.limitUsd, resetAt]
+      );
       return { ...scope, usedUsd: 0, reservedUsd: 0 };
     }
 
@@ -237,7 +240,8 @@ export class BudgetRepository {
 
   private async adjustReservation(client: any, scope: BudgetScope, reservedDelta: number, usedDelta: number): Promise<void> {
     const resetAt = scope.resetAt?.toISOString() || null;
-    await client.query(`
+    await client.query(
+      `
       UPDATE budgets
       SET reserved_usd = GREATEST(0, reserved_usd + $1),
           used_usd = used_usd + $2,
@@ -245,14 +249,9 @@ export class BudgetRepository {
       WHERE scope = $3
         AND target_id IS NOT DISTINCT FROM $4
         AND period = $5
-        AND reset_at IS NOT DISTINCT FROM $6`, [
-      reservedDelta,
-      usedDelta,
-      scope.scope,
-      scope.targetId,
-      scope.period,
-      resetAt
-    ]);
+        AND reset_at IS NOT DISTINCT FROM $6`,
+      [reservedDelta, usedDelta, scope.scope, scope.targetId, scope.period, resetAt]
+    );
   }
 
   private reservationScopes(row: any): BudgetScope[] {
@@ -276,10 +275,7 @@ export class BudgetRepository {
 
   private async lockScope(client: any, scope: BudgetScope): Promise<void> {
     const resetAt = scope.resetAt?.toISOString() || '';
-    await client.query(
-      'SELECT pg_advisory_xact_lock(hashtext($1))',
-      [`${scope.scope}:${scope.targetId || ''}:${scope.period}:${resetAt}`]
-    );
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`${scope.scope}:${scope.targetId || ''}:${scope.period}:${resetAt}`]);
   }
 
   private mapReservation(row: any): BudgetReservation {

@@ -1,0 +1,9 @@
+node_modules
+.turbo
+.next
+dist
+**/tsconfig.tsbuildinfo
+**/data/**
+pnpm-lock.yaml
+*.md
+.env*

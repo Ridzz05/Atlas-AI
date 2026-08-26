@@ -45,7 +45,7 @@ export class ToolGatewayExecutor implements ToolExecutor {
 
     return {
       success: true,
-      output: (result.output && typeof result.output === 'object') ? result.output : { value: result.output }
+      output: result.output && typeof result.output === 'object' ? result.output : { value: result.output }
     };
   }
 }

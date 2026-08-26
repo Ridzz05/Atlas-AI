@@ -12,13 +12,7 @@ export const ApprovalStatusSchema = z.enum([
 ]);
 export type ApprovalStatus = z.infer<typeof ApprovalStatusSchema>;
 
-export const ApprovalRiskLevelSchema = z.enum([
-  'read',
-  'low',
-  'medium',
-  'high',
-  'critical'
-]);
+export const ApprovalRiskLevelSchema = z.enum(['read', 'low', 'medium', 'high', 'critical']);
 export type ApprovalRiskLevel = z.infer<typeof ApprovalRiskLevelSchema>;
 
 export const ApprovalRequestSchema = z.object({

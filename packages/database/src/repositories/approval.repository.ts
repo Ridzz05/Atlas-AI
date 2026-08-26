@@ -3,7 +3,10 @@ import { TokenVerifier } from '@atlas/policy';
 import { DatabaseClient } from '../client.js';
 
 export class ApprovalRepository {
-  constructor(private db: DatabaseClient, private approvalSecretKey?: string) {}
+  constructor(
+    private db: DatabaseClient,
+    private approvalSecretKey?: string
+  ) {}
 
   public async findById(id: string): Promise<ApprovalRequest | null> {
     const result = await this.db.query('SELECT * FROM approvals WHERE id = $1', [id]);
@@ -11,10 +14,7 @@ export class ApprovalRepository {
   }
 
   public async list(status: ApprovalStatus = 'pending', limit = 50): Promise<ApprovalRequest[]> {
-    const result = await this.db.query(
-      'SELECT * FROM approvals WHERE status = $1 ORDER BY requested_at DESC LIMIT $2',
-      [status, limit]
-    );
+    const result = await this.db.query('SELECT * FROM approvals WHERE status = $1 ORDER BY requested_at DESC LIMIT $2', [status, limit]);
     return result.rows.map(row => this.mapRow(row));
   }
 
@@ -107,10 +107,7 @@ export class ApprovalRepository {
       throw new Error('Approval token signing key is not configured.');
     }
 
-    const current = await this.db.query(
-      'SELECT * FROM approvals WHERE id = $1 AND status = $2 AND expires_at > NOW()',
-      [id, 'approved']
-    );
+    const current = await this.db.query('SELECT * FROM approvals WHERE id = $1 AND status = $2 AND expires_at > NOW()', [id, 'approved']);
     const row = current.rows[0];
     if (!row) return null;
 
@@ -166,10 +163,7 @@ export class ApprovalRepository {
   }
 
   public async getExecutionStatus(id: string): Promise<ApprovalStatus | null> {
-    const result = await this.db.query(
-      'SELECT status FROM approvals WHERE id = $1',
-      [id]
-    );
+    const result = await this.db.query('SELECT status FROM approvals WHERE id = $1', [id]);
     return result.rows[0]?.status || null;
   }
 

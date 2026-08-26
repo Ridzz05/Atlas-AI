@@ -23,7 +23,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this.baseUrl = (options.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
     this.defaultModel = options.defaultModel || 'gpt-4o-mini';
     this.inputCostPerMillion = options.inputCostPerMillion ?? 0.15;
-    this.outputCostPerMillion = options.outputCostPerMillion ?? 0.60;
+    this.outputCostPerMillion = options.outputCostPerMillion ?? 0.6;
   }
 
   public estimateCost(inputTokens: number, outputTokens: number): number {

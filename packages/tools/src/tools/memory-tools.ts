@@ -13,13 +13,15 @@ export function createMemoryTools(memoryTools: MemoryService): ToolDefinition[] 
       limit: z.number().int().min(1).max(20).default(5)
     }),
     outputSchema: z.object({
-      results: z.array(z.object({
-        id: z.string(),
-        content: z.string(),
-        source: z.string(),
-        confidence: z.number(),
-        score: z.number()
-      }))
+      results: z.array(
+        z.object({
+          id: z.string(),
+          content: z.string(),
+          source: z.string(),
+          confidence: z.number(),
+          score: z.number()
+        })
+      )
     }),
     riskLevel: 'read',
     requiresApproval: false,
@@ -49,7 +51,7 @@ export function createMemoryTools(memoryTools: MemoryService): ToolDefinition[] 
 
   const proposeWrite: ToolDefinition = {
     name: 'memory.propose_write',
-    description: 'Propose an unverified memory item within the calling agent\'s granted scopes.',
+    description: "Propose an unverified memory item within the calling agent's granted scopes.",
     inputSchema: z.object({
       type: MemoryTypeSchema,
       content: z.string().min(1),

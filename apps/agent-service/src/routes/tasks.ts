@@ -7,13 +7,7 @@ import { z } from 'zod';
 
 const TaskIdSchema = z.string().uuid();
 
-function parseQueryInteger(
-  value: unknown,
-  label: string,
-  fallback: number,
-  minimum: number,
-  maximum: number
-): number | { error: string } {
+function parseQueryInteger(value: unknown, label: string, fallback: number, minimum: number, maximum: number): number | { error: string } {
   if (value === undefined) return fallback;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
@@ -47,9 +41,7 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
         const controlState = await options.controlStateRepo.getControlState();
         if (controlState.emergencyStop || controlState.paused) {
           return reply.status(423).send({
-            error: controlState.emergencyStop
-              ? 'Task intake is locked by emergency stop'
-              : 'Task intake is paused',
+            error: controlState.emergencyStop ? 'Task intake is locked by emergency stop' : 'Task intake is paused',
             state: controlState.emergencyStop ? 'emergency_stop' : 'paused'
           });
         }
@@ -91,7 +83,10 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
     }
 
     const assignedAgent = query.assignedAgent;
-    if (assignedAgent !== undefined && (typeof assignedAgent !== 'string' || assignedAgent.trim().length === 0 || assignedAgent.length > 64)) {
+    if (
+      assignedAgent !== undefined &&
+      (typeof assignedAgent !== 'string' || assignedAgent.trim().length === 0 || assignedAgent.length > 64)
+    ) {
       return reply.status(400).send({ error: 'assignedAgent must be a non-empty string up to 64 characters.' });
     }
 

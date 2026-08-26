@@ -26,12 +26,7 @@ describe('@atlas/policy tests', () => {
     });
 
     it('blocks every external side-effect class when external writes are disabled', () => {
-      for (const action of [
-        'communication.send_message',
-        'outreach.publish_campaign',
-        'database.write_production',
-        'system.deploy'
-      ]) {
+      for (const action of ['communication.send_message', 'outreach.publish_campaign', 'database.write_production', 'system.deploy']) {
         const evaluation = ApprovalMatrix.evaluate(action, { externalWritesEnabled: false });
         expect(evaluation.blocked, action).toBe(true);
       }

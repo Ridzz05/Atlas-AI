@@ -5,7 +5,8 @@ export const HERMES_AGENT: AgentDefinition = {
   name: 'Hermes',
   role: 'content_creator',
   version: 1,
-  description: 'Content & Copywriting Specialist — drafts evidence-backed communication, pitches, and personalized outreach based on brand voice guidelines.',
+  description:
+    'Content & Copywriting Specialist — drafts evidence-backed communication, pitches, and personalized outreach based on brand voice guidelines.',
   systemPrompt: `You are Hermes, the Content & Communication Specialist for ATLAS AI OS.
 Your role is to produce persuasive, high-converting, evidence-backed drafts following specified brand voice guidelines.
 
@@ -22,16 +23,10 @@ CONSTRAINTS & RULES:
     maxTurns: 8,
     maxDelegationDepth: 1,
     timeoutSeconds: 180,
-    maxCostUsd: 0.50
+    maxCostUsd: 0.5
   },
   permissions: {
-    tools: [
-      'memory.search',
-      'artifacts.read',
-      'artifacts.write',
-      'brand.get_voice',
-      'communication.create_draft'
-    ],
+    tools: ['memory.search', 'artifacts.read', 'artifacts.write', 'brand.get_voice', 'communication.create_draft'],
     dataScopes: ['approved_research', 'business_knowledge'],
     externalWrites: false
   },

@@ -37,11 +37,10 @@ export class Migrator {
         );
       `);
 
-      const appliedResult = await client.query<{ version: string }>(
-        'SELECT version FROM schema_migrations ORDER BY version ASC'
-      );
+      const appliedResult = await client.query<{ version: string }>('SELECT version FROM schema_migrations ORDER BY version ASC');
       const applied = new Set(appliedResult.rows.map(row => row.version));
-      const files = fs.readdirSync(migrationsDir)
+      const files = fs
+        .readdirSync(migrationsDir)
         .filter(f => f.endsWith('.sql'))
         .sort();
       const newlyApplied: string[] = [];

@@ -65,17 +65,18 @@ describe('@atlas/dashboard Integration Tests', () => {
   it('proxies dashboard API paths to the versioned agent-service API', async () => {
     const previousBaseUrl = process.env.ATLAS_API_BASE_URL;
     delete process.env.ATLAS_API_BASE_URL;
-    const fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', {
-      status: 200,
-      headers: { 'content-type': 'application/json' }
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('{"ok":true}', {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    );
     vi.stubGlobal('fetch', fetchMock);
 
     try {
-      const response = await proxyGet(
-        new NextRequest('http://dashboard.test/api/atlas/control'),
-        { params: Promise.resolve({ path: ['control'] }) }
-      );
+      const response = await proxyGet(new NextRequest('http://dashboard.test/api/atlas/control'), {
+        params: Promise.resolve({ path: ['control'] })
+      });
 
       expect(response.status).toBe(200);
       expect(fetchMock).toHaveBeenCalledWith(

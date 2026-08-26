@@ -17,7 +17,8 @@ const artifactRow = {
 describe('metadata repositories', () => {
   it('creates and lists artifact metadata', async () => {
     const db = {
-      query: vi.fn()
+      query: vi
+        .fn()
         .mockResolvedValueOnce({ rows: [artifactRow] })
         .mockResolvedValueOnce({ rows: [artifactRow] })
     } as any;
@@ -36,10 +37,7 @@ describe('metadata repositories', () => {
 
     expect(created).toMatchObject({ id: artifactRow.id, sizeBytes: 42 });
     expect(listed[0]?.name).toBe('report.md');
-    expect(db.query).toHaveBeenLastCalledWith(
-      expect.stringContaining('FROM artifacts'),
-      [artifactRow.task_id, 10]
-    );
+    expect(db.query).toHaveBeenLastCalledWith(expect.stringContaining('FROM artifacts'), [artifactRow.task_id, 10]);
   });
 
   it('writes and lists audit records', async () => {
@@ -55,7 +53,8 @@ describe('metadata repositories', () => {
       ip_address: null
     };
     const db = {
-      query: vi.fn()
+      query: vi
+        .fn()
         .mockResolvedValueOnce({ rows: [auditRow] })
         .mockResolvedValueOnce({ rows: [auditRow] })
     } as any;
@@ -74,9 +73,6 @@ describe('metadata repositories', () => {
 
     expect(created).toMatchObject({ actor: 'hermes', action: 'tool.artifacts.write' });
     expect(listed[0]?.details).toEqual({ riskLevel: 'low' });
-    expect(db.query).toHaveBeenLastCalledWith(
-      expect.stringContaining('FROM audit_events'),
-      [auditRow.task_id, 10]
-    );
+    expect(db.query).toHaveBeenLastCalledWith(expect.stringContaining('FROM audit_events'), [auditRow.task_id, 10]);
   });
 });

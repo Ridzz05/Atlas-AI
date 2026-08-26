@@ -20,10 +20,7 @@ export class DatabaseClient {
     return this.pool;
   }
 
-  public async query<T extends pg.QueryResultRow = any>(
-    sql: string,
-    params?: any[]
-  ): Promise<pg.QueryResult<T>> {
+  public async query<T extends pg.QueryResultRow = any>(sql: string, params?: any[]): Promise<pg.QueryResult<T>> {
     return this.pool.query<T>(sql, params);
   }
 

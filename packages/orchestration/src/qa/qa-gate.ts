@@ -101,7 +101,10 @@ RULES:
     }
 
     try {
-      const cleaned = modelContent.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      const cleaned = modelContent
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*$/g, '')
+        .trim();
       const parsed = JSON.parse(cleaned) as {
         verdict?: unknown;
         findings?: unknown;
@@ -146,11 +149,7 @@ RULES:
     }
   }
 
-  private async runThroughDurableRunner(
-    task: Task,
-    prompt: string,
-    signal?: AbortSignal
-  ): Promise<{ content: string; costUsd: number }> {
+  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<{ content: string; costUsd: number }> {
     const summary = await this.options.runner!.run({
       task,
       agent: this.options.argusAgent,

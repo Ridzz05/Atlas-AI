@@ -28,10 +28,7 @@ describe('ApprovalRepository', () => {
 
     const approvals = await repository.list('pending', 25);
 
-    expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('FROM approvals'),
-      ['pending', 25]
-    );
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('FROM approvals'), ['pending', 25]);
     expect(approvals[0]?.taskId).toBe(row.task_id);
     expect(approvals[0]?.payload).toEqual(row.payload);
   });
@@ -40,17 +37,14 @@ describe('ApprovalRepository', () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [{ ...row, status: 'approved', decided_by: 'owner' }] }) } as any;
     const repository = new ApprovalRepository(db);
 
-    const approval = await repository.decide(
-      row.id,
+    const approval = await repository.decide(row.id, 'approved', 'owner', 'Approved from Telegram');
+
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("status = 'pending'"), [
       'approved',
       'owner',
-      'Approved from Telegram'
-    );
-
-    expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining("status = 'pending'"),
-      ['approved', 'owner', 'Approved from Telegram', row.id]
-    );
+      'Approved from Telegram',
+      row.id
+    ]);
     expect(approval?.status).toBe('approved');
     expect(approval?.decidedBy).toBe('owner');
   });
@@ -72,7 +66,8 @@ describe('ApprovalRepository', () => {
       decided_by: 'owner'
     };
     const db = {
-      query: vi.fn()
+      query: vi
+        .fn()
         .mockResolvedValueOnce({ rows: [approvedRow] })
         .mockResolvedValueOnce({ rows: [{ ...approvedRow, execution_token_signature: 'stored-signature' }] })
     } as any;
@@ -83,10 +78,7 @@ describe('ApprovalRepository', () => {
     expect(token?.requestId).toBe(row.id);
     expect(token?.action).toBe(row.action);
     expect(token?.payloadHash).toBe(TokenVerifier.hashPayload(row.payload));
-    expect(db.query).toHaveBeenLastCalledWith(
-      expect.stringContaining('execution_token_signature'),
-      expect.arrayContaining([row.id])
-    );
+    expect(db.query).toHaveBeenLastCalledWith(expect.stringContaining('execution_token_signature'), expect.arrayContaining([row.id]));
   });
 
   it('atomically claims an issued token and prevents a second worker from claiming it', async () => {
@@ -102,7 +94,10 @@ describe('ApprovalRepository', () => {
       execution_started_at: new Date().toISOString()
     };
     const db = {
-      query: vi.fn().mockResolvedValueOnce({ rows: [claimedRow] }).mockResolvedValueOnce({ rows: [] })
+      query: vi
+        .fn()
+        .mockResolvedValueOnce({ rows: [claimedRow] })
+        .mockResolvedValueOnce({ rows: [] })
     } as any;
     const repository = new ApprovalRepository(db, secret);
 
@@ -129,10 +124,7 @@ describe('ApprovalRepository', () => {
     });
 
     expect(result?.status).toBe('executed');
-    expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining("status = 'executing'"),
-      expect.arrayContaining(['executed', row.id])
-    );
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("status = 'executing'"), expect.arrayContaining(['executed', row.id]));
   });
 
   it('creates one durable approval request for an exact task, action, and payload', async () => {

@@ -57,10 +57,7 @@ export interface AtlasRuntimeOptions {
   seed?: boolean;
 }
 
-export async function createAtlasRuntime(
-  config: EnvConfig,
-  options: AtlasRuntimeOptions = {}
-): Promise<AtlasRuntime> {
+export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntimeOptions = {}): Promise<AtlasRuntime> {
   const db = options.db || new DatabaseClient({ connectionString: config.DATABASE_URL });
   const registry = options.registry || defaultAgentRegistry;
 
@@ -75,12 +72,14 @@ export async function createAtlasRuntime(
 
   const taskQueue = options.taskQueue || new BullMqTaskQueue({ redisUrl: config.REDIS_URL });
   const eventBus = options.eventBus || new PostgresEventBus(db);
-  const provider = options.provider || createModelProvider({
-    providerType: config.MODEL_PROVIDER,
-    apiKey: config.MODEL_API_KEY,
-    baseUrl: config.MODEL_BASE_URL,
-    model: config.MODEL_NAME
-  });
+  const provider =
+    options.provider ||
+    createModelProvider({
+      providerType: config.MODEL_PROVIDER,
+      apiKey: config.MODEL_API_KEY,
+      baseUrl: config.MODEL_BASE_URL,
+      model: config.MODEL_NAME
+    });
 
   const taskRepo = new TaskRepository(db);
   const runRepo = new RunRepository(db);

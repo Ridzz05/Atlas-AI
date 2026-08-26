@@ -23,7 +23,7 @@ function collectSourceFiles(directory) {
   return files;
 }
 
-const sourceFiles = sourceRoots.flatMap((root) => collectSourceFiles(resolve(repositoryRoot, root)));
+const sourceFiles = sourceRoots.flatMap(root => collectSourceFiles(resolve(repositoryRoot, root)));
 
 const violations = [];
 

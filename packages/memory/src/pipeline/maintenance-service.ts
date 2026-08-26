@@ -1,10 +1,6 @@
 import { AuditService } from '@atlas/observability';
 import { MemoryItem } from '@atlas/shared';
-import {
-  MemoryAuditSink,
-  MemoryMaintenanceOptions,
-  MemoryMaintenanceResult
-} from '../types.js';
+import { MemoryAuditSink, MemoryMaintenanceOptions, MemoryMaintenanceResult } from '../types.js';
 import { isMemoryExpired, MemoryStore } from '../store/memory-store.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,16 +68,18 @@ export class MemoryMaintenanceService {
 
   private async audit(action: string, item: MemoryItem, details: Record<string, unknown>): Promise<void> {
     if (!this.auditSink) return;
-    await this.auditSink.record(AuditService.format({
-      actor: 'memory-maintenance',
-      action,
-      target: item.id,
-      taskId: item.taskId || undefined,
-      details: {
-        memoryType: item.type,
-        scope: item.scope,
-        ...details
-      }
-    }));
+    await this.auditSink.record(
+      AuditService.format({
+        actor: 'memory-maintenance',
+        action,
+        target: item.id,
+        taskId: item.taskId || undefined,
+        details: {
+          memoryType: item.type,
+          scope: item.scope,
+          ...details
+        }
+      })
+    );
   }
 }

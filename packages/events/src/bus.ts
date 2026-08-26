@@ -53,7 +53,10 @@ export class PostgresEventBus implements EventBus {
   private listenerStarting: Promise<void> | null = null;
   private localPublished = new Set<string>();
 
-  constructor(private store: PostgresEventStore, private channel = 'atlas_events') {
+  constructor(
+    private store: PostgresEventStore,
+    private channel = 'atlas_events'
+  ) {
     if (!/^[a-zA-Z0-9_]+$/.test(channel)) throw new Error('Invalid PostgreSQL event channel.');
   }
 
@@ -62,7 +65,15 @@ export class PostgresEventBus implements EventBus {
       `INSERT INTO event_outbox (event_id, event_type, task_id, run_id, agent_id, payload, occurred_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (event_id) DO NOTHING`,
-      [event.id, event.type, event.taskId || null, event.runId || null, event.agentId || null, JSON.stringify(event.payload), event.timestamp]
+      [
+        event.id,
+        event.type,
+        event.taskId || null,
+        event.runId || null,
+        event.agentId || null,
+        JSON.stringify(event.payload),
+        event.timestamp
+      ]
     );
     if (this.listenerClient) this.localPublished.add(event.id);
     await this.store.query('SELECT pg_notify($1, $2)', [this.channel, JSON.stringify(event)]);
@@ -104,11 +115,13 @@ export class PostgresEventBus implements EventBus {
           console.error('Failed to decode PostgreSQL event notification', error);
         }
       });
-    })().catch(error => {
-      console.error('Failed to start PostgreSQL event listener', error);
-    }).finally(() => {
-      this.listenerStarting = null;
-    });
+    })()
+      .catch(error => {
+        console.error('Failed to start PostgreSQL event listener', error);
+      })
+      .finally(() => {
+        this.listenerStarting = null;
+      });
     await this.listenerStarting;
   }
 

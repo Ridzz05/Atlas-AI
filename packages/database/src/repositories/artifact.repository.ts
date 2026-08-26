@@ -27,19 +27,14 @@ export class ArtifactRepository {
   constructor(private db: DatabaseClient) {}
 
   public async create(input: ArtifactCreateInput): Promise<ArtifactRecord> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       INSERT INTO artifacts (task_id, run_id, name, mime_type, file_path, size_bytes, metadata)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
       RETURNING *
-    `, [
-      input.taskId,
-      input.runId || null,
-      input.name,
-      input.mimeType,
-      input.filePath,
-      input.sizeBytes,
-      JSON.stringify(input.metadata || {})
-    ]);
+    `,
+      [input.taskId, input.runId || null, input.name, input.mimeType, input.filePath, input.sizeBytes, JSON.stringify(input.metadata || {})]
+    );
 
     return this.mapRow(result.rows[0]);
   }

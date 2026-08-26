@@ -41,9 +41,7 @@ export function registerControlRoutes(app: FastifyInstance, options: ControlRout
     const reason = parsedBody.data.reason || 'Emergency stop activated by API owner';
     try {
       const data = await options.controlStateRepo.setEmergencyStop(true, API_OWNER);
-      const cancelledRuns = options.runRepo?.requestCancellationForActive
-        ? await options.runRepo.requestCancellationForActive(reason)
-        : 0;
+      const cancelledRuns = options.runRepo?.requestCancellationForActive ? await options.runRepo.requestCancellationForActive(reason) : 0;
       return reply.status(200).send({ data, cancelledRuns, reason, durable: true });
     } catch (err) {
       rootLogger.error('Failed to activate durable emergency stop', { error: String(err) });
@@ -79,9 +77,10 @@ export function registerControlRoutes(app: FastifyInstance, options: ControlRout
     }
 
     try {
-      const data = typeof options.controlStateRepo.resume === 'function'
-        ? await options.controlStateRepo.resume(API_OWNER)
-        : await options.controlStateRepo.setPaused(false, API_OWNER);
+      const data =
+        typeof options.controlStateRepo.resume === 'function'
+          ? await options.controlStateRepo.resume(API_OWNER)
+          : await options.controlStateRepo.setPaused(false, API_OWNER);
       return reply.status(200).send({ data, reason: parsedBody.data.reason, durable: true });
     } catch (err) {
       rootLogger.error('Failed to resume durable execution control state', { error: String(err) });

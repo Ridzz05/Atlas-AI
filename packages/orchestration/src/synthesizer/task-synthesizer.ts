@@ -90,11 +90,7 @@ INSTRUCTIONS:
     return resultContent;
   }
 
-  private async runThroughDurableRunner(
-    task: Task,
-    prompt: string,
-    signal?: AbortSignal
-  ): Promise<{ content: string; costUsd: number }> {
+  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<{ content: string; costUsd: number }> {
     const summary = await this.options.runner!.run({
       task,
       agent: this.options.chiefAgent,

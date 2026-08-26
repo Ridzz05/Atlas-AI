@@ -7,12 +7,7 @@ export interface MemoryStore {
   save(item: MemoryItem): Promise<MemoryItem>;
   findById(id: string): Promise<MemoryItem | null>;
   listExpired(options?: { now?: Date; limit?: number }): Promise<MemoryItem[]>;
-  search(params: {
-    scopes?: string[];
-    types?: MemoryType[];
-    status?: MemoryStatus;
-    limit?: number;
-  }): Promise<MemoryItem[]>;
+  search(params: { scopes?: string[]; types?: MemoryType[]; status?: MemoryStatus; limit?: number }): Promise<MemoryItem[]>;
   updateStatus(id: string, status: MemoryStatus): Promise<MemoryItem | null>;
   delete(id: string): Promise<boolean>;
   deleteByScope(scope: string): Promise<number>;
@@ -51,12 +46,7 @@ export class InMemoryMemoryStore implements MemoryStore {
     return options.limit ? items.slice(0, options.limit) : items;
   }
 
-  public async search(params: {
-    scopes?: string[];
-    types?: MemoryType[];
-    status?: MemoryStatus;
-    limit?: number;
-  }): Promise<MemoryItem[]> {
+  public async search(params: { scopes?: string[]; types?: MemoryType[]; status?: MemoryStatus; limit?: number }): Promise<MemoryItem[]> {
     let list = Array.from(this.items.values());
 
     if (params.scopes && params.scopes.length > 0) {
@@ -142,10 +132,7 @@ export class DatabaseMemoryStore implements MemoryStore {
   }
 
   public async findById(id: string): Promise<MemoryItem | null> {
-    const res = await this.db.query(
-      'SELECT * FROM memory_items WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())',
-      [id]
-    );
+    const res = await this.db.query('SELECT * FROM memory_items WHERE id = $1 AND (expires_at IS NULL OR expires_at > NOW())', [id]);
     if (!res.rows[0]) return null;
     return this.mapRow(res.rows[0]);
   }
@@ -163,12 +150,7 @@ export class DatabaseMemoryStore implements MemoryStore {
     return res.rows.map(row => this.mapRow(row));
   }
 
-  public async search(params: {
-    scopes?: string[];
-    types?: MemoryType[];
-    status?: MemoryStatus;
-    limit?: number;
-  }): Promise<MemoryItem[]> {
+  public async search(params: { scopes?: string[]; types?: MemoryType[]; status?: MemoryStatus; limit?: number }): Promise<MemoryItem[]> {
     let sql = 'SELECT * FROM memory_items WHERE 1=1';
     const values: any[] = [];
 

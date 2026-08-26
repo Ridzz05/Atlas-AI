@@ -58,16 +58,16 @@ export class FetchTelegramApiClient implements TelegramApiClient {
     this.baseUrl = `https://api.telegram.org/bot${botToken}`;
   }
 
-  public async getUpdates(
-    offset: number | undefined,
-    timeoutSeconds: number,
-    signal: AbortSignal
-  ): Promise<TelegramUpdate[]> {
-    const updates = await this.request<TelegramUpdate[]>('getUpdates', {
-      ...(offset === undefined ? {} : { offset }),
-      timeout: timeoutSeconds,
-      allowed_updates: ['message', 'callback_query']
-    }, signal);
+  public async getUpdates(offset: number | undefined, timeoutSeconds: number, signal: AbortSignal): Promise<TelegramUpdate[]> {
+    const updates = await this.request<TelegramUpdate[]>(
+      'getUpdates',
+      {
+        ...(offset === undefined ? {} : { offset }),
+        timeout: timeoutSeconds,
+        allowed_updates: ['message', 'callback_query']
+      },
+      signal
+    );
     return Array.isArray(updates) ? updates : [];
   }
 
@@ -86,7 +86,7 @@ export class FetchTelegramApiClient implements TelegramApiClient {
       body: JSON.stringify(payload),
       signal
     });
-    const body = await response.json() as TelegramApiResponse<T>;
+    const body = (await response.json()) as TelegramApiResponse<T>;
     if (!response.ok || !body.ok) {
       throw new Error(`Telegram API ${method} failed: ${body.description || response.statusText}`);
     }
@@ -131,11 +131,11 @@ export class AtlasTelegramBot {
       taskQueue: options.taskQueue,
       runner: options.runner,
       isPaused: this.isPaused,
-      setPaused: (paused) => {
+      setPaused: paused => {
         return this.updatePausedState(paused);
       },
       setEmergencyStop: (active, actorId) => this.updateEmergencyStop(active, actorId),
-      resume: (actorId) => this.resumeControlState(actorId)
+      resume: actorId => this.resumeControlState(actorId)
     });
   }
 
@@ -301,10 +301,14 @@ export class AtlasTelegramBot {
   private async delay(durationMs: number, signal: AbortSignal): Promise<void> {
     await new Promise<void>(resolve => {
       const timer = setTimeout(resolve, durationMs);
-      signal.addEventListener('abort', () => {
-        clearTimeout(timer);
-        resolve();
-      }, { once: true });
+      signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true }
+      );
     });
   }
 }

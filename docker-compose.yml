@@ -10,11 +10,11 @@ services:
       POSTGRES_PASSWORD: atlas
       POSTGRES_DB: atlas
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - atlas-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U atlas -d atlas"]
+      test: ['CMD-SHELL', 'pg_isready -U atlas -d atlas']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -24,11 +24,11 @@ services:
     container_name: atlas-redis
     restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - atlas-redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 5s
       retries: 5

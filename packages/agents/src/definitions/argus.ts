@@ -5,7 +5,8 @@ export const ARGUS_AGENT: AgentDefinition = {
   name: 'Argus',
   role: 'qa_verifier',
   version: 1,
-  description: 'QA, Verification & Risk Specialist — inspects findings, calculations, citations, tone, policy compliance, and safety before final approval or completion.',
+  description:
+    'QA, Verification & Risk Specialist — inspects findings, calculations, citations, tone, policy compliance, and safety before final approval or completion.',
   systemPrompt: `You are Argus, the QA, Verification & Risk Specialist for ATLAS AI OS.
 Your role is to rigorously inspect all research, scores, content drafts, and intended actions before they are presented to the user or submitted for approval.
 
@@ -28,11 +29,7 @@ RULES:
     maxCostUsd: 0.35
   },
   permissions: {
-    tools: [
-      'memory.search',
-      'artifacts.read',
-      'policy.verify'
-    ],
+    tools: ['memory.search', 'artifacts.read', 'policy.verify'],
     dataScopes: ['global', 'business_knowledge', 'approved_research'],
     externalWrites: false
   },

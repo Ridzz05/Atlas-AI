@@ -7,10 +7,7 @@ export interface AtlasEventStream {
   removeEventListener(type: string, listener: EventListener): void;
 }
 
-export function subscribeToAtlasEvents(
-  stream: AtlasEventStream,
-  onEvent: () => void
-): () => void {
+export function subscribeToAtlasEvents(stream: AtlasEventStream, onEvent: () => void): () => void {
   const listener: EventListener = () => onEvent();
   const eventTypes = ['message', ...atlasEventTypes];
 

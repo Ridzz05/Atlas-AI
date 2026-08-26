@@ -55,11 +55,10 @@ export class BullMqTaskQueue implements TaskQueue {
     }
 
     const connection = { url: this.redisUrl, maxRetriesPerRequest: null };
-    this.worker = new Worker<TaskJobData>(
-      this.queueName,
-      async (job) => handler(job.data),
-      { connection, concurrency: Math.max(1, concurrency) }
-    );
+    this.worker = new Worker<TaskJobData>(this.queueName, async job => handler(job.data), {
+      connection,
+      concurrency: Math.max(1, concurrency)
+    });
 
     this.worker.on('failed', (job, error) => {
       rootLogger.error('BullMQ task failed', {

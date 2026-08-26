@@ -22,9 +22,7 @@ import {
 import { TokenVerifier } from '@atlas/policy';
 import { InMemoryMemoryStore, MemoryRetriever, MemoryProposalService, MemoryTools } from '@atlas/memory';
 
-const completeLeadEvidence = Object.fromEntries(
-  LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`])
-);
+const completeLeadEvidence = Object.fromEntries(LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`]));
 
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('rejects malformed tool output before returning it to orchestration', async () => {
@@ -42,11 +40,15 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       }
     });
 
-    const result = await registry.execute('test.malformed_output', {}, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'argus'
-    });
+    const result = await registry.execute(
+      'test.malformed_output',
+      {},
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'argus'
+      }
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("Invalid output from tool 'test.malformed_output'");
@@ -65,19 +67,27 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       timeoutMs: 10,
       async execute(context) {
         return new Promise(resolve => {
-          context.signal?.addEventListener('abort', () => {
-            aborted = true;
-            resolve({ completed: true });
-          }, { once: true });
+          context.signal?.addEventListener(
+            'abort',
+            () => {
+              aborted = true;
+              resolve({ completed: true });
+            },
+            { once: true }
+          );
         });
       }
     });
 
-    const result = await registry.execute('test.timeout_abort', {}, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned'
-    });
+    const result = await registry.execute(
+      'test.timeout_abort',
+      {},
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned'
+      }
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("Tool 'test.timeout_abort' timed out");
@@ -89,22 +99,30 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     registry.register(WebSearchTool);
     registry.register(CompanyLookupTool);
 
-    const searchRes = await registry.execute('web.search', { query: 'gyms in Palembang' }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned'
-    });
+    const searchRes = await registry.execute(
+      'web.search',
+      { query: 'gyms in Palembang' },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned'
+      }
+    );
 
     expect(searchRes.success).toBe(true);
     expect((searchRes.output as any).configured).toBe(false);
     expect((searchRes.output as any).results).toEqual([]);
     expect((searchRes.output as any).warning).toContain('No verified research provider');
 
-    const companyRes = await registry.execute('company.lookup', { companyName: 'Unknown Gym' }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned'
-    });
+    const companyRes = await registry.execute(
+      'company.lookup',
+      { companyName: 'Unknown Gym' },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned'
+      }
+    );
     expect(companyRes.success).toBe(true);
     expect((companyRes.output as any).found).toBe(false);
     expect((companyRes.output as any).configured).toBe(false);
@@ -114,14 +132,18 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(WebFetchTool);
 
-    const result = await registry.execute('web.fetch_safe', {
-      url: 'https://example.com/research'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned',
-      allowedTools: ['web.fetch_safe']
-    });
+    const result = await registry.execute(
+      'web.fetch_safe',
+      {
+        url: 'https://example.com/research'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        allowedTools: ['web.fetch_safe']
+      }
+    );
 
     expect(result.success).toBe(true);
     expect((result.output as any).configured).toBe(false);
@@ -133,25 +155,29 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(WebFetchTool);
 
-    const result = await registry.execute('web.fetch_safe', {
-      url: 'https://example.com/research'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned',
-      allowedTools: ['web.fetch_safe'],
-      researchProvider: {
-        fetchSafe: vi.fn().mockResolvedValue({
-          content: 'Untrusted business page content',
-          sourceUrl: 'https://example.com/research',
-          extractedAt: '2026-08-26T00:00:00.000Z',
-          freshness: 'fresh',
-          sensitivity: 'public',
-          unresolvedQuestions: ['Owner identity is not confirmed'],
-          confidence: 0.81
-        })
+    const result = await registry.execute(
+      'web.fetch_safe',
+      {
+        url: 'https://example.com/research'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        allowedTools: ['web.fetch_safe'],
+        researchProvider: {
+          fetchSafe: vi.fn().mockResolvedValue({
+            content: 'Untrusted business page content',
+            sourceUrl: 'https://example.com/research',
+            extractedAt: '2026-08-26T00:00:00.000Z',
+            freshness: 'fresh',
+            sensitivity: 'public',
+            unresolvedQuestions: ['Owner identity is not confirmed'],
+            confidence: 0.81
+          })
+        }
       }
-    });
+    );
 
     expect(result.success).toBe(true);
     expect((result.output as any).configured).toBe(true);
@@ -191,18 +217,34 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       researchProvider: { fetchSafe }
     } as any;
 
-    const localHostResult = await registry.execute('web.fetch_safe', {
-      url: 'https://localhost/admin'
-    }, context);
-    const privateIpResult = await registry.execute('web.fetch_safe', {
-      url: 'http://192.168.1.10/metadata'
-    }, context);
-    const linkLocalResult = await registry.execute('web.fetch_safe', {
-      url: 'http://169.254.169.254/latest/meta-data'
-    }, context);
-    const ipv6LoopbackResult = await registry.execute('web.fetch_safe', {
-      url: 'http://[::1]/admin'
-    }, context);
+    const localHostResult = await registry.execute(
+      'web.fetch_safe',
+      {
+        url: 'https://localhost/admin'
+      },
+      context
+    );
+    const privateIpResult = await registry.execute(
+      'web.fetch_safe',
+      {
+        url: 'http://192.168.1.10/metadata'
+      },
+      context
+    );
+    const linkLocalResult = await registry.execute(
+      'web.fetch_safe',
+      {
+        url: 'http://169.254.169.254/latest/meta-data'
+      },
+      context
+    );
+    const ipv6LoopbackResult = await registry.execute(
+      'web.fetch_safe',
+      {
+        url: 'http://[::1]/admin'
+      },
+      context
+    );
 
     expect(localHostResult.success).toBe(false);
     expect(privateIpResult.success).toBe(false);
@@ -215,15 +257,19 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(PolicyVerifyTool);
 
-    const result = await registry.execute('policy.verify', {
-      action: 'system.deploy'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'argus',
-      allowedTools: ['policy.verify'],
-      externalWritesEnabled: false
-    });
+    const result = await registry.execute(
+      'policy.verify',
+      {
+        action: 'system.deploy'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'argus',
+        allowedTools: ['policy.verify'],
+        externalWritesEnabled: false
+      }
+    );
 
     expect(result.success).toBe(true);
     expect((result.output as any).blocked).toBe(true);
@@ -234,15 +280,19 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(LeadEnrichmentTool);
 
-    const result = await registry.execute('lead.enrich', {
-      companyName: 'Unknown Gym',
-      location: 'Palembang'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'layla',
-      allowedTools: ['lead.enrich']
-    });
+    const result = await registry.execute(
+      'lead.enrich',
+      {
+        companyName: 'Unknown Gym',
+        location: 'Palembang'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'layla',
+        allowedTools: ['lead.enrich']
+      }
+    );
 
     expect(result.success).toBe(true);
     expect((result.output as any).configured).toBe(false);
@@ -254,30 +304,34 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(LeadEnrichmentTool);
 
-    const result = await registry.execute('lead.enrich', {
-      companyName: 'Verified Gym',
-      location: 'Palembang'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'layla',
-      allowedTools: ['lead.enrich'],
-      researchProvider: {
-        enrichLead: vi.fn().mockResolvedValue({
-          found: true,
-          companyName: 'Verified Gym',
-          location: 'Palembang',
-          category: 'Fitness Center',
-          estimatedMembers: 600,
-          sourceUrl: 'https://example.com/verified-gym',
-          extractedAt: '2026-08-26T00:00:00.000Z',
-          freshness: 'fresh',
-          sensitivity: 'public',
-          unresolvedQuestions: [],
-          confidence: 0.92
-        })
+    const result = await registry.execute(
+      'lead.enrich',
+      {
+        companyName: 'Verified Gym',
+        location: 'Palembang'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'layla',
+        allowedTools: ['lead.enrich'],
+        researchProvider: {
+          enrichLead: vi.fn().mockResolvedValue({
+            found: true,
+            companyName: 'Verified Gym',
+            location: 'Palembang',
+            category: 'Fitness Center',
+            estimatedMembers: 600,
+            sourceUrl: 'https://example.com/verified-gym',
+            extractedAt: '2026-08-26T00:00:00.000Z',
+            freshness: 'fresh',
+            sensitivity: 'public',
+            unresolvedQuestions: [],
+            confidence: 0.92
+          })
+        }
       }
-    });
+    );
 
     expect(result.success).toBe(true);
     expect((result.output as any).configured).toBe(true);
@@ -289,30 +343,34 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(LeadScoringTool);
 
-    const result = await registry.execute('lead.score', {
-      leadId: 'gym-tool-1',
-      name: 'Deterministic Gym',
-      category: 'Fitness Center',
-      location: 'Palembang',
-      scores: {
-        businessTypeFit: 15,
-        channelCount: 10,
-        customerVolume: 10,
-        memberRetentionNeed: 15,
-        digitalPresenceQuality: 8,
-        responsiveness: 8,
-        csAutomationPotential: 10,
-        broadcastPotential: 8,
-        decisionMakerEase: 6,
-        dataFreshness: 10
+    const result = await registry.execute(
+      'lead.score',
+      {
+        leadId: 'gym-tool-1',
+        name: 'Deterministic Gym',
+        category: 'Fitness Center',
+        location: 'Palembang',
+        scores: {
+          businessTypeFit: 15,
+          channelCount: 10,
+          customerVolume: 10,
+          memberRetentionNeed: 15,
+          digitalPresenceQuality: 8,
+          responsiveness: 8,
+          csAutomationPotential: 10,
+          broadcastPotential: 8,
+          decisionMakerEase: 6,
+          dataFreshness: 10
+        },
+        evidence: completeLeadEvidence
       },
-      evidence: completeLeadEvidence
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'layla',
-      allowedTools: ['lead.score']
-    });
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'layla',
+        allowedTools: ['lead.score']
+      }
+    );
 
     expect(result.success).toBe(true);
     expect((result.output as any).totalScore).toBe(100);
@@ -324,24 +382,28 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(LeadEnrichmentTool);
 
-    const result = await registry.execute('lead.enrich', {
-      companyName: 'Malformed Gym',
-      location: 'Palembang'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'layla',
-      allowedTools: ['lead.enrich'],
-      researchProvider: {
-        enrichLead: vi.fn().mockResolvedValue({
-          found: true,
-          companyName: 'Malformed Gym',
-          location: 'Palembang',
-          category: 'Gym',
-          sourceUrl: 'https://example.com/gym'
-        })
-      } as any
-    });
+    const result = await registry.execute(
+      'lead.enrich',
+      {
+        companyName: 'Malformed Gym',
+        location: 'Palembang'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'layla',
+        allowedTools: ['lead.enrich'],
+        researchProvider: {
+          enrichLead: vi.fn().mockResolvedValue({
+            found: true,
+            companyName: 'Malformed Gym',
+            location: 'Palembang',
+            category: 'Gym',
+            sourceUrl: 'https://example.com/gym'
+          })
+        } as any
+      }
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("Invalid output from tool 'lead.enrich'");
@@ -351,20 +413,26 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(WebSearchTool);
 
-    const result = await registry.execute('web.search', { query: 'gyms in Palembang' }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned',
-      researchProvider: {
-        search: vi.fn().mockResolvedValue([{
-          title: 'Gym result',
-          url: 'https://example.com/gym',
-          snippet: 'Gym profile',
-          confidence: 0.9
-        }]),
-        lookupCompany: vi.fn()
-      } as any
-    });
+    const result = await registry.execute(
+      'web.search',
+      { query: 'gyms in Palembang' },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        researchProvider: {
+          search: vi.fn().mockResolvedValue([
+            {
+              title: 'Gym result',
+              url: 'https://example.com/gym',
+              snippet: 'Gym profile',
+              confidence: 0.9
+            }
+          ]),
+          lookupCompany: vi.fn()
+        } as any
+      }
+    );
 
     expect(result.success).toBe(false);
     expect(result.error).toContain("Invalid output from tool 'web.search'");
@@ -382,38 +450,48 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       confidence: 0.9
     };
 
-    const searchResult = await registry.execute('web.search', { query: 'gyms in Palembang' }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned',
-      researchProvider: {
-        search: vi.fn().mockResolvedValue([{
-          title: 'Gym result',
-          url: 'https://example.com/gym',
-          snippet: 'Gym profile',
-          ...evidence
-        }]),
-        lookupCompany: vi.fn()
-      } as any
-    });
+    const searchResult = await registry.execute(
+      'web.search',
+      { query: 'gyms in Palembang' },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        researchProvider: {
+          search: vi.fn().mockResolvedValue([
+            {
+              title: 'Gym result',
+              url: 'https://example.com/gym',
+              snippet: 'Gym profile',
+              ...evidence
+            }
+          ]),
+          lookupCompany: vi.fn()
+        } as any
+      }
+    );
 
     expect(searchResult.success).toBe(true);
 
-    const companyResult = await registry.execute('company.lookup', { companyName: 'Gym result' }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'ned',
-      researchProvider: {
-        search: vi.fn(),
-        lookupCompany: vi.fn().mockResolvedValue({
-          found: true,
-          companyName: 'Gym result',
-          address: 'Palembang',
-          sourceUrl: 'https://example.com/gym',
-          ...evidence
-        })
-      } as any
-    });
+    const companyResult = await registry.execute(
+      'company.lookup',
+      { companyName: 'Gym result' },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        researchProvider: {
+          search: vi.fn(),
+          lookupCompany: vi.fn().mockResolvedValue({
+            found: true,
+            companyName: 'Gym result',
+            address: 'Palembang',
+            sourceUrl: 'https://example.com/gym',
+            ...evidence
+          })
+        } as any
+      }
+    );
 
     expect(companyResult.success).toBe(true);
   });
@@ -422,17 +500,21 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const registry = new ToolRegistry();
     registry.register(SendApprovedCommunicationTool);
 
-    const sendRes = await registry.execute('communication.send_approved', {
-      recipient: '+62812345678',
-      channel: 'whatsapp',
-      content: 'Hello Gym owner',
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'hermes',
-      externalWritesEnabled: true
-      // No approvalToken provided in context
-    });
+    const sendRes = await registry.execute(
+      'communication.send_approved',
+      {
+        recipient: '+62812345678',
+        channel: 'whatsapp',
+        content: 'Hello Gym owner'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'hermes',
+        externalWritesEnabled: true
+        // No approvalToken provided in context
+      }
+    );
 
     expect(sendRes.success).toBe(false);
     expect(sendRes.error).toContain('requires a valid human approval token');
@@ -447,12 +529,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       channel: 'whatsapp' as const,
       content: 'Hello Gym owner'
     };
-    const approvalToken = TokenVerifier.generateToken(
-      randomUUID(),
-      'communication.send_approved',
-      payload,
-      secret
-    );
+    const approvalToken = TokenVerifier.generateToken(randomUUID(), 'communication.send_approved', payload, secret);
     let sendCount = 0;
 
     const sendRes = await registry.execute('communication.send_approved', payload, {
@@ -505,23 +582,27 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       secret
     );
 
-    const sendRes = await registry.execute('communication.send_approved', {
-      recipient: '+62812345678',
-      channel: 'whatsapp',
-      content: 'Tampered copy'
-    }, {
-      taskId: 'task-1',
-      runId: 'run-1',
-      agentId: 'hermes',
-      externalWritesEnabled: true,
-      approvalToken,
-      approvalSecretKey: secret,
-      communicationSender: async () => ({
-        messageId: 'should-not-send',
-        timestamp: new Date().toISOString(),
-        recipient: '+62812345678'
-      })
-    });
+    const sendRes = await registry.execute(
+      'communication.send_approved',
+      {
+        recipient: '+62812345678',
+        channel: 'whatsapp',
+        content: 'Tampered copy'
+      },
+      {
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'hermes',
+        externalWritesEnabled: true,
+        approvalToken,
+        approvalSecretKey: secret,
+        communicationSender: async () => ({
+          messageId: 'should-not-send',
+          timestamp: new Date().toISOString(),
+          recipient: '+62812345678'
+        })
+      }
+    );
 
     expect(sendRes.success).toBe(false);
     expect(sendRes.error).toContain('Payload has changed');
@@ -536,12 +617,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       channel: 'whatsapp' as const,
       content: 'Hello Gym owner'
     };
-    const approvalToken = TokenVerifier.generateToken(
-      randomUUID(),
-      'communication.send_approved',
-      payload,
-      secret
-    );
+    const approvalToken = TokenVerifier.generateToken(randomUUID(), 'communication.send_approved', payload, secret);
 
     const sendRes = await registry.execute('communication.send_approved', payload, {
       taskId: 'task-1',
@@ -568,12 +644,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       channel: 'whatsapp' as const,
       content: 'Hello Gym owner'
     };
-    const approvalToken = TokenVerifier.generateToken(
-      randomUUID(),
-      'communication.send_approved',
-      payload,
-      secret
-    );
+    const approvalToken = TokenVerifier.generateToken(randomUUID(), 'communication.send_approved', payload, secret);
     const claimed = new Set<string>();
     const approvalExecutionStore = {
       claimExecution: vi.fn(async (token: any) => {
@@ -582,7 +653,10 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         return { id: token.requestId };
       }),
       getExecutionStatus: vi.fn(async () => 'executing'),
-      finalizeExecution: vi.fn(async (id: string, result: { success: boolean }) => ({ id, status: result.success ? 'executed' : 'revoked' }))
+      finalizeExecution: vi.fn(async (id: string, result: { success: boolean }) => ({
+        id,
+        status: result.success ? 'executed' : 'revoked'
+      }))
     };
     const sender = async () => ({
       messageId: 'provider-message-1',
@@ -625,25 +699,31 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       requestApproval: vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174003' })
     };
 
-    const result = await registry.execute('communication.send_approved', {
-      recipient: '+62812345678',
-      channel: 'whatsapp',
-      content: 'Approval required'
-    }, {
-      taskId: '123e4567-e89b-12d3-a456-426614174000',
-      runId: '123e4567-e89b-12d3-a456-426614174001',
-      agentId: 'hermes',
-      externalWritesEnabled: true,
-      approvalRequestStore
-    });
+    const result = await registry.execute(
+      'communication.send_approved',
+      {
+        recipient: '+62812345678',
+        channel: 'whatsapp',
+        content: 'Approval required'
+      },
+      {
+        taskId: '123e4567-e89b-12d3-a456-426614174000',
+        runId: '123e4567-e89b-12d3-a456-426614174001',
+        agentId: 'hermes',
+        externalWritesEnabled: true,
+        approvalRequestStore
+      }
+    );
 
     expect(result.success).toBe(false);
     expect(result.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
     expect(result.error).toContain('human approval');
-    expect(approvalRequestStore.requestApproval).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'communication.send_approved',
-      taskId: '123e4567-e89b-12d3-a456-426614174000'
-    }));
+    expect(approvalRequestStore.requestApproval).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'communication.send_approved',
+        taskId: '123e4567-e89b-12d3-a456-426614174000'
+      })
+    );
   });
 
   it('calculates 10-dimension rubric scores and ranks leads properly', () => {
@@ -746,36 +826,39 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       }
     });
 
-    const result = RubricEngine.calculate({
-      leadId: 'gym-v2',
-      name: 'Versioned Gym',
-      category: 'Fitness Center',
-      location: 'Palembang',
-      scores: {
-        businessTypeFit: 10,
-        channelCount: 15,
-        customerVolume: 10,
-        memberRetentionNeed: 15,
-        digitalPresenceQuality: 8,
-        responsiveness: 8,
-        csAutomationPotential: 10,
-        broadcastPotential: 8,
-        decisionMakerEase: 6,
-        dataFreshness: 10
+    const result = RubricEngine.calculate(
+      {
+        leadId: 'gym-v2',
+        name: 'Versioned Gym',
+        category: 'Fitness Center',
+        location: 'Palembang',
+        scores: {
+          businessTypeFit: 10,
+          channelCount: 15,
+          customerVolume: 10,
+          memberRetentionNeed: 15,
+          digitalPresenceQuality: 8,
+          responsiveness: 8,
+          csAutomationPotential: 10,
+          broadcastPotential: 8,
+          decisionMakerEase: 6,
+          dataFreshness: 10
+        },
+        evidence: {
+          businessTypeFit: 'Fitness center confirmed',
+          channelCount: 'WhatsApp and Instagram confirmed',
+          customerVolume: '600 members reported',
+          memberRetentionNeed: 'Retention program identified',
+          digitalPresenceQuality: 'Active digital profiles',
+          responsiveness: 'Response time observed',
+          csAutomationPotential: 'Manual support workflow identified',
+          broadcastPotential: 'Broadcast audience confirmed',
+          decisionMakerEase: 'Owner contact identified',
+          dataFreshness: 'Observed this week'
+        }
       },
-      evidence: {
-        businessTypeFit: 'Fitness center confirmed',
-        channelCount: 'WhatsApp and Instagram confirmed',
-        customerVolume: '600 members reported',
-        memberRetentionNeed: 'Retention program identified',
-        digitalPresenceQuality: 'Active digital profiles',
-        responsiveness: 'Response time observed',
-        csAutomationPotential: 'Manual support workflow identified',
-        broadcastPotential: 'Broadcast audience confirmed',
-        decisionMakerEase: 'Owner contact identified',
-        dataFreshness: 'Observed this week'
-      }
-    }, { rubricVersion: 'v2-test' });
+      { rubricVersion: 'v2-test' }
+    );
 
     expect(result.rubricVersion).toBe('v2-test');
     expect(result.totalScore).toBe(100);
@@ -801,26 +884,26 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   });
 
   it('rejects duplicate or missing active rubric versions without replacing the current set', () => {
-    expect(() => RubricEngine.hydrate(
-      [DEFAULT_LEAD_RUBRIC, DEFAULT_LEAD_RUBRIC],
-      DEFAULT_LEAD_RUBRIC.version
-    )).toThrow('is duplicated during hydration');
+    expect(() => RubricEngine.hydrate([DEFAULT_LEAD_RUBRIC, DEFAULT_LEAD_RUBRIC], DEFAULT_LEAD_RUBRIC.version)).toThrow(
+      'is duplicated during hydration'
+    );
 
     expect(RubricEngine.getRubric().version).toBe(DEFAULT_LEAD_RUBRIC.version);
-    expect(() => RubricEngine.hydrate([DEFAULT_LEAD_RUBRIC], 'missing-version'))
-      .toThrow('is not present during hydration');
+    expect(() => RubricEngine.hydrate([DEFAULT_LEAD_RUBRIC], 'missing-version')).toThrow('is not present during hydration');
     expect(RubricEngine.getRubric().version).toBe(DEFAULT_LEAD_RUBRIC.version);
   });
 
   it('rejects malformed or unknown rubric versions', () => {
-    expect(() => RubricEngine.register({
-      ...DEFAULT_LEAD_RUBRIC,
-      version: 'invalid-total',
-      maxScores: {
-        ...DEFAULT_LEAD_RUBRIC.maxScores,
-        businessTypeFit: 14
-      }
-    })).toThrow('must sum to 100');
+    expect(() =>
+      RubricEngine.register({
+        ...DEFAULT_LEAD_RUBRIC,
+        version: 'invalid-total',
+        maxScores: {
+          ...DEFAULT_LEAD_RUBRIC.maxScores,
+          businessTypeFit: 14
+        }
+      })
+    ).toThrow('must sum to 100');
 
     expect(() => RubricEngine.getRubric('missing-version')).toThrow('is not registered');
   });
@@ -904,11 +987,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       updatedAt: now
     });
 
-    const memoryTools = new MemoryTools(
-      new MemoryRetriever(store),
-      new MemoryProposalService(store),
-      store
-    );
+    const memoryTools = new MemoryTools(new MemoryRetriever(store), new MemoryProposalService(store), store);
     const registry = new ToolRegistry();
     for (const tool of createMemoryTools(memoryTools)) registry.register(tool);
     registry.register(CreateDraftTool);
@@ -933,11 +1012,15 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(restricted.success).toBe(true);
     expect((restricted.output as any).item).toBeNull();
 
-    const proposal = await registry.execute('memory.propose_write', {
-      type: 'semantic',
-      content: 'Must be rejected outside granted scope',
-      scope: 'restricted_security'
-    }, context);
+    const proposal = await registry.execute(
+      'memory.propose_write',
+      {
+        type: 'semantic',
+        content: 'Must be rejected outside granted scope',
+        scope: 'restricted_security'
+      },
+      context
+    );
     expect(proposal.success).toBe(false);
     expect(proposal.error).toContain('not granted');
 

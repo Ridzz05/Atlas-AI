@@ -1,19 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import {
-  ArtifactService,
-  RubricEngine,
-  LEAD_DIMENSIONS,
-  LeadScoringInput
-} from '@atlas/tools';
+import { ArtifactService, RubricEngine, LEAD_DIMENSIONS, LeadScoringInput } from '@atlas/tools';
 import { defaultAgentRegistry } from '@atlas/agents';
 import { MockModelProvider } from '@atlas/providers';
 import { InMemoryEventBus } from '@atlas/events';
 import { TaskDelegator } from '../src/index.js';
 import { Task } from '@atlas/shared';
 
-const completeLeadEvidence = Object.fromEntries(
-  LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`])
-);
+const completeLeadEvidence = Object.fromEntries(LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`]));
 
 describe('First Demonstration Scenario: Palembang Gym Lead Intelligence', () => {
   it('executes full end-to-end gym intelligence workflow without outbound send', async () => {
@@ -44,9 +37,27 @@ describe('First Demonstration Scenario: Palembang Gym Lead Intelligence', () => 
             assumptions: ['Target gyms located in Palembang with membership models'],
             questions: [],
             steps: [
-              { id: 'step_1', agent: 'ned', objective: 'Collect 30 gym candidates in Palembang with contacts', depends_on: [], expected_artifact: 'gym_candidates.json' },
-              { id: 'step_2', agent: 'layla', objective: 'Score 30 gym candidates using 10-dimension ICP rubric', depends_on: ['step_1'], expected_artifact: 'lead_scoring_report.md' },
-              { id: 'step_3', agent: 'hermes', objective: 'Draft personalized WhatsApp outreach copy for top 10 qualified gyms', depends_on: ['step_2'], expected_artifact: 'outreach_drafts.md' }
+              {
+                id: 'step_1',
+                agent: 'ned',
+                objective: 'Collect 30 gym candidates in Palembang with contacts',
+                depends_on: [],
+                expected_artifact: 'gym_candidates.json'
+              },
+              {
+                id: 'step_2',
+                agent: 'layla',
+                objective: 'Score 30 gym candidates using 10-dimension ICP rubric',
+                depends_on: ['step_1'],
+                expected_artifact: 'lead_scoring_report.md'
+              },
+              {
+                id: 'step_3',
+                agent: 'hermes',
+                objective: 'Draft personalized WhatsApp outreach copy for top 10 qualified gyms',
+                depends_on: ['step_2'],
+                expected_artifact: 'outreach_drafts.md'
+              }
             ],
             approval_points: ['communication.send_approved'],
             estimated_cost_usd: 0.75
@@ -54,11 +65,13 @@ describe('First Demonstration Scenario: Palembang Gym Lead Intelligence', () => 
         },
         // 2. Ned Research
         {
-          content: 'Ned findings: Collected 30 gym locations in Palembang (Mega Fitness, Celebrity Fit, Palembang Muscle, etc.) with validated phone numbers and Instagram channels.'
+          content:
+            'Ned findings: Collected 30 gym locations in Palembang (Mega Fitness, Celebrity Fit, Palembang Muscle, etc.) with validated phone numbers and Instagram channels.'
         },
         // 3. Layla Scoring
         {
-          content: 'Layla evaluation: Scored all 30 gym leads using the 10-dimension rubric. 10 qualified (scores 82-96), 12 needs review, 8 disqualified.'
+          content:
+            'Layla evaluation: Scored all 30 gym leads using the 10-dimension rubric. 10 qualified (scores 82-96), 12 needs review, 8 disqualified.'
         },
         // 4. Hermes Content Drafts
         {
@@ -73,9 +86,7 @@ describe('First Demonstration Scenario: Palembang Gym Lead Intelligence', () => 
               'Scores strictly follow 10-dimension weighting and sum to <= 100',
               'No external send actions were attempted; drafts created strictly for human approval'
             ],
-            recommendations: [
-              'Present executive summary to user with artifact download links'
-            ]
+            recommendations: ['Present executive summary to user with artifact download links']
           })
         },
         // 6. Chief Final Synthesis

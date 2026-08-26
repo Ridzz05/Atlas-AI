@@ -121,11 +121,13 @@ describe('agent-service rubric control API', () => {
       createdBy: 'owner-api',
       activate: true
     });
-    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
-      actor: 'owner-api',
-      action: 'rubric.created',
-      target: definition.version
-    }));
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'owner-api',
+        action: 'rubric.created',
+        target: definition.version
+      })
+    );
     expect(RubricEngine.getRubric().version).toBe(definition.version);
   });
 
@@ -176,11 +178,13 @@ describe('agent-service rubric control API', () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(auditCreate).toHaveBeenCalledWith(expect.objectContaining({
-      actor: 'owner-api',
-      action: 'rubric.activated',
-      target: definition.version
-    }));
+    expect(auditCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        actor: 'owner-api',
+        action: 'rubric.activated',
+        target: definition.version
+      })
+    );
     expect(RubricEngine.getRubric().version).toBe(definition.version);
   });
 });

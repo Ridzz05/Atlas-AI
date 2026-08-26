@@ -31,7 +31,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
       mockTasks.set(task.id, task);
       return task;
     }),
-    findById: vi.fn(async (id) => mockTasks.get(id) || null),
+    findById: vi.fn(async id => mockTasks.get(id) || null),
     list: vi.fn(async () => Array.from(mockTasks.values())),
     updateStatus: vi.fn(async (id, status, opts) => {
       const task = mockTasks.get(id);
@@ -59,11 +59,9 @@ describe('agent-service Task and Multi-Agent APIs', () => {
           goal: 'Analyze CRM market',
           assumptions: [],
           questions: [],
-          steps: [
-            { id: 'step_1', agent: 'ned', objective: 'Collect market data', depends_on: [] }
-          ],
+          steps: [{ id: 'step_1', agent: 'ned', objective: 'Collect market data', depends_on: [] }],
           approval_points: [],
-          estimated_cost_usd: 0.50
+          estimated_cost_usd: 0.5
         })
       },
       { content: 'Ned data collected.' },
@@ -190,12 +188,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     });
     expect(decision.statusCode).toBe(200);
     expect(JSON.parse(decision.body).approval.status).toBe('approved');
-    expect(approvalRepo.decide).toHaveBeenCalledWith(
-      '123e4567-e89b-12d3-a456-426614174000',
-      'approved',
-      'api-owner',
-      'Looks good'
-    );
+    expect(approvalRepo.decide).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174000', 'approved', 'api-owner', 'Looks good');
   });
 
   it('rejects invalid task list filters and pagination before querying the repository', async () => {
@@ -230,12 +223,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
 
     expect(invalidTask.statusCode).toBe(400);
     expect(invalidApproval.statusCode).toBe(400);
-    expect(approvalRepo.decide).not.toHaveBeenCalledWith(
-      'not-a-uuid',
-      expect.anything(),
-      expect.anything(),
-      expect.anything()
-    );
+    expect(approvalRepo.decide).not.toHaveBeenCalledWith('not-a-uuid', expect.anything(), expect.anything(), expect.anything());
   });
 
   it('issues a one-time token and requeues a paused child through its parent task', async () => {
@@ -270,7 +258,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
       status: 'approval_pending'
     };
     const resumeTaskRepo: any = {
-      findById: vi.fn(async (id: string) => id === parentId ? parent : id === childId ? child : null)
+      findById: vi.fn(async (id: string) => (id === parentId ? parent : id === childId ? child : null))
     };
     const resumeQueue: any = {
       enqueue: vi.fn(async () => 'resume-job'),
@@ -322,10 +310,12 @@ describe('agent-service Task and Multi-Agent APIs', () => {
 
     expect(response.statusCode).toBe(200);
     expect(resumeApprovalRepo.issueExecutionToken).toHaveBeenCalledWith(approvalId);
-    expect(resumeQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
-      task: parent,
-      runId: undefined,
-      approvalResume: { taskId: childId, runId, token }
-    }));
+    expect(resumeQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: parent,
+        runId: undefined,
+        approvalResume: { taskId: childId, runId, token }
+      })
+    );
   });
 });

@@ -85,11 +85,14 @@ describe('BullMqTaskQueue', () => {
   it('defers a locked task with a delayed durable job', async () => {
     const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-defer' });
 
-    await queue.defer({
-      task: { id: 'task-deferred' } as never,
-      agent: {} as never,
-      prompt: 'wait for resume'
-    }, 5000);
+    await queue.defer(
+      {
+        task: { id: 'task-deferred' } as never,
+        agent: {} as never,
+        prompt: 'wait for resume'
+      },
+      5000
+    );
 
     expect(add).toHaveBeenLastCalledWith(
       'agent-task',

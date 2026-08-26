@@ -7,11 +7,7 @@ export const metadata = {
   description: 'Multi-agent orchestration control plane'
 };
 
-export default function RootLayout({
-  children
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className="bg-[#090d16] text-gray-100 min-h-screen flex">
@@ -28,9 +24,7 @@ export default function RootLayout({
               <span className="text-gray-500 font-mono">Budget and cost are shown when supplied by the API.</span>
             </div>
           </header>
-          <div className="p-8 flex-1">
-            {children}
-          </div>
+          <div className="p-8 flex-1">{children}</div>
         </main>
       </body>
     </html>

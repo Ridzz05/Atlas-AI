@@ -26,28 +26,32 @@ export class ToolCallRepository {
   constructor(private db: DatabaseClient) {}
 
   public async create(input: ToolCallCreateInput, id = crypto.randomUUID()): Promise<ToolCall> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       INSERT INTO tool_calls (
         id, run_id, task_id, agent_id, tool_name, input, risk_level, requires_approval, approval_id, status
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
       RETURNING *
-    `, [
-      id,
-      input.runId,
-      input.taskId,
-      input.agentId,
-      input.toolName,
-      JSON.stringify(input.input),
-      input.riskLevel || 'read',
-      input.requiresApproval || false,
-      input.approvalId || null
-    ]);
+    `,
+      [
+        id,
+        input.runId,
+        input.taskId,
+        input.agentId,
+        input.toolName,
+        JSON.stringify(input.input),
+        input.riskLevel || 'read',
+        input.requiresApproval || false,
+        input.approvalId || null
+      ]
+    );
 
     return this.mapRow(result.rows[0]);
   }
 
   public async complete(id: string, input: ToolCallCompletionInput): Promise<ToolCall | null> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE tool_calls
       SET output = $1,
           error = $2,
@@ -56,14 +60,16 @@ export class ToolCallRepository {
           approval_id = COALESCE($5, approval_id)
       WHERE id = $6
       RETURNING *
-    `, [
-      input.output == null ? null : JSON.stringify(input.output),
-      input.error || null,
-      input.durationMs ?? null,
-      input.status,
-      input.approvalId || null,
-      id
-    ]);
+    `,
+      [
+        input.output == null ? null : JSON.stringify(input.output),
+        input.error || null,
+        input.durationMs ?? null,
+        input.status,
+        input.approvalId || null,
+        id
+      ]
+    );
 
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }

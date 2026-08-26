@@ -17,7 +17,10 @@ export interface ArtifactMetadataWriter {
 export class ArtifactService {
   private readonly storageDir: string;
 
-  constructor(storageDir = './data/artifacts', private metadataWriter?: ArtifactMetadataWriter) {
+  constructor(
+    storageDir = './data/artifacts',
+    private metadataWriter?: ArtifactMetadataWriter
+  ) {
     this.storageDir = path.resolve(storageDir);
     if (!fs.existsSync(this.storageDir)) {
       fs.mkdirSync(this.storageDir, { recursive: true });
@@ -54,10 +57,7 @@ export class ArtifactService {
     return fs.readFileSync(fullPath, 'utf-8');
   }
 
-  public async recordMetadata(
-    meta: ArtifactMeta,
-    context: { taskId: string; runId?: string }
-  ): Promise<void> {
+  public async recordMetadata(meta: ArtifactMeta, context: { taskId: string; runId?: string }): Promise<void> {
     if (!this.metadataWriter) return;
     await this.metadataWriter.record({ ...meta, ...context });
   }
@@ -69,11 +69,7 @@ export class ArtifactService {
 
     const fullPath = path.resolve(this.storageDir, name);
     const relativePath = path.relative(this.storageDir, fullPath);
-    if (
-      relativePath === '..' ||
-      relativePath.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(relativePath)
-    ) {
+    if (relativePath === '..' || relativePath.startsWith(`..${path.sep}`) || path.isAbsolute(relativePath)) {
       throw new Error('Artifact path must remain inside the storage root.');
     }
 
@@ -100,9 +96,9 @@ export class ArtifactService {
   public exportScoringReport(leads: LeadScoringResult[], filename = 'lead_scoring_report.md'): ArtifactMeta {
     const rubricVersions = [...new Set(leads.map(lead => lead.rubricVersion))];
     const rubricLabel = rubricVersions.length === 1 ? rubricVersions[0] : rubricVersions.join(', ');
-    const tableRows = leads.map(l =>
-      `| ${l.rank} | **${l.name}** | ${l.totalScore}/100 | \`${l.status.toUpperCase()}\` | ${l.recommendation} |`
-    ).join('\n');
+    const tableRows = leads
+      .map(l => `| ${l.rank} | **${l.name}** | ${l.totalScore}/100 | \`${l.status.toUpperCase()}\` | ${l.recommendation} |`)
+      .join('\n');
 
     const markdown = `# Lead Scoring & ICP Evaluation Report
 
@@ -132,7 +128,9 @@ ${tableRows}
     drafts: Array<{ leadName: string; contactPerson: string; phone: string; pitchDraft: string }>,
     filename = 'outreach_drafts.md'
   ): ArtifactMeta {
-    const entries = drafts.map((d, idx) => `
+    const entries = drafts
+      .map(
+        (d, idx) => `
 ### ${idx + 1}. ${d.leadName}
 - **Target Contact:** ${d.contactPerson} (\`${d.phone}\`)
 - **Status:** \`DRAFT (Pending Approval)\`
@@ -140,7 +138,9 @@ ${tableRows}
 \`\`\`text
 ${d.pitchDraft}
 \`\`\`
-`).join('\n---\n');
+`
+      )
+      .join('\n---\n');
 
     const markdown = `# WhatsApp Outreach Copy Drafts (Top Candidates)
 

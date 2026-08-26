@@ -61,15 +61,12 @@ export class RunRepository {
   }
 
   public async getCostSummary(now = new Date()): Promise<CostSummary> {
-    const periodStart = new Date(Date.UTC(
-      now.getUTCFullYear(),
-      now.getUTCMonth(),
-      now.getUTCDate()
-    ));
+    const periodStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const periodEnd = new Date(periodStart.getTime() + 24 * 60 * 60 * 1000);
 
     const [summaryResult, byAgentResult] = await Promise.all([
-      this.db.query(`
+      this.db.query(
+        `
         SELECT
           COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= $1 AND created_at < $2), 0) AS period_cost_usd,
           COALESCE(SUM(cost_usd), 0) AS total_cost_usd,
@@ -78,8 +75,10 @@ export class RunRepository {
           COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_run_count,
           COUNT(*) FILTER (WHERE status IN ('failed', 'cancelled', 'timed_out'))::int AS failed_run_count
         FROM runs`,
-      [periodStart.toISOString(), periodEnd.toISOString()]),
-      this.db.query(`
+        [periodStart.toISOString(), periodEnd.toISOString()]
+      ),
+      this.db.query(
+        `
         SELECT
           agent_id,
           COALESCE(SUM(cost_usd) FILTER (WHERE created_at >= $1 AND created_at < $2), 0) AS period_cost_usd,
@@ -88,7 +87,8 @@ export class RunRepository {
         FROM runs
         GROUP BY agent_id
         ORDER BY SUM(cost_usd) DESC, agent_id ASC`,
-      [periodStart.toISOString(), periodEnd.toISOString()])
+        [periodStart.toISOString(), periodEnd.toISOString()]
+      )
     ]);
 
     const summary = summaryResult.rows[0] || {};
@@ -112,7 +112,8 @@ export class RunRepository {
 
   public async getLeaseSummary(now = new Date()): Promise<LeaseSummary> {
     const checkedAt = now.toISOString();
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT
         COUNT(*) FILTER (
           WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
@@ -134,7 +135,9 @@ export class RunRepository {
             AND cancel_requested = TRUE
         )::int AS cancellation_requested_count
       FROM runs
-    `, [checkedAt]);
+    `,
+      [checkedAt]
+    );
 
     const summary = result.rows[0] || {};
     return {
@@ -148,7 +151,8 @@ export class RunRepository {
 
   public async acquireLease(runId: string, workerId: string, leaseSeconds = 60): Promise<Run | null> {
     this.assertLeaseInput(workerId, leaseSeconds);
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET worker_id = $2,
           heartbeat_at = NOW(),
@@ -158,14 +162,17 @@ export class RunRepository {
         AND status IN ('created', 'active', 'waiting_tool', 'waiting_child')
         AND (worker_id IS NULL OR lease_expires_at < NOW() OR worker_id = $2)
       RETURNING *;
-    `, [runId, workerId, leaseSeconds]);
+    `,
+      [runId, workerId, leaseSeconds]
+    );
 
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
   public async heartbeat(runId: string, workerId: string, leaseSeconds = 60): Promise<boolean> {
     this.assertLeaseInput(workerId, leaseSeconds);
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET heartbeat_at = NOW(),
           lease_expires_at = NOW() + ($3 * INTERVAL '1 second'),
@@ -173,13 +180,16 @@ export class RunRepository {
       WHERE id = $1
         AND worker_id = $2
         AND status IN ('created', 'active', 'waiting_tool', 'waiting_child')
-    `, [runId, workerId, leaseSeconds]);
+    `,
+      [runId, workerId, leaseSeconds]
+    );
 
     return (result.rowCount || 0) > 0;
   }
 
   public async releaseLease(runId: string, workerId?: string): Promise<boolean> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET worker_id = NULL,
           heartbeat_at = NULL,
@@ -187,14 +197,17 @@ export class RunRepository {
           updated_at = NOW()
       WHERE id = $1
         AND ($2::varchar IS NULL OR worker_id = $2)
-    `, [runId, workerId || null]);
+    `,
+      [runId, workerId || null]
+    );
 
     return (result.rowCount || 0) > 0;
   }
 
   public async recoverStaleRuns(reason = 'Worker lease expired'): Promise<number> {
     if (!reason.trim()) throw new RangeError('reason must not be empty.');
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET status = 'failed',
           error = COALESCE($1, error),
@@ -206,17 +219,14 @@ export class RunRepository {
       WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
         AND lease_expires_at IS NOT NULL
         AND lease_expires_at < NOW()
-    `, [reason]);
+    `,
+      [reason]
+    );
 
     return result.rowCount || 0;
   }
 
-  public async recordTurn(
-    runId: string,
-    inputTokens: number,
-    outputTokens: number,
-    costUsd: number
-  ): Promise<Run> {
+  public async recordTurn(runId: string, inputTokens: number, outputTokens: number, costUsd: number): Promise<Run> {
     const query = `
       UPDATE runs
       SET input_tokens = input_tokens + $1,
@@ -277,7 +287,8 @@ export class RunRepository {
   }
 
   public async requestCancellation(runId: string, reason: string): Promise<Run | null> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET cancel_requested = TRUE,
           cancel_reason = $1,
@@ -285,16 +296,15 @@ export class RunRepository {
       WHERE id = $2
         AND status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
       RETURNING *;
-    `, [reason, runId]);
+    `,
+      [reason, runId]
+    );
 
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
   public async isCancellationRequested(runId: string): Promise<{ requested: boolean; reason?: string }> {
-    const result = await this.db.query(
-      'SELECT cancel_requested, cancel_reason FROM runs WHERE id = $1',
-      [runId]
-    );
+    const result = await this.db.query('SELECT cancel_requested, cancel_reason FROM runs WHERE id = $1', [runId]);
     const row = result.rows[0];
     return {
       requested: Boolean(row?.cancel_requested),
@@ -303,7 +313,8 @@ export class RunRepository {
   }
 
   public async requestCancellationForTask(taskId: string, reason: string): Promise<number> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET cancel_requested = TRUE,
           cancel_reason = $1,
@@ -311,20 +322,25 @@ export class RunRepository {
       WHERE task_id = $2
         AND status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
         AND cancel_requested = FALSE;
-    `, [reason, taskId]);
+    `,
+      [reason, taskId]
+    );
 
     return result.rowCount || 0;
   }
 
   public async requestCancellationForActive(reason: string): Promise<number> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       UPDATE runs
       SET cancel_requested = TRUE,
           cancel_reason = $1,
           updated_at = NOW()
       WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
         AND cancel_requested = FALSE;
-    `, [reason]);
+    `,
+      [reason]
+    );
 
     return result.rowCount || 0;
   }

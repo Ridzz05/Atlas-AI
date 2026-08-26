@@ -32,9 +32,7 @@ export class PlanValidator {
     }
 
     if (value.estimated_cost_usd > maxEstimatedCostUsd) {
-      errors.push(
-        `Plan estimated cost $${value.estimated_cost_usd.toFixed(4)} exceeds maximum $${maxEstimatedCostUsd.toFixed(4)}.`
-      );
+      errors.push(`Plan estimated cost $${value.estimated_cost_usd.toFixed(4)} exceeds maximum $${maxEstimatedCostUsd.toFixed(4)}.`);
     }
 
     const stepIds = new Set<string>();

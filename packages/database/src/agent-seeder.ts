@@ -2,7 +2,7 @@ import { AgentDefinition } from '@atlas/shared';
 import { DatabaseClient } from './client.js';
 
 export async function seedAgents(db: DatabaseClient, agents: AgentDefinition[]): Promise<void> {
-  await db.transaction(async (client) => {
+  await db.transaction(async client => {
     for (const agent of agents) {
       const modelPolicy = JSON.stringify(agent.modelPolicy);
       const limits = JSON.stringify(agent.limits);
@@ -25,19 +25,8 @@ export async function seedAgents(db: DatabaseClient, agents: AgentDefinition[]):
           permissions = EXCLUDED.permissions,
           review_policy = EXCLUDED.review_policy,
           is_active = TRUE,
-          updated_at = NOW()` ,
-        [
-          agent.id,
-          agent.name,
-          agent.role,
-          agent.version,
-          agent.description,
-          agent.systemPrompt,
-          modelPolicy,
-          limits,
-          permissions,
-          review
-        ]
+          updated_at = NOW()`,
+        [agent.id, agent.name, agent.role, agent.version, agent.description, agent.systemPrompt, modelPolicy, limits, permissions, review]
       );
 
       await client.query(

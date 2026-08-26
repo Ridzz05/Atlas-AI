@@ -67,9 +67,7 @@ export function registerEventRoutes(app: FastifyInstance, options: EventRouteOpt
         const replayedEvents = await options.eventRepo.listAfterId(lastEventId, 100);
         const replayedIds = new Set(replayedEvents.map(event => event.id));
         replayedEvents.forEach(send);
-        pendingLiveEvents
-          .filter(event => !replayedIds.has(event.id))
-          .forEach(send);
+        pendingLiveEvents.filter(event => !replayedIds.has(event.id)).forEach(send);
       } catch {
         response.write(': durable replay unavailable; live events remain connected\n\n');
       } finally {

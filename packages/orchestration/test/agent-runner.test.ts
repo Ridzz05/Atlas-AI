@@ -43,13 +43,11 @@ describe('@atlas/orchestration AgentRunner tests', () => {
 
   it('successfully executes a single-agent task run', async () => {
     const provider = new MockModelProvider({
-      cannedResponses: [
-        { content: 'Here is the completed solution for the task.' }
-      ]
+      cannedResponses: [{ content: 'Here is the completed solution for the task.' }]
     });
     const eventBus = new InMemoryEventBus();
     const eventsReceived: string[] = [];
-    eventBus.subscribe('*', (ev) => {
+    eventBus.subscribe('*', ev => {
       eventsReceived.push(ev.type);
     });
 
@@ -111,9 +109,7 @@ describe('@atlas/orchestration AgentRunner tests', () => {
 
   it('cancels active run on demand', async () => {
     const provider = new MockModelProvider({
-      cannedResponses: [
-        { content: 'Delayed turn', delayMs: 200 }
-      ]
+      cannedResponses: [{ content: 'Delayed turn', delayMs: 200 }]
     });
     const eventBus = new InMemoryEventBus();
     const runner = new AgentRunner({ provider, eventBus });
@@ -176,7 +172,8 @@ describe('@atlas/orchestration AgentRunner tests', () => {
       })
     } as any;
     const cancellationStore = {
-      isCancellationRequested: vi.fn()
+      isCancellationRequested: vi
+        .fn()
         .mockResolvedValueOnce({ requested: false })
         .mockResolvedValueOnce({ requested: true, reason: 'remote stop during call' })
     };
@@ -233,23 +230,32 @@ describe('@atlas/orchestration AgentRunner tests', () => {
 
     expect(summary.status).toBe('completed');
     expect(messageRepo.create).toHaveBeenCalledTimes(4);
-    expect(messageRepo.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      senderType: 'user',
-      content: 'Find gym information'
-    }));
-    expect(messageRepo.create).toHaveBeenCalledWith(expect.objectContaining({
-      senderType: 'agent',
-      content: 'Searching memory.'
-    }));
-    expect(messageRepo.create).toHaveBeenCalledWith(expect.objectContaining({
-      senderType: 'tool',
-      senderId: 'memory.search'
-    }));
-    expect(toolCallRepo.create).toHaveBeenCalledWith(expect.objectContaining({
-      toolName: 'memory.search',
-      taskId: mockTask.id,
-      runId: '123e4567-e89b-12d3-a456-426614174008'
-    }));
+    expect(messageRepo.create).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        senderType: 'user',
+        content: 'Find gym information'
+      })
+    );
+    expect(messageRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        senderType: 'agent',
+        content: 'Searching memory.'
+      })
+    );
+    expect(messageRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        senderType: 'tool',
+        senderId: 'memory.search'
+      })
+    );
+    expect(toolCallRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'memory.search',
+        taskId: mockTask.id,
+        runId: '123e4567-e89b-12d3-a456-426614174008'
+      })
+    );
     expect(toolCallRepo.complete).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ status: 'success', durationMs: expect.any(Number) })
@@ -321,10 +327,12 @@ describe('@atlas/orchestration AgentRunner tests', () => {
 
   it('pauses a run when a tool creates a pending human approval', async () => {
     const provider = new MockModelProvider({
-      cannedResponses: [{
-        content: 'Requesting approval.',
-        toolCalls: [{ id: 'tc-approval', name: 'communication.send_approved', arguments: {} }]
-      }]
+      cannedResponses: [
+        {
+          content: 'Requesting approval.',
+          toolCalls: [{ id: 'tc-approval', name: 'communication.send_approved', arguments: {} }]
+        }
+      ]
     });
     const toolExecutor = {
       execute: vi.fn().mockResolvedValue({
@@ -354,10 +362,12 @@ describe('@atlas/orchestration AgentRunner tests', () => {
 
   it('releases the worker lease while a run waits for human approval', async () => {
     const provider = new MockModelProvider({
-      cannedResponses: [{
-        content: 'Requesting approval.',
-        toolCalls: [{ id: 'tc-approval-lease', name: 'communication.send_approved', arguments: {} }]
-      }]
+      cannedResponses: [
+        {
+          content: 'Requesting approval.',
+          toolCalls: [{ id: 'tc-approval-lease', name: 'communication.send_approved', arguments: {} }]
+        }
+      ]
     });
     const toolExecutor = {
       execute: vi.fn().mockResolvedValue({
@@ -390,10 +400,7 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     });
 
     expect(summary.status).toBe('waiting_approval');
-    expect(runRepo.releaseLease).toHaveBeenCalledWith(
-      '123e4567-e89b-12d3-a456-426614174014',
-      'worker-a'
-    );
+    expect(runRepo.releaseLease).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174014', 'worker-a');
   });
 
   it('resumes an existing run and refuses completion until approval is finalized', async () => {
@@ -466,16 +473,15 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     });
 
     expect(summary.status).toBe('completed');
-    expect(budgetRepo.reserve).toHaveBeenCalledWith(expect.objectContaining({
-      runId: '123e4567-e89b-12d3-a456-426614174008',
-      amountUsd: mockAgent.limits.maxCostUsd,
-      globalDailyLimitUsd: 5,
-      perRunLimitUsd: mockAgent.limits.maxCostUsd
-    }));
-    expect(budgetRepo.commit).toHaveBeenCalledWith(
-      '123e4567-e89b-12d3-a456-426614174009',
-      summary.totalCostUsd
+    expect(budgetRepo.reserve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: '123e4567-e89b-12d3-a456-426614174008',
+        amountUsd: mockAgent.limits.maxCostUsd,
+        globalDailyLimitUsd: 5,
+        perRunLimitUsd: mockAgent.limits.maxCostUsd
+      })
     );
+    expect(budgetRepo.commit).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174009', summary.totalCostUsd);
   });
 
   it('fails closed and does not call the provider when durable budget is exhausted', async () => {
@@ -560,10 +566,6 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     });
 
     expect(summary.status).toBe('completed');
-    expect(runRepo.acquireLease).toHaveBeenCalledWith(
-      '123e4567-e89b-12d3-a456-426614174011',
-      'worker-a',
-      60
-    );
+    expect(runRepo.acquireLease).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174011', 'worker-a', 60);
   });
 });

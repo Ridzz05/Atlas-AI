@@ -44,7 +44,10 @@ export class MockModelProvider implements ModelProvider {
       });
     }
 
-    const inputTokens = Math.max(10, request.messages.reduce((acc, m) => acc + (m.content?.length || 0) / 4, 0));
+    const inputTokens = Math.max(
+      10,
+      request.messages.reduce((acc, m) => acc + (m.content?.length || 0) / 4, 0)
+    );
     const content = canned?.content ?? `Mock response for ${request.agentId}: Goal acknowledged.`;
     const toolCalls = canned?.toolCalls ?? [];
     const outputTokens = Math.max(5, content.length / 4);

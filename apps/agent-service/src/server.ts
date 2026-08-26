@@ -3,17 +3,25 @@ import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { ApprovalRepository, ArtifactRepository, AuditRepository, BudgetRepository, DatabaseClient, LeadRubricRepository, SystemEventRepository, TaskRepository, RunRepository, TelegramStateRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
+import {
+  ApprovalRepository,
+  ArtifactRepository,
+  AuditRepository,
+  BudgetRepository,
+  DatabaseClient,
+  LeadRubricRepository,
+  SystemEventRepository,
+  TaskRepository,
+  RunRepository,
+  TelegramStateRepository,
+  MessageRepository,
+  ToolCallRepository
+} from '@atlas/database';
 import { MemoryStore } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
-import {
-  AgentRunner,
-  TaskDelegator,
-  InMemoryTaskQueue,
-  TaskQueue
-} from '@atlas/orchestration';
+import { AgentRunner, TaskDelegator, InMemoryTaskQueue, TaskQueue } from '@atlas/orchestration';
 import { registerTaskRoutes } from './routes/tasks.js';
 import { registerRunRoutes } from './routes/runs.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
@@ -51,16 +59,18 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   const app = Fastify({ logger: false });
   const rateLimitWindowMs = options.config.API_RATE_LIMIT_WINDOW_SECONDS * 1000;
   const rateLimitMax = options.config.API_RATE_LIMIT_MAX_REQUESTS;
-  const rateLimiter = options.rateLimiter || (options.redisUrl
-    ? new RedisRateLimiter({
-      redisUrl: options.redisUrl,
-      windowMs: rateLimitWindowMs,
-      maxRequests: rateLimitMax
-    })
-    : new InMemoryRateLimiter({
-      windowMs: rateLimitWindowMs,
-      maxRequests: rateLimitMax
-    }));
+  const rateLimiter =
+    options.rateLimiter ||
+    (options.redisUrl
+      ? new RedisRateLimiter({
+          redisUrl: options.redisUrl,
+          windowMs: rateLimitWindowMs,
+          maxRequests: rateLimitMax
+        })
+      : new InMemoryRateLimiter({
+          windowMs: rateLimitWindowMs,
+          maxRequests: rateLimitMax
+        }));
   const ownsRateLimiter = !options.rateLimiter;
 
   app.addHook('onClose', async () => {
@@ -69,8 +79,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     }
   });
 
-  const allowedOrigins = options.config.CORS_ALLOWED_ORIGINS
-    .split(',')
+  const allowedOrigins = options.config.CORS_ALLOWED_ORIGINS.split(',')
     .map(origin => origin.trim())
     .filter(Boolean);
   app.register(cors, { origin: allowedOrigins });
@@ -79,9 +88,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     const requestPath = req.url.split('?')[0] || '';
     const isPublicHealthEndpoint = requestPath === '/health' || requestPath === '/ready';
     const incomingRequestId = req.headers['x-request-id'];
-    const requestId = typeof incomingRequestId === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(incomingRequestId)
-      ? incomingRequestId
-      : crypto.randomUUID();
+    const requestId =
+      typeof incomingRequestId === 'string' && /^[A-Za-z0-9._-]{1,128}$/.test(incomingRequestId) ? incomingRequestId : crypto.randomUUID();
     reply.header('x-request-id', requestId);
 
     if (!isPublicHealthEndpoint && requestPath.startsWith('/api/')) {
@@ -104,9 +112,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
     if (expectedToken && !isPublicHealthEndpoint) {
       const authorization = req.headers.authorization || '';
-      const providedToken = authorization.startsWith('Bearer ')
-        ? authorization.slice('Bearer '.length)
-        : '';
+      const providedToken = authorization.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : '';
       const provided = Buffer.from(providedToken);
       const expected = Buffer.from(expectedToken);
       const valid = provided.length === expected.length && crypto.timingSafeEqual(provided, expected);
@@ -126,12 +132,14 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
   const eventBus = options.eventBus || new InMemoryEventBus();
   const registry = options.registry || defaultAgentRegistry;
-  const provider = options.provider || createModelProvider({
-    providerType: options.config.MODEL_PROVIDER,
-    apiKey: options.config.MODEL_API_KEY,
-    baseUrl: options.config.MODEL_BASE_URL,
-    model: options.config.MODEL_NAME
-  });
+  const provider =
+    options.provider ||
+    createModelProvider({
+      providerType: options.config.MODEL_PROVIDER,
+      apiKey: options.config.MODEL_API_KEY,
+      baseUrl: options.config.MODEL_BASE_URL,
+      model: options.config.MODEL_NAME
+    });
 
   const runner = new AgentRunner({
     provider,
@@ -162,7 +170,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
   const taskQueue = options.taskQueue || new InMemoryTaskQueue();
   if (options.processQueue !== false) {
-    taskQueue.process(options.config.MAX_CONCURRENT_AGENT_RUNS, async (job) => {
+    taskQueue.process(options.config.MAX_CONCURRENT_AGENT_RUNS, async job => {
       if (options.controlStateRepo) {
         try {
           const controlState = await options.controlStateRepo.getControlState();
@@ -303,7 +311,9 @@ export function buildServer(options: ServerOptions): FastifyInstance {
         maxDelegationDepth: options.config.MAX_DELEGATION_DEPTH,
         externalWritesEnabled: options.config.EXTERNAL_WRITES_ENABLED,
         apiAuthRequired: Boolean(options.config.API_AUTH_TOKEN),
-        corsAllowedOrigins: options.config.CORS_ALLOWED_ORIGINS.split(',').map(origin => origin.trim()).filter(Boolean),
+        corsAllowedOrigins: options.config.CORS_ALLOWED_ORIGINS.split(',')
+          .map(origin => origin.trim())
+          .filter(Boolean),
         source: 'environment',
         mutable: false
       }

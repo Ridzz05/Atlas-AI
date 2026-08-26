@@ -32,14 +32,16 @@ describe('LeadRubricRepository', () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [row] }) } as any;
     const repository = new LeadRubricRepository(db);
 
-    await expect(repository.list()).resolves.toEqual([{
-      version: 'v1',
-      definition,
-      isActive: true,
-      createdBy: 'system',
-      createdAt: '2026-08-26T00:00:00.000Z',
-      updatedAt: '2026-08-26T00:00:00.000Z'
-    }]);
+    await expect(repository.list()).resolves.toEqual([
+      {
+        version: 'v1',
+        definition,
+        isActive: true,
+        createdBy: 'system',
+        createdAt: '2026-08-26T00:00:00.000Z',
+        updatedAt: '2026-08-26T00:00:00.000Z'
+      }
+    ]);
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('FROM lead_rubrics'), []);
   });
 
@@ -72,10 +74,7 @@ describe('LeadRubricRepository', () => {
     const repository = new LeadRubricRepository(db);
 
     await expect(repository.activate('missing')).resolves.toBeNull();
-    expect(client.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('SET is_active = FALSE'),
-      expect.anything()
-    );
+    expect(client.query).not.toHaveBeenCalledWith(expect.stringContaining('SET is_active = FALSE'), expect.anything());
   });
 
   it('ensures a default version without replacing an already active operational version', async () => {
@@ -93,9 +92,6 @@ describe('LeadRubricRepository', () => {
       createdBy: 'system'
     });
 
-    expect(client.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('SET is_active = FALSE'),
-      expect.anything()
-    );
+    expect(client.query).not.toHaveBeenCalledWith(expect.stringContaining('SET is_active = FALSE'), expect.anything());
   });
 });

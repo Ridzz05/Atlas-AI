@@ -50,11 +50,7 @@ export class TaskRepository {
     return res.rows.map(r => this.mapRow(r));
   }
 
-  public async updateStatus(
-    id: string,
-    status: TaskStatus,
-    options?: { error?: string; result?: Record<string, unknown> }
-  ): Promise<Task> {
+  public async updateStatus(id: string, status: TaskStatus, options?: { error?: string; result?: Record<string, unknown> }): Promise<Task> {
     const isTerminal = ['completed', 'failed', 'cancelled'].includes(status);
     const query = `
       UPDATE tasks

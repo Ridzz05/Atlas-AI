@@ -328,9 +328,7 @@ describe('@atlas/telegram-bot tests', () => {
       '123e4567-e89b-12d3-a456-426614174000',
       'Stopped by user via Telegram command'
     );
-    expect(runRepo.requestCancellationForActive).toHaveBeenCalledWith(
-      'Emergency stop activated by Telegram owner'
-    );
+    expect(runRepo.requestCancellationForActive).toHaveBeenCalledWith('Emergency stop activated by Telegram owner');
   });
 
   it('handles inline keyboard callback for approvals', async () => {
@@ -396,10 +394,14 @@ describe('@atlas/telegram-bot tests', () => {
         if (polls === 1) return [update];
         await new Promise<void>((resolve, reject) => {
           const timer = setTimeout(resolve, 25);
-          signal.addEventListener('abort', () => {
-            clearTimeout(timer);
-            reject(new Error('aborted'));
-          }, { once: true });
+          signal.addEventListener(
+            'abort',
+            () => {
+              clearTimeout(timer);
+              reject(new Error('aborted'));
+            },
+            { once: true }
+          );
         });
         return [];
       },

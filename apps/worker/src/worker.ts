@@ -12,14 +12,7 @@ import {
   ToolCallRepository,
   BudgetRepository
 } from '@atlas/database';
-import {
-  MemoryAuditSink,
-  MemoryMaintenanceService,
-  MemoryProposalService,
-  MemoryRetriever,
-  MemoryStore,
-  MemoryTools
-} from '@atlas/memory';
+import { MemoryAuditSink, MemoryMaintenanceService, MemoryProposalService, MemoryRetriever, MemoryStore, MemoryTools } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -37,13 +30,7 @@ import {
   createMemoryTools
 } from '@atlas/tools';
 import type { ResearchProvider } from '@atlas/tools';
-import {
-  AgentRunner,
-  TaskDelegator,
-  TaskQueue,
-  InMemoryTaskQueue,
-  ToolGatewayExecutor
-} from '@atlas/orchestration';
+import { AgentRunner, TaskDelegator, TaskQueue, InMemoryTaskQueue, ToolGatewayExecutor } from '@atlas/orchestration';
 
 export interface WorkerRunnerOptions {
   config: EnvConfig;
@@ -81,12 +68,14 @@ export class AgentWorkerRunner {
     this.workerId = options.workerId || `${process.env.HOSTNAME || 'atlas-worker'}:${process.pid}`;
     const eventBus = options.eventBus || new InMemoryEventBus();
     const registry = options.registry || defaultAgentRegistry;
-    const provider = options.provider || createModelProvider({
-      providerType: options.config.MODEL_PROVIDER,
-      apiKey: options.config.MODEL_API_KEY,
-      baseUrl: options.config.MODEL_BASE_URL,
-      model: options.config.MODEL_NAME
-    });
+    const provider =
+      options.provider ||
+      createModelProvider({
+        providerType: options.config.MODEL_PROVIDER,
+        apiKey: options.config.MODEL_API_KEY,
+        baseUrl: options.config.MODEL_BASE_URL,
+        model: options.config.MODEL_NAME
+      });
     const toolRegistry = new ToolRegistry();
     toolRegistry.register(WebSearchTool);
     toolRegistry.register(CompanyLookupTool);
@@ -189,7 +178,7 @@ export class AgentWorkerRunner {
     const concurrency = this.options.config.MAX_CONCURRENT_AGENT_RUNS || 3;
 
     // Start queue processor
-    this.taskQueue.process(concurrency, async (job) => {
+    this.taskQueue.process(concurrency, async job => {
       if (this.options.controlStateRepo) {
         try {
           const controlState = await this.options.controlStateRepo.getControlState();

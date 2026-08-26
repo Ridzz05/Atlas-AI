@@ -35,11 +35,23 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
             questions: [],
             steps: [
               { id: 'step_1', agent: 'ned', objective: 'Collect 30 gym leads in Palembang', depends_on: [], parallelizable: true },
-              { id: 'step_2', agent: 'layla', objective: 'Score and qualify candidate gyms', depends_on: ['step_1'], parallelizable: false },
-              { id: 'step_3', agent: 'hermes', objective: 'Draft WhatsApp outreach copies for top 10', depends_on: ['step_2'], parallelizable: false }
+              {
+                id: 'step_2',
+                agent: 'layla',
+                objective: 'Score and qualify candidate gyms',
+                depends_on: ['step_1'],
+                parallelizable: false
+              },
+              {
+                id: 'step_3',
+                agent: 'hermes',
+                objective: 'Draft WhatsApp outreach copies for top 10',
+                depends_on: ['step_2'],
+                parallelizable: false
+              }
             ],
             approval_points: ['communication.send_approved'],
-            estimated_cost_usd: 0.80
+            estimated_cost_usd: 0.8
           })
         },
         // 2. Ned execution
@@ -57,7 +69,10 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
           })
         },
         // 6. Chief Final Synthesis
-        { content: 'Chief Executive Summary: Successfully identified 30 gyms in Palembang. 10 qualified leads prepared with customized WhatsApp outreach drafts. Pending human approval.' }
+        {
+          content:
+            'Chief Executive Summary: Successfully identified 30 gyms in Palembang. 10 qualified leads prepared with customized WhatsApp outreach drafts. Pending human approval.'
+        }
       ]
     });
 

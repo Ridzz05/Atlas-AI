@@ -19,15 +19,16 @@ describe('PostgresEventBus', () => {
 
     await bus.publish(event);
 
-    expect(query).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('INSERT INTO event_outbox'),
-      [event.id, event.type, event.taskId, null, null, JSON.stringify(event.payload), event.timestamp]
-    );
-    expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('pg_notify'), [
-      'atlas_events',
-      JSON.stringify(event)
+    expect(query).toHaveBeenNthCalledWith(1, expect.stringContaining('INSERT INTO event_outbox'), [
+      event.id,
+      event.type,
+      event.taskId,
+      null,
+      null,
+      JSON.stringify(event.payload),
+      event.timestamp
     ]);
+    expect(query).toHaveBeenNthCalledWith(2, expect.stringContaining('pg_notify'), ['atlas_events', JSON.stringify(event)]);
     expect(handler).toHaveBeenCalledWith(event);
   });
 });

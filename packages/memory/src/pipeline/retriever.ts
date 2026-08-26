@@ -8,9 +8,7 @@ export class MemoryRetriever {
 
   public async retrieve(query: MemoryQuery): Promise<RankedMemoryResult[]> {
     // 1. Fetch items filtered by allowed scopes & types
-    const allowedScopes = query.allowedScopes && query.allowedScopes.length > 0
-      ? query.allowedScopes
-      : ['global'];
+    const allowedScopes = query.allowedScopes && query.allowedScopes.length > 0 ? query.allowedScopes : ['global'];
     const candidates = await this.store.search({
       scopes: allowedScopes,
       types: query.types,
@@ -51,7 +49,7 @@ export class MemoryRetriever {
       const freshnessScore = Math.max(0.1, 1 - ageDays / 30);
 
       // Weighted total score
-      const totalScore = (0.5 * relevanceScore) + (0.3 * confidenceScore) + (0.2 * freshnessScore);
+      const totalScore = 0.5 * relevanceScore + 0.3 * confidenceScore + 0.2 * freshnessScore;
 
       if (relevanceScore > 0 || queryTokens.length === 0) {
         ranked.push({

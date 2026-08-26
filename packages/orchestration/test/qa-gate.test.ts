@@ -29,9 +29,7 @@ describe('QAGate', () => {
       argusAgent: defaultAgentRegistry.getOrThrow('argus')
     });
 
-    const result = await gate.evaluate(task, new Map([
-      ['step-1', { agentId: 'ned', content: 'Unverified output' }]
-    ]));
+    const result = await gate.evaluate(task, new Map([['step-1', { agentId: 'ned', content: 'Unverified output' }]]));
 
     expect(result.verdict).toBe('BLOCKED');
     expect(result.passed).toBe(false);

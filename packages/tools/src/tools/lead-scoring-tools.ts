@@ -1,10 +1,6 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types.js';
-import {
-  LeadScoringInputSchema,
-  LeadScoringResultSchema,
-  RubricEngine
-} from '../scoring/rubric-engine.js';
+import { LeadScoringInputSchema, LeadScoringResultSchema, RubricEngine } from '../scoring/rubric-engine.js';
 
 const LeadScoringToolInputSchema = LeadScoringInputSchema.extend({
   rubricVersion: z.string().trim().min(1).optional()

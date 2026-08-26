@@ -135,19 +135,23 @@ describe('@atlas/shared schema tests', () => {
 
   it('rejects the development encryption key and mock provider in production', () => {
     const token = 'a'.repeat(32);
-    expect(() => EnvConfigSchema.parse({
-      NODE_ENV: 'production',
-      API_AUTH_TOKEN: token,
-      MODEL_PROVIDER: 'openai',
-      MODEL_API_KEY: 'test-model-key'
-    })).toThrow('ENCRYPTION_KEY');
+    expect(() =>
+      EnvConfigSchema.parse({
+        NODE_ENV: 'production',
+        API_AUTH_TOKEN: token,
+        MODEL_PROVIDER: 'openai',
+        MODEL_API_KEY: 'test-model-key'
+      })
+    ).toThrow('ENCRYPTION_KEY');
 
-    expect(() => EnvConfigSchema.parse({
-      NODE_ENV: 'production',
-      API_AUTH_TOKEN: token,
-      ENCRYPTION_KEY: 'b'.repeat(64),
-      MODEL_PROVIDER: 'mock'
-    })).toThrow('MODEL_PROVIDER');
+    expect(() =>
+      EnvConfigSchema.parse({
+        NODE_ENV: 'production',
+        API_AUTH_TOKEN: token,
+        ENCRYPTION_KEY: 'b'.repeat(64),
+        MODEL_PROVIDER: 'mock'
+      })
+    ).toThrow('MODEL_PROVIDER');
   });
 
   it('rejects an unsupported model provider', () => {
@@ -165,10 +169,12 @@ describe('@atlas/shared schema tests', () => {
 
     expect(() => EnvConfigSchema.parse(base)).toThrow('MODEL_NAME');
     expect(() => EnvConfigSchema.parse({ ...base, MODEL_NAME: 'llama-model' })).not.toThrow();
-    expect(() => EnvConfigSchema.parse({
-      ...base,
-      MODEL_NAME: 'llama-model',
-      MODEL_API_KEY: undefined
-    })).toThrow('MODEL_API_KEY');
+    expect(() =>
+      EnvConfigSchema.parse({
+        ...base,
+        MODEL_NAME: 'llama-model',
+        MODEL_API_KEY: undefined
+      })
+    ).toThrow('MODEL_API_KEY');
   });
 });

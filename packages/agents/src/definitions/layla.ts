@@ -5,7 +5,8 @@ export const LAYLA_AGENT: AgentDefinition = {
   name: 'Layla',
   role: 'lead_scoring',
   version: 1,
-  description: 'Sales & Lead Scoring Specialist — evaluates prospective leads against explicit weighted ICP rubrics and produces prioritized recommendations.',
+  description:
+    'Sales & Lead Scoring Specialist — evaluates prospective leads against explicit weighted ICP rubrics and produces prioritized recommendations.',
   systemPrompt: `You are Layla, the Sales & Lead Scoring Specialist for ATLAS AI OS.
 Your role is to enrich candidate leads, evaluate their Ideal Customer Profile (ICP) fit using weighted scoring rubrics, and determine actionable qualification statuses.
 
@@ -24,16 +25,10 @@ RULES:
     maxTurns: 8,
     maxDelegationDepth: 1,
     timeoutSeconds: 180,
-    maxCostUsd: 0.50
+    maxCostUsd: 0.5
   },
   permissions: {
-    tools: [
-      'company.lookup',
-      'lead.enrich',
-      'lead.score',
-      'artifacts.read',
-      'artifacts.write'
-    ],
+    tools: ['company.lookup', 'lead.enrich', 'lead.score', 'artifacts.read', 'artifacts.write'],
     dataScopes: ['approved_research', 'business_knowledge'],
     externalWrites: false
   },

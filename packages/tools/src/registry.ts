@@ -73,9 +73,8 @@ export class ToolRegistry {
       if (!token || !context.approvalSecretKey) {
         if (context.approvalRequestStore) {
           const payload = parseResult.data as Record<string, unknown>;
-          const target = typeof payload.recipient === 'string'
-            ? payload.recipient
-            : typeof payload.target === 'string' ? payload.target : name;
+          const target =
+            typeof payload.recipient === 'string' ? payload.recipient : typeof payload.target === 'string' ? payload.target : name;
           const approval = await context.approvalRequestStore.requestApproval({
             taskId: context.taskId,
             runId: context.runId,
@@ -180,9 +179,7 @@ export class ToolRegistry {
       }
       const outputValidation = tool.outputSchema.safeParse(rawOutput);
       if (!outputValidation.success) {
-        throw new Error(
-          `Invalid output from tool '${name}': ${JSON.stringify(outputValidation.error.errors)}`
-        );
+        throw new Error(`Invalid output from tool '${name}': ${JSON.stringify(outputValidation.error.errors)}`);
       }
       const output = outputValidation.data;
 

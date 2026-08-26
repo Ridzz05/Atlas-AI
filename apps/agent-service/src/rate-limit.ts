@@ -29,9 +29,7 @@ export class InMemoryRateLimiter implements RateLimiter {
   public async check(key: string): Promise<RateLimitDecision> {
     const now = Date.now();
     const current = this.buckets.get(key);
-    const bucket = !current || current.resetAt <= now
-      ? { count: 0, resetAt: now + this.windowMs }
-      : current;
+    const bucket = !current || current.resetAt <= now ? { count: 0, resetAt: now + this.windowMs } : current;
 
     bucket.count += 1;
     this.buckets.set(key, bucket);
@@ -74,23 +72,20 @@ export class RedisRateLimiter implements RateLimiter {
   private readonly maxRequests: number;
 
   constructor(options: RedisRateLimiterOptions) {
-    this.client = options.client || new Redis(options.redisUrl, {
-      lazyConnect: true,
-      maxRetriesPerRequest: 1,
-      enableOfflineQueue: false
-    });
+    this.client =
+      options.client ||
+      new Redis(options.redisUrl, {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        enableOfflineQueue: false
+      });
     this.ownsClient = !options.client;
     this.windowMs = options.windowMs;
     this.maxRequests = options.maxRequests;
   }
 
   public async check(key: string): Promise<RateLimitDecision> {
-    const result = await this.client.eval(
-      RATE_LIMIT_SCRIPT,
-      1,
-      `atlas:api-rate-limit:${key}`,
-      String(this.windowMs)
-    );
+    const result = await this.client.eval(RATE_LIMIT_SCRIPT, 1, `atlas:api-rate-limit:${key}`, String(this.windowMs));
 
     if (!Array.isArray(result) || result.length < 2) {
       throw new Error('invalid Redis rate-limit response');

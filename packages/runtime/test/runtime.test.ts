@@ -85,23 +85,27 @@ describe('@atlas/runtime', () => {
       healthCheck: async () => false
     };
 
-    await expect(getServiceReadiness({
-      service: 'worker',
-      isRunning: () => false,
-      database: healthy,
-      queue: healthy
-    })).resolves.toEqual({
+    await expect(
+      getServiceReadiness({
+        service: 'worker',
+        isRunning: () => false,
+        database: healthy,
+        queue: healthy
+      })
+    ).resolves.toEqual({
       ready: false,
       database: false,
       queue: false
     });
 
-    await expect(getServiceReadiness({
-      service: 'telegram-bot',
-      isRunning: () => true,
-      database: healthy,
-      queue: unavailable
-    })).resolves.toEqual({
+    await expect(
+      getServiceReadiness({
+        service: 'telegram-bot',
+        isRunning: () => true,
+        database: healthy,
+        queue: unavailable
+      })
+    ).resolves.toEqual({
       ready: false,
       database: true,
       queue: false
@@ -110,12 +114,15 @@ describe('@atlas/runtime', () => {
 
   it('serves liveness and dependency-aware readiness endpoints', async () => {
     let running = true;
-    const service = createServiceHealthServer({
-      service: 'worker',
-      isRunning: () => running,
-      database: { healthCheck: async () => true },
-      queue: { healthCheck: async () => true }
-    }, { host: '127.0.0.1', port: 0 });
+    const service = createServiceHealthServer(
+      {
+        service: 'worker',
+        isRunning: () => running,
+        database: { healthCheck: async () => true },
+        queue: { healthCheck: async () => true }
+      },
+      { host: '127.0.0.1', port: 0 }
+    );
 
     await service.start();
     const address = service.server.address();

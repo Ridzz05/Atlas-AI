@@ -8,16 +8,7 @@ export interface LogContext {
   [key: string]: unknown;
 }
 
-const SENSITIVE_KEYS = new Set([
-  'password',
-  'token',
-  'secret',
-  'apiKey',
-  'api_key',
-  'authorization',
-  'encryption_key',
-  'bot_token'
-]);
+const SENSITIVE_KEYS = new Set(['password', 'token', 'secret', 'apiKey', 'api_key', 'authorization', 'encryption_key', 'bot_token']);
 
 export function redactSensitive(obj: unknown): unknown {
   if (obj === null || obj === undefined) return obj;

@@ -62,16 +62,18 @@ export class MemoryProposalService {
 
   private async audit(action: string, item: MemoryItem): Promise<void> {
     if (!this.auditSink) return;
-    await this.auditSink.record(AuditService.format({
-      actor: 'memory-governance',
-      action,
-      target: item.id,
-      taskId: item.taskId || undefined,
-      details: {
-        memoryType: item.type,
-        scope: item.scope,
-        status: item.status
-      }
-    }));
+    await this.auditSink.record(
+      AuditService.format({
+        actor: 'memory-governance',
+        action,
+        target: item.id,
+        taskId: item.taskId || undefined,
+        details: {
+          memoryType: item.type,
+          scope: item.scope,
+          status: item.status
+        }
+      })
+    );
   }
 }

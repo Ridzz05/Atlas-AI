@@ -18,9 +18,7 @@ function isSafePublicWebUrl(value: string): boolean {
     return false;
   }
 
-  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:')
-    || parsed.username
-    || parsed.password) {
+  if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.username || parsed.password) {
     return false;
   }
 
@@ -32,16 +30,15 @@ function isSafePublicWebUrl(value: string): boolean {
     return false;
   }
 
-  return hostname !== 'localhost'
-    && !hostname.endsWith('.localhost')
-    && !hostname.endsWith('.local')
-    && !hostname.endsWith('.internal');
+  return hostname !== 'localhost' && !hostname.endsWith('.localhost') && !hostname.endsWith('.local') && !hostname.endsWith('.internal');
 }
 
-const SafeWebUrlSchema = z.string().trim().max(2048).url().refine(
-  isSafePublicWebUrl,
-  'Only credential-free HTTP(S) URLs with a public hostname are allowed.'
-);
+const SafeWebUrlSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .url()
+  .refine(isSafePublicWebUrl, 'Only credential-free HTTP(S) URLs with a public hostname are allowed.');
 
 const WebFetchUnavailableSchema = z.object({
   configured: z.literal(false),
@@ -112,12 +109,14 @@ export const WebSearchTool: ToolDefinition = {
   }),
   outputSchema: z.object({
     configured: z.boolean(),
-    results: z.array(z.object({
-      title: z.string(),
-      url: SafeWebUrlSchema,
-      snippet: z.string(),
-      ...ResearchEvidenceSchema.shape
-    })),
+    results: z.array(
+      z.object({
+        title: z.string(),
+        url: SafeWebUrlSchema,
+        snippet: z.string(),
+        ...ResearchEvidenceSchema.shape
+      })
+    ),
     warning: z.string().optional()
   }),
   riskLevel: 'read',

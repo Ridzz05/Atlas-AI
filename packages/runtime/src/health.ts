@@ -22,10 +22,7 @@ export async function getServiceReadiness(options: ServiceReadinessOptions): Pro
     return { ready: false, database: false, queue: false };
   }
 
-  const [database, queue] = await Promise.all([
-    checkDependency(options.database),
-    checkDependency(options.queue)
-  ]);
+  const [database, queue] = await Promise.all([checkDependency(options.database), checkDependency(options.queue)]);
 
   return {
     ready: database && queue,
@@ -69,50 +66,54 @@ export function createServiceHealthServer(
     const healthy = pathname === '/health' ? live : readiness.ready;
     response.statusCode = healthy ? 200 : 503;
     response.setHeader('content-type', 'application/json; charset=utf-8');
-    response.end(JSON.stringify({
-      status: healthy ? (pathname === '/health' ? 'ok' : 'ready') : 'degraded',
-      service: options.service,
-      database: readiness.database ? 'connected' : 'disconnected',
-      queue: readiness.queue ? 'connected' : 'disconnected',
-      timestamp: new Date().toISOString()
-    }));
+    response.end(
+      JSON.stringify({
+        status: healthy ? (pathname === '/health' ? 'ok' : 'ready') : 'degraded',
+        service: options.service,
+        database: readiness.database ? 'connected' : 'disconnected',
+        queue: readiness.queue ? 'connected' : 'disconnected',
+        timestamp: new Date().toISOString()
+      })
+    );
   });
 
   let listening = false;
 
   return {
     server,
-    start: () => new Promise<void>((resolve, reject) => {
-      const onError = (error: Error) => {
-        server.off('listening', onListening);
-        reject(error);
-      };
-      const onListening = () => {
-        server.off('error', onError);
-        listening = true;
-        resolve();
-      };
-      server.once('error', onError);
-      server.once('listening', onListening);
-      server.listen({
-        host: listenOptions.host || '127.0.0.1',
-        port: listenOptions.port ?? 8081
-      });
-    }),
-    stop: () => new Promise<void>((resolve, reject) => {
-      if (!listening) {
-        resolve();
-        return;
-      }
-      server.close(error => {
-        if (error) {
+    start: () =>
+      new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => {
+          server.off('listening', onListening);
           reject(error);
+        };
+        const onListening = () => {
+          server.off('error', onError);
+          listening = true;
+          resolve();
+        };
+        server.once('error', onError);
+        server.once('listening', onListening);
+        server.listen({
+          host: listenOptions.host || '127.0.0.1',
+          port: listenOptions.port ?? 8081
+        });
+      }),
+    stop: () =>
+      new Promise<void>((resolve, reject) => {
+        if (!listening) {
+          resolve();
           return;
         }
-        listening = false;
-        resolve();
-      });
-    })
+        server.close(error => {
+          if (error) {
+            reject(error);
+            return;
+          }
+          listening = false;
+          resolve();
+        });
+      })
   };
 }
 

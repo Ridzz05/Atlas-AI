@@ -29,10 +29,7 @@ describe('@atlas/providers tests', () => {
         messages: [{ role: 'user', content: 'Hello' }]
       });
 
-      expect(fetchMock).toHaveBeenCalledWith(
-        'https://api.groq.com/openai/v1/chat/completions',
-        expect.any(Object)
-      );
+      expect(fetchMock).toHaveBeenCalledWith('https://api.groq.com/openai/v1/chat/completions', expect.any(Object));
     } finally {
       vi.unstubAllGlobals();
     }
@@ -40,10 +37,7 @@ describe('@atlas/providers tests', () => {
 
   it('runs mock completion with canned responses', async () => {
     const mock = new MockModelProvider({
-      cannedResponses: [
-        { content: 'Canned step 1 response' },
-        { content: 'Canned step 2 response' }
-      ]
+      cannedResponses: [{ content: 'Canned step 1 response' }, { content: 'Canned step 2 response' }]
     });
 
     const res1 = await mock.run({

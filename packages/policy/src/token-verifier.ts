@@ -3,17 +3,14 @@ import { ApprovalToken } from '@atlas/shared';
 
 export class TokenVerifier {
   public static hashPayload(payload: unknown): string {
-    const normalized = JSON.stringify(payload, Object.keys(payload as object || {}).sort());
-    return crypto.createHash('sha256').update(normalized || '').digest('hex');
+    const normalized = JSON.stringify(payload, Object.keys((payload as object) || {}).sort());
+    return crypto
+      .createHash('sha256')
+      .update(normalized || '')
+      .digest('hex');
   }
 
-  public static generateToken(
-    requestId: string,
-    action: string,
-    payload: unknown,
-    secretKey: string,
-    ttlSeconds = 3600
-  ): ApprovalToken {
+  public static generateToken(requestId: string, action: string, payload: unknown, secretKey: string, ttlSeconds = 3600): ApprovalToken {
     const expiresAt = Math.floor(Date.now() / 1000) + ttlSeconds;
     return this.generateTokenForExpiry(requestId, action, payload, secretKey, expiresAt);
   }
@@ -28,10 +25,7 @@ export class TokenVerifier {
     const payloadHash = this.hashPayload(payload);
 
     const dataToSign = `${requestId}:${action}:${payloadHash}:${expiresAt}`;
-    const signature = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataToSign)
-      .digest('hex');
+    const signature = crypto.createHmac('sha256', secretKey).update(dataToSign).digest('hex');
 
     return {
       requestId,
@@ -42,11 +36,7 @@ export class TokenVerifier {
     };
   }
 
-  public static verifyToken(
-    token: ApprovalToken,
-    currentPayload: unknown,
-    secretKey: string
-  ): { valid: boolean; reason?: string } {
+  public static verifyToken(token: ApprovalToken, currentPayload: unknown, secretKey: string): { valid: boolean; reason?: string } {
     const now = Math.floor(Date.now() / 1000);
     if (token.expiresAt <= now) {
       return { valid: false, reason: 'Approval token has expired' };
@@ -58,19 +48,13 @@ export class TokenVerifier {
     }
 
     const dataToSign = `${token.requestId}:${token.action}:${token.payloadHash}:${token.expiresAt}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', secretKey)
-      .update(dataToSign)
-      .digest('hex');
+    const expectedSignature = crypto.createHmac('sha256', secretKey).update(dataToSign).digest('hex');
 
     if (!/^[0-9a-f]+$/i.test(token.signature) || token.signature.length !== expectedSignature.length) {
       return { valid: false, reason: 'Invalid token signature' };
     }
 
-    const signatureMatch = crypto.timingSafeEqual(
-      Buffer.from(token.signature, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    );
+    const signatureMatch = crypto.timingSafeEqual(Buffer.from(token.signature, 'hex'), Buffer.from(expectedSignature, 'hex'));
 
     if (!signatureMatch) {
       return { valid: false, reason: 'Invalid token signature' };

@@ -21,10 +21,7 @@ describe('agent-service cancellation endpoint', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().message).toContain('Cancellation requested');
-    expect(runRepo.requestCancellation).toHaveBeenCalledWith(
-      '123e4567-e89b-12d3-a456-426614174000',
-      'owner stop'
-    );
+    expect(runRepo.requestCancellation).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174000', 'owner stop');
   });
 
   it('rejects invalid run IDs and cancellation reasons before touching the repository', async () => {

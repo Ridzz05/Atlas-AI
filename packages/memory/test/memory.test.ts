@@ -154,14 +154,18 @@ describe('@atlas/memory tests', () => {
     // 4. Deprecate
     const deprecated = await proposalService.deprecate(proposed.id);
     expect(deprecated?.status).toBe('deprecated');
-    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'memory.verified',
-      target: proposed.id
-    }));
-    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'memory.deprecated',
-      target: proposed.id
-    }));
+    expect(auditSink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'memory.verified',
+        target: proposed.id
+      })
+    );
+    expect(auditSink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'memory.deprecated',
+        target: proposed.id
+      })
+    );
   });
 
   it('does not retrieve or expose expired memory items', async () => {
@@ -238,10 +242,7 @@ describe('@atlas/memory tests', () => {
 
     expect(expired).toHaveLength(1);
     expect(expired[0]?.id).toBe('123e4567-e89b-12d3-a456-426614174000');
-    expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('expires_at IS NOT NULL'),
-      [now, 25]
-    );
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('expires_at IS NOT NULL'), [now, 25]);
   });
 
   it('allows a fresh proposal after an identical memory item expires', async () => {
@@ -320,17 +321,21 @@ describe('@atlas/memory tests', () => {
     const result = await maintenance.run({ now, deletionGraceDays: 7 });
 
     expect(result).toEqual({ inspected: 2, deprecated: 1, deleted: 1 });
-    expect((await store.findById(expiredVerifiedId))).toBeNull();
-    expect((await store.findById(expiredDeprecatedId))).toBeNull();
+    expect(await store.findById(expiredVerifiedId)).toBeNull();
+    expect(await store.findById(expiredDeprecatedId)).toBeNull();
     expect(auditSink.record).toHaveBeenCalledTimes(2);
-    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'memory.deprecated',
-      target: expiredVerifiedId
-    }));
-    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
-      action: 'memory.deleted',
-      target: expiredDeprecatedId
-    }));
+    expect(auditSink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'memory.deprecated',
+        target: expiredVerifiedId
+      })
+    );
+    expect(auditSink.record).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'memory.deleted',
+        target: expiredDeprecatedId
+      })
+    );
   });
 
   it('supports privacy deletion by scope', async () => {
@@ -396,11 +401,7 @@ describe('@atlas/memory tests', () => {
 
   it('does not expose unverified memory through the agent search tool', async () => {
     const store = new InMemoryMemoryStore();
-    const tools = new MemoryTools(
-      new MemoryRetriever(store),
-      new MemoryProposalService(store),
-      store
-    );
+    const tools = new MemoryTools(new MemoryRetriever(store), new MemoryProposalService(store), store);
 
     await store.save({
       id: crypto.randomUUID(),

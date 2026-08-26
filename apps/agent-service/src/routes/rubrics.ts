@@ -1,24 +1,20 @@
 import { FastifyInstance } from 'fastify';
 import { AuditRepository, LeadRubricRepository } from '@atlas/database';
 import { AuditService } from '@atlas/observability';
-import {
-  LeadRubricDefinitionSchema,
-  RubricEngine
-} from '@atlas/tools';
+import { LeadRubricDefinitionSchema, RubricEngine } from '@atlas/tools';
 import { z } from 'zod';
 
-const CreateRubricSchema = z.object({
-  definition: LeadRubricDefinitionSchema,
-  activate: z.boolean().default(false)
-}).strict();
+const CreateRubricSchema = z
+  .object({
+    definition: LeadRubricDefinitionSchema,
+    activate: z.boolean().default(false)
+  })
+  .strict();
 
 const RubricVersionSchema = z.string().trim().min(1).max(128);
 
 async function hydrateActiveRubric(repository: LeadRubricRepository) {
-  const [rubrics, active] = await Promise.all([
-    repository.list(),
-    repository.getActive()
-  ]);
+  const [rubrics, active] = await Promise.all([repository.list(), repository.getActive()]);
   if (!active) {
     throw new Error('No active lead rubric is configured.');
   }
@@ -42,10 +38,7 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
     }
 
     try {
-      const [data, active] = await Promise.all([
-        options.rubricRepo.list(),
-        options.rubricRepo.getActive()
-      ]);
+      const [data, active] = await Promise.all([options.rubricRepo.list(), options.rubricRepo.getActive()]);
       if (!active) {
         return reply.status(503).send({ error: 'No active lead rubric is configured.' });
       }
@@ -83,16 +76,18 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
         activate: parsed.data.activate
       });
       const active = await hydrateActiveRubric(options.rubricRepo);
-      await options.auditRepo.create(AuditService.format({
-        actor: 'owner-api',
-        action: 'rubric.created',
-        target: created.version,
-        ipAddress: req.ip,
-        details: {
-          version: created.version,
-          activated: parsed.data.activate
-        }
-      }));
+      await options.auditRepo.create(
+        AuditService.format({
+          actor: 'owner-api',
+          action: 'rubric.created',
+          target: created.version,
+          ipAddress: req.ip,
+          details: {
+            version: created.version,
+            activated: parsed.data.activate
+          }
+        })
+      );
       return reply.status(201).send({
         data: created,
         activeVersion: active.version,
@@ -123,13 +118,15 @@ export function registerRubricRoutes(app: FastifyInstance, options: RubricRouteO
         return reply.status(404).send({ error: 'Lead rubric version not found.' });
       }
       const active = await hydrateActiveRubric(options.rubricRepo);
-      await options.auditRepo.create(AuditService.format({
-        actor: 'owner-api',
-        action: 'rubric.activated',
-        target: activated.version,
-        ipAddress: req.ip,
-        details: { version: activated.version }
-      }));
+      await options.auditRepo.create(
+        AuditService.format({
+          actor: 'owner-api',
+          action: 'rubric.activated',
+          target: activated.version,
+          ipAddress: req.ip,
+          details: { version: activated.version }
+        })
+      );
       return reply.status(200).send({
         data: activated,
         activeVersion: active.version,

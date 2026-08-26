@@ -22,31 +22,40 @@ export class LeadRubricRepository {
   constructor(private db: DatabaseClient) {}
 
   public async list(): Promise<LeadRubricRecord[]> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT version, definition, is_active, created_by, created_at, updated_at
       FROM lead_rubrics
       ORDER BY created_at ASC, version ASC
-    `, []);
+    `,
+      []
+    );
     return result.rows.map(row => this.mapRow(row));
   }
 
   public async get(version: string): Promise<LeadRubricRecord | null> {
     this.assertVersion(version);
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT version, definition, is_active, created_by, created_at, updated_at
       FROM lead_rubrics
       WHERE version = $1
-    `, [version]);
+    `,
+      [version]
+    );
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
   public async getActive(): Promise<LeadRubricRecord | null> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       SELECT version, definition, is_active, created_by, created_at, updated_at
       FROM lead_rubrics
       WHERE is_active = TRUE
       LIMIT 1
-    `, []);
+    `,
+      []
+    );
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
@@ -62,16 +71,14 @@ export class LeadRubricRepository {
         `);
       }
 
-      const result = await client.query(`
+      const result = await client.query(
+        `
         INSERT INTO lead_rubrics (version, definition, is_active, created_by)
         VALUES ($1, $2, $3, $4)
         RETURNING version, definition, is_active, created_by, created_at, updated_at
-      `, [
-        input.version,
-        JSON.stringify(input.definition),
-        input.activate === true,
-        input.createdBy
-      ]);
+      `,
+        [input.version, JSON.stringify(input.definition), input.activate === true, input.createdBy]
+      );
       return this.mapRow(result.rows[0]);
     });
   }
@@ -80,22 +87,26 @@ export class LeadRubricRepository {
     this.assertInput(input);
     await this.db.transaction(async client => {
       await this.lockActive(client);
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO lead_rubrics (version, definition, is_active, created_by)
         VALUES ($1, $2, FALSE, $3)
         ON CONFLICT (version) DO NOTHING
-      `, [input.version, JSON.stringify(input.definition), input.createdBy]);
-
-      const active = await client.query(
-        'SELECT version FROM lead_rubrics WHERE is_active = TRUE LIMIT 1'
+      `,
+        [input.version, JSON.stringify(input.definition), input.createdBy]
       );
+
+      const active = await client.query('SELECT version FROM lead_rubrics WHERE is_active = TRUE LIMIT 1');
       if (active.rows.length > 0) return;
 
-      await client.query(`
+      await client.query(
+        `
         UPDATE lead_rubrics
         SET is_active = TRUE, updated_at = NOW()
         WHERE version = $1
-      `, [input.version]);
+      `,
+        [input.version]
+      );
     });
   }
 
@@ -103,10 +114,7 @@ export class LeadRubricRepository {
     this.assertVersion(version);
     return this.db.transaction(async client => {
       await this.lockActive(client);
-      const existing = await client.query(
-        'SELECT version FROM lead_rubrics WHERE version = $1 FOR UPDATE',
-        [version]
-      );
+      const existing = await client.query('SELECT version FROM lead_rubrics WHERE version = $1 FOR UPDATE', [version]);
       if (existing.rows.length === 0) return null;
 
       await client.query(`
@@ -114,21 +122,21 @@ export class LeadRubricRepository {
         SET is_active = FALSE, updated_at = NOW()
         WHERE is_active = TRUE
       `);
-      const updated = await client.query(`
+      const updated = await client.query(
+        `
         UPDATE lead_rubrics
         SET is_active = TRUE, updated_at = NOW()
         WHERE version = $1
         RETURNING version, definition, is_active, created_by, created_at, updated_at
-      `, [version]);
+      `,
+        [version]
+      );
       return this.mapRow(updated.rows[0]);
     });
   }
 
   private async lockActive(client: { query(sql: string, params?: unknown[]): Promise<{ rows: any[] }> }): Promise<void> {
-    await client.query(
-      'SELECT pg_advisory_xact_lock(hashtext($1))',
-      [LeadRubricRepository.ACTIVE_LOCK_KEY]
-    );
+    await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [LeadRubricRepository.ACTIVE_LOCK_KEY]);
   }
 
   private assertInput(input: LeadRubricDefinitionInput): void {

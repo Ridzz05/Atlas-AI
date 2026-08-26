@@ -1,9 +1,4 @@
-import {
-  Task,
-  TaskPlan,
-  PlanStep,
-  SystemEvent
-} from '@atlas/shared';
+import { Task, TaskPlan, PlanStep, SystemEvent } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
 import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
@@ -113,11 +108,7 @@ export class TaskDelegator {
     this.maxConcurrency = options.maxConcurrency || 3;
   }
 
-  public async executePlan(
-    parentTask: Task,
-    signal?: AbortSignal,
-    approvalResume?: ApprovalResumeContext
-  ): Promise<DelegationResult> {
+  public async executePlan(parentTask: Task, signal?: AbortSignal, approvalResume?: ApprovalResumeContext): Promise<DelegationResult> {
     rootLogger.info(`Starting multi-agent delegation for parent task ${parentTask.id}`);
     let totalCostUsd = 0;
     const addCost = (costUsd: number): void => {
@@ -136,9 +127,10 @@ export class TaskDelegator {
 
     const subtaskResults = new Map<string, { agentId: string; content: string }>();
     const completedStepIds = new Set<string>();
-    const existingChildren = this.options.taskRepo && typeof (this.options.taskRepo as any).findChildren === 'function'
-      ? await this.options.taskRepo.findChildren(parentTask.id)
-      : [];
+    const existingChildren =
+      this.options.taskRepo && typeof (this.options.taskRepo as any).findChildren === 'function'
+        ? await this.options.taskRepo.findChildren(parentTask.id)
+        : [];
     const existingChildrenByStep = new Map<string, Task>();
     for (const child of existingChildren) {
       const stepId = typeof child.context.stepId === 'string' ? child.context.stepId : undefined;
@@ -165,9 +157,7 @@ export class TaskDelegator {
       }
 
       // Find steps whose dependencies are fully satisfied
-      const readySteps = pendingSteps.filter(step =>
-        step.depends_on.every(dep => completedStepIds.has(dep))
-      );
+      const readySteps = pendingSteps.filter(step => step.depends_on.every(dep => completedStepIds.has(dep)));
 
       if (readySteps.length === 0) {
         throw new Error(`Deadlock in task plan dependencies: [${pendingSteps.map(s => s.id).join(', ')}]`);
@@ -178,7 +168,7 @@ export class TaskDelegator {
 
       rootLogger.info(`Executing delegation batch of ${batch.length} steps: [${batch.map(s => `${s.id} (${s.agent})`).join(', ')}]`);
 
-      const batchPromises = batch.map(async (step) => {
+      const batchPromises = batch.map(async step => {
         // Enforce depth guard
         const depthValidation = DepthGuard.validateDelegation({
           parentAgentId: parentTask.assignedAgent,
@@ -194,9 +184,7 @@ export class TaskDelegator {
         const agent = this.options.registry.getOrThrow(step.agent);
 
         // Construct enriched subtask prompt with prior step dependencies
-        const priorContext = step.depends_on
-          .map(dep => `[Prior Output ${dep}]:\n${subtaskResults.get(dep)?.content || ''}`)
-          .join('\n\n');
+        const priorContext = step.depends_on.map(dep => `[Prior Output ${dep}]:\n${subtaskResults.get(dep)?.content || ''}`).join('\n\n');
 
         const prompt = priorContext
           ? `OBJECTIVE: ${step.objective}\n\nDEPENDENT CONTEXT FROM PRIOR STEPS:\n${priorContext}`
@@ -204,9 +192,7 @@ export class TaskDelegator {
 
         // Create child task record in DB if repository available
         const existingChild = existingChildrenByStep.get(step.id);
-        const resumableChild = existingChild && approvalResume && existingChild.id === approvalResume.taskId
-          ? existingChild
-          : undefined;
+        const resumableChild = existingChild && approvalResume && existingChild.id === approvalResume.taskId ? existingChild : undefined;
         let childTask: Task = resumableChild || {
           id: crypto.randomUUID(),
           parentId: parentTask.id,
@@ -226,14 +212,17 @@ export class TaskDelegator {
         };
 
         if (this.options.taskRepo && !existingChild) {
-          childTask = await this.options.taskRepo.create({
-            title: childTask.title,
-            goal: childTask.goal,
-            assignedAgent: childTask.assignedAgent,
-            parentId: parentTask.id,
-            priority: childTask.priority,
-            context: childTask.context
-          }, childTask.id);
+          childTask = await this.options.taskRepo.create(
+            {
+              title: childTask.title,
+              goal: childTask.goal,
+              assignedAgent: childTask.assignedAgent,
+              parentId: parentTask.id,
+              priority: childTask.priority,
+              context: childTask.context
+            },
+            childTask.id
+          );
         }
 
         // Run agent

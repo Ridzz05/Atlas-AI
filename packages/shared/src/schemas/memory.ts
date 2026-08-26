@@ -1,23 +1,9 @@
 import { z } from 'zod';
 
-export const MemoryTypeSchema = z.enum([
-  'working',
-  'conversation',
-  'episodic',
-  'semantic',
-  'entity',
-  'artifact',
-  'policy'
-]);
+export const MemoryTypeSchema = z.enum(['working', 'conversation', 'episodic', 'semantic', 'entity', 'artifact', 'policy']);
 export type MemoryType = z.infer<typeof MemoryTypeSchema>;
 
-export const MemoryStatusSchema = z.enum([
-  'proposed',
-  'verified',
-  'unverified',
-  'deprecated',
-  'archived'
-]);
+export const MemoryStatusSchema = z.enum(['proposed', 'verified', 'unverified', 'deprecated', 'archived']);
 export type MemoryStatus = z.infer<typeof MemoryStatusSchema>;
 
 export const MemoryItemSchema = z.object({

@@ -5,7 +5,8 @@ export const NED_AGENT: AgentDefinition = {
   name: 'Ned',
   role: 'researcher',
   version: 1,
-  description: 'Research Specialist — gathers, enriches, verifies, and summarizes information from external and internal sources with strict source tracking.',
+  description:
+    'Research Specialist — gathers, enriches, verifies, and summarizes information from external and internal sources with strict source tracking.',
   systemPrompt: `You are Ned, the Research Specialist for ATLAS AI OS.
 Your role is to find, enrich, verify, and summarize external and internal information with evidence and source tracking.
 
@@ -27,12 +28,7 @@ RULES:
     maxCostUsd: 0.75
   },
   permissions: {
-    tools: [
-      'web.search',
-      'web.fetch_safe',
-      'memory.search',
-      'artifacts.write'
-    ],
+    tools: ['web.search', 'web.fetch_safe', 'memory.search', 'artifacts.write'],
     dataScopes: ['approved_research', 'business_knowledge'],
     externalWrites: false
   },

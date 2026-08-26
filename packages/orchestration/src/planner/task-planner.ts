@@ -19,7 +19,10 @@ export class TaskPlanner {
   public async plan(task: Task, signal?: AbortSignal, onCost?: (costUsd: number) => void): Promise<TaskPlan> {
     rootLogger.info(`Planning subtasks for task ${task.id}: "${task.goal}"`);
 
-    const availableAgents = this.options.registry.list().map(a => `- ${a.id} (${a.name}, ${a.role}): ${a.description}`).join('\n');
+    const availableAgents = this.options.registry
+      .list()
+      .map(a => `- ${a.id} (${a.name}, ${a.role}): ${a.description}`)
+      .join('\n');
 
     const prompt = `You are Chief, the root orchestrator.
 Decompose the following user goal into a structured, dependency-ordered multi-agent execution plan.
@@ -92,7 +95,10 @@ RULES:
     }
 
     try {
-      const cleaned = resultContent.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      const cleaned = resultContent
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*$/g, '')
+        .trim();
       const parsed = JSON.parse(cleaned);
       const plan = TaskPlanSchema.parse(parsed);
       return PlanValidator.assertValid(plan, { registry: this.options.registry });
@@ -172,15 +178,11 @@ RULES:
         }
       ],
       approval_points: [],
-      estimated_cost_usd: 0.40
+      estimated_cost_usd: 0.4
     };
   }
 
-  private async runThroughDurableRunner(
-    task: Task,
-    prompt: string,
-    signal?: AbortSignal
-  ): Promise<{ content: string; costUsd: number }> {
+  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<{ content: string; costUsd: number }> {
     const chiefAgent = this.options.registry.getOrThrow('chief');
     const summary = await this.options.runner!.run({
       task,

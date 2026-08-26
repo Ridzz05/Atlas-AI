@@ -5,32 +5,37 @@ export class AuditRepository {
   constructor(private db: DatabaseClient) {}
 
   public async create(record: AuditRecord): Promise<AuditRecord> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       INSERT INTO audit_events (id, timestamp, actor, action, target, task_id, run_id, details, ip_address)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       RETURNING *
-    `, [
-      record.id,
-      record.timestamp,
-      record.actor,
-      record.action,
-      record.target || null,
-      record.taskId || null,
-      record.runId || null,
-      JSON.stringify(record.details || {}),
-      record.ipAddress || null
-    ]);
+    `,
+      [
+        record.id,
+        record.timestamp,
+        record.actor,
+        record.action,
+        record.target || null,
+        record.taskId || null,
+        record.runId || null,
+        JSON.stringify(record.details || {}),
+        record.ipAddress || null
+      ]
+    );
 
     return this.mapRow(result.rows[0]);
   }
 
-  public async list(options: {
-    actor?: string;
-    action?: string;
-    taskId?: string;
-    runId?: string;
-    limit?: number;
-  } = {}): Promise<AuditRecord[]> {
+  public async list(
+    options: {
+      actor?: string;
+      action?: string;
+      taskId?: string;
+      runId?: string;
+      limit?: number;
+    } = {}
+  ): Promise<AuditRecord[]> {
     const limit = Math.min(100, Math.max(1, Math.trunc(options.limit || 50)));
     const values: unknown[] = [];
     const filters: string[] = [];

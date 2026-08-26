@@ -28,20 +28,23 @@ export class MessageRepository {
   constructor(private db: DatabaseClient) {}
 
   public async create(input: MessageCreateInput, id = crypto.randomUUID()): Promise<MessageRecord> {
-    const result = await this.db.query(`
+    const result = await this.db.query(
+      `
       INSERT INTO messages (id, task_id, run_id, sender_type, sender_id, recipient_id, content, metadata)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *
-    `, [
-      id,
-      input.taskId || null,
-      input.runId || null,
-      input.senderType,
-      input.senderId,
-      input.recipientId || null,
-      input.content,
-      JSON.stringify(input.metadata || {})
-    ]);
+    `,
+      [
+        id,
+        input.taskId || null,
+        input.runId || null,
+        input.senderType,
+        input.senderId,
+        input.recipientId || null,
+        input.content,
+        JSON.stringify(input.metadata || {})
+      ]
+    );
 
     return this.mapRow(result.rows[0]);
   }

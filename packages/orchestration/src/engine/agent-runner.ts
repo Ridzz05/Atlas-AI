@@ -1,10 +1,4 @@
-import {
-  ApprovalToken,
-  Task,
-  Run,
-  AgentDefinition,
-  SystemEvent
-} from '@atlas/shared';
+import { ApprovalToken, Task, Run, AgentDefinition, SystemEvent } from '@atlas/shared';
 import { ModelProvider, ChatMessage, ToolCallRequest } from '@atlas/providers';
 import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
@@ -160,9 +154,7 @@ export class AgentRunner {
     let budgetReservationId: string | undefined;
     let budgetSettled = false;
 
-    const messages: ChatMessage[] = [
-      { role: 'user', content: input.initialPrompt }
-    ];
+    const messages: ChatMessage[] = [{ role: 'user', content: input.initialPrompt }];
 
     const persistMessage = async (message: {
       senderType: 'user' | 'agent' | 'system' | 'tool';
@@ -195,10 +187,12 @@ export class AgentRunner {
     };
 
     const acquireRunLease = async (): Promise<void> => {
-      const runRepo = this.options.runRepo as (RunRepository & {
-        acquireLease?: RunRepository['acquireLease'];
-        heartbeat?: RunRepository['heartbeat'];
-      }) | undefined;
+      const runRepo = this.options.runRepo as
+        | (RunRepository & {
+            acquireLease?: RunRepository['acquireLease'];
+            heartbeat?: RunRepository['heartbeat'];
+          })
+        | undefined;
       if (!runRepo || typeof runRepo.acquireLease !== 'function') return;
 
       const lease = await runRepo.acquireLease(runId, this.workerId, leaseSeconds);
@@ -207,7 +201,7 @@ export class AgentRunner {
       }
 
       if (typeof runRepo.heartbeat !== 'function') return;
-      const heartbeatIntervalMs = Math.max(1000, Math.min(30000, Math.floor(leaseSeconds * 1000 / 2)));
+      const heartbeatIntervalMs = Math.max(1000, Math.min(30000, Math.floor((leaseSeconds * 1000) / 2)));
       leaseHeartbeatTimer = setInterval(() => {
         void runRepo.heartbeat!(runId, this.workerId, leaseSeconds)
           .then(renewed => {
@@ -319,12 +313,7 @@ export class AgentRunner {
 
         // Record turn in DB
         if (this.options.runRepo) {
-          await this.options.runRepo.recordTurn(
-            runId,
-            modelResult.inputTokens,
-            modelResult.outputTokens,
-            modelResult.costUsd
-          );
+          await this.options.runRepo.recordTurn(runId, modelResult.inputTokens, modelResult.outputTokens, modelResult.costUsd);
         }
 
         // Publish turn completed event
@@ -358,13 +347,15 @@ export class AgentRunner {
           for (const tc of modelResult.toolCalls) {
             let output: Record<string, unknown> = { success: true };
             const toolCallRecordId = this.options.toolCallRepo
-              ? (await this.options.toolCallRepo.create({
-                runId,
-                taskId,
-                agentId,
-                toolName: tc.name,
-                input: tc.arguments
-              })).id
+              ? (
+                  await this.options.toolCallRepo.create({
+                    runId,
+                    taskId,
+                    agentId,
+                    toolName: tc.name,
+                    input: tc.arguments
+                  })
+                ).id
               : undefined;
             const toolStartedAt = Date.now();
 
@@ -394,9 +385,7 @@ export class AgentRunner {
             if (toolCallRecordId && this.options.toolCallRepo) {
               const blockedApproval = output.approvalPending === true;
               await this.options.toolCallRepo.complete(toolCallRecordId, {
-                status: output.success === false
-                  ? blockedApproval ? 'blocked_approval' : 'failed'
-                  : 'success',
+                status: output.success === false ? (blockedApproval ? 'blocked_approval' : 'failed') : 'success',
                 output,
                 error: typeof output.error === 'string' ? output.error : null,
                 durationMs: Date.now() - toolStartedAt,
@@ -415,9 +404,8 @@ export class AgentRunner {
               const toolError = new Error(String(output.error || `Tool '${tc.name}' rejected execution.`));
               if (output.approvalPending === true) {
                 (toolError as Error & { approvalPending?: boolean; approvalId?: string }).approvalPending = true;
-                (toolError as Error & { approvalPending?: boolean; approvalId?: string }).approvalId = typeof output.approvalId === 'string'
-                  ? output.approvalId
-                  : undefined;
+                (toolError as Error & { approvalPending?: boolean; approvalId?: string }).approvalId =
+                  typeof output.approvalId === 'string' ? output.approvalId : undefined;
               }
               throw toolError;
             }
@@ -482,7 +470,6 @@ export class AgentRunner {
         },
         timestamp: new Date().toISOString()
       });
-
     } catch (err: any) {
       const isAbort = controller.signal.aborted || String(err?.message || '').includes('aborted');
       const isTimeout = String(err?.message || '').includes('Timeout');
@@ -519,21 +506,20 @@ export class AgentRunner {
         }
       }
       if (this.options.taskRepo) {
-        await this.options.taskRepo.updateStatus(taskId, status === 'waiting_approval' ? 'approval_pending' : status as any, { error: errorMessage });
+        await this.options.taskRepo.updateStatus(taskId, status === 'waiting_approval' ? 'approval_pending' : (status as any), {
+          error: errorMessage
+        });
       }
 
       await this.publishEvent({
         id: crypto.randomUUID(),
-        type: status === 'waiting_approval'
-          ? 'approval.requested'
-          : status === 'cancelled' ? 'run.cancelled' : 'run.failed',
+        type: status === 'waiting_approval' ? 'approval.requested' : status === 'cancelled' ? 'run.cancelled' : 'run.failed',
         taskId,
         runId,
         agentId,
         payload: { error: errorMessage, approvalId },
         timestamp: new Date().toISOString()
       });
-
     } finally {
       clearTimeout(timeoutTimer);
       if (leaseHeartbeatTimer) clearInterval(leaseHeartbeatTimer);

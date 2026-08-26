@@ -140,7 +140,9 @@ ${activeTasks.length > 0 ? `*Active Tasks:*\n` + activeTasks.map(t => `- \`${t.i
     if (!task) return `❌ Task not found: \`${taskId}\``;
 
     const children = await this.ctx.taskRepo.findChildren(taskId);
-    const childRows = children.map(c => `  └─ \`${c.id.slice(0, 8)}\` *${c.assignedAgent}* [${c.status.toUpperCase()}]: ${c.title}`).join('\n');
+    const childRows = children
+      .map(c => `  └─ \`${c.id.slice(0, 8)}\` *${c.assignedAgent}* [${c.status.toUpperCase()}]: ${c.title}`)
+      .join('\n');
 
     return `📌 *Task Details:* \`${task.id}\`
 • *Title:* ${task.title}
@@ -182,13 +184,16 @@ ${task.error ? `\n⚠️ *Error:* \`${task.error}\`` : ''}`;
     };
 
     if (this.ctx.taskRepo) {
-      task = await this.ctx.taskRepo.create({
-        title,
-        goal,
-        assignedAgent: 'chief',
-        priority: 'normal',
-        context: {}
-      }, taskId);
+      task = await this.ctx.taskRepo.create(
+        {
+          title,
+          goal,
+          assignedAgent: 'chief',
+          priority: 'normal',
+          context: {}
+        },
+        taskId
+      );
     }
 
     if (this.ctx.taskQueue) {
@@ -253,10 +258,7 @@ Use \`/resume\` to unfreeze the system when ready.`;
     }
 
     try {
-      const [costs, budget] = await Promise.all([
-        this.ctx.runRepo?.getCostSummary(),
-        this.ctx.budgetRepo?.getGlobalDailySummary()
-      ]);
+      const [costs, budget] = await Promise.all([this.ctx.runRepo?.getCostSummary(), this.ctx.budgetRepo?.getGlobalDailySummary()]);
 
       if (!costs && !budget) {
         return 'ℹ️ *Cost telemetry unavailable.* No durable cost or budget record is available yet.';
@@ -300,8 +302,7 @@ Use \`/resume\` to unfreeze the system when ready.`;
     }
     if (!approval) return `Approval \`${requestId}\` was not changed. It may be missing, expired, or already decided.`;
 
-    const canResume = typeof (this.ctx.approvalRepo as any).issueExecutionToken === 'function'
-      && this.ctx.taskRepo && this.ctx.taskQueue;
+    const canResume = typeof (this.ctx.approvalRepo as any).issueExecutionToken === 'function' && this.ctx.taskRepo && this.ctx.taskQueue;
     if (!canResume) {
       return `Approval \`${requestId}\` recorded as APPROVED. No outbound side effect was executed by this command.`;
     }
@@ -309,9 +310,7 @@ Use \`/resume\` to unfreeze the system when ready.`;
     try {
       const token = await this.ctx.approvalRepo.issueExecutionToken(approval.id);
       const approvedTask = await this.ctx.taskRepo!.findById(approval.taskId);
-      const queueTask = approvedTask?.parentId
-        ? await this.ctx.taskRepo!.findById(approvedTask.parentId)
-        : approvedTask;
+      const queueTask = approvedTask?.parentId ? await this.ctx.taskRepo!.findById(approvedTask.parentId) : approvedTask;
       if (!token || !approvedTask || approvedTask.status !== 'approval_pending' || !queueTask) {
         return `Approval \`${requestId}\` was recorded, but the paused task could not be resumed safely. Retry after the worker and database are ready.`;
       }

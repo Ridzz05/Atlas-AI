@@ -12,7 +12,7 @@ export const LEAD_DIMENSIONS = [
   'decisionMakerEase',
   'dataFreshness'
 ] as const;
-export type LeadDimension = typeof LEAD_DIMENSIONS[number];
+export type LeadDimension = (typeof LEAD_DIMENSIONS)[number];
 
 export const LeadDimensionScoresSchema = z.object({
   businessTypeFit: z.number().finite().nonnegative(),
@@ -41,30 +41,32 @@ export const LeadScoringInputSchema = z.object({
 });
 export type LeadScoringInput = z.infer<typeof LeadScoringInputSchema>;
 
-export const LeadRubricDefinitionSchema = z.object({
-  version: z.string().trim().min(1),
-  maxScores: LeadDimensionScoresSchema,
-  thresholds: z.object({
-    qualified: z.number().finite().min(0).max(100),
-    needsReview: z.number().finite().min(0).max(100)
+export const LeadRubricDefinitionSchema = z
+  .object({
+    version: z.string().trim().min(1),
+    maxScores: LeadDimensionScoresSchema,
+    thresholds: z.object({
+      qualified: z.number().finite().min(0).max(100),
+      needsReview: z.number().finite().min(0).max(100)
+    })
   })
-}).superRefine((definition, ctx) => {
-  const maxScore = LEAD_DIMENSIONS.reduce((sum, dimension) => sum + definition.maxScores[dimension], 0);
-  if (Math.abs(maxScore - 100) > Number.EPSILON) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['maxScores'],
-      message: `Rubric maximum scores must sum to 100, received ${maxScore}.`
-    });
-  }
-  if (definition.thresholds.qualified <= definition.thresholds.needsReview) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      path: ['thresholds'],
-      message: 'The qualified threshold must be greater than the needs-review threshold.'
-    });
-  }
-});
+  .superRefine((definition, ctx) => {
+    const maxScore = LEAD_DIMENSIONS.reduce((sum, dimension) => sum + definition.maxScores[dimension], 0);
+    if (Math.abs(maxScore - 100) > Number.EPSILON) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['maxScores'],
+        message: `Rubric maximum scores must sum to 100, received ${maxScore}.`
+      });
+    }
+    if (definition.thresholds.qualified <= definition.thresholds.needsReview) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['thresholds'],
+        message: 'The qualified threshold must be greater than the needs-review threshold.'
+      });
+    }
+  });
 export type LeadRubricDefinition = z.infer<typeof LeadRubricDefinitionSchema>;
 
 export const DEFAULT_LEAD_RUBRIC: LeadRubricDefinition = {
@@ -109,9 +111,7 @@ export const LeadScoringResultSchema = z.object({
 export type LeadScoringResult = z.infer<typeof LeadScoringResultSchema>;
 
 export class RubricEngine {
-  private static readonly rubrics = new Map<string, LeadRubricDefinition>([
-    [DEFAULT_LEAD_RUBRIC.version, DEFAULT_LEAD_RUBRIC]
-  ]);
+  private static readonly rubrics = new Map<string, LeadRubricDefinition>([[DEFAULT_LEAD_RUBRIC.version, DEFAULT_LEAD_RUBRIC]]);
   private static defaultVersion = DEFAULT_LEAD_RUBRIC.version;
 
   public static register(rubric: LeadRubricDefinition): void {
@@ -148,9 +148,7 @@ export class RubricEngine {
     return this.cloneRubric(rubric);
   }
 
-  public static validateEvidence(
-    input: Pick<LeadScoringInput, 'scores' | 'evidence'>
-  ): LeadEvidenceValidation {
+  public static validateEvidence(input: Pick<LeadScoringInput, 'scores' | 'evidence'>): LeadEvidenceValidation {
     const missingDimensions = LEAD_DIMENSIONS.filter(dimension => {
       const evidence = input.evidence?.[dimension];
       return input.scores[dimension] > 0 && (typeof evidence !== 'string' || evidence.trim().length === 0);
@@ -162,18 +160,13 @@ export class RubricEngine {
     };
   }
 
-  public static calculate(
-    input: LeadScoringInput,
-    options: { rubricVersion?: string } = {}
-  ): LeadScoringResult {
+  public static calculate(input: LeadScoringInput, options: { rubricVersion?: string } = {}): LeadScoringResult {
     const rubric = this.getRubric(options.rubricVersion);
     const scores = LeadDimensionScoresSchema.parse(input.scores);
 
     for (const dimension of LEAD_DIMENSIONS) {
       if (scores[dimension] > rubric.maxScores[dimension]) {
-        throw new Error(
-          `Score for '${dimension}' exceeds rubric '${rubric.version}' maximum of ${rubric.maxScores[dimension]}.`
-        );
+        throw new Error(`Score for '${dimension}' exceeds rubric '${rubric.version}' maximum of ${rubric.maxScores[dimension]}.`);
       }
     }
 
@@ -216,9 +209,7 @@ export class RubricEngine {
   }
 
   public static rank(leads: LeadScoringResult[]): LeadScoringResult[] {
-    const sorted = [...leads].sort((a, b) =>
-      b.totalScore - a.totalScore || a.leadId.localeCompare(b.leadId)
-    );
+    const sorted = [...leads].sort((a, b) => b.totalScore - a.totalScore || a.leadId.localeCompare(b.leadId));
     return sorted.map((lead, idx) => ({ ...lead, rank: idx + 1 }));
   }
 

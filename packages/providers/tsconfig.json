@@ -6,10 +6,7 @@
     "composite": true,
     "tsBuildInfoFile": "tsconfig.tsbuildinfo"
   },
-  "references": [
-    { "path": "../shared" },
-    { "path": "../observability" }
-  ],
+  "references": [{ "path": "../shared" }, { "path": "../observability" }],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]
 }

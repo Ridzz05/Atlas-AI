@@ -1,12 +1,6 @@
 import { z } from 'zod';
 
-export const ToolRiskLevelSchema = z.enum([
-  'read',
-  'low',
-  'medium',
-  'high',
-  'critical'
-]);
+export const ToolRiskLevelSchema = z.enum(['read', 'low', 'medium', 'high', 'critical']);
 export type ToolRiskLevel = z.infer<typeof ToolRiskLevelSchema>;
 
 export const ToolCallSchema = z.object({

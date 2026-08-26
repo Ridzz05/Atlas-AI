@@ -151,16 +151,14 @@ describe('worker lifecycle and task execution tests', () => {
     await handler!({ task: mockTask, agent: mockAgent, prompt: 'must be deferred' });
 
     expect(provider.run).not.toHaveBeenCalled();
-    expect(taskQueue.defer).toHaveBeenCalledWith(
-      expect.objectContaining({ task: mockTask }),
-      expect.any(Number)
-    );
+    expect(taskQueue.defer).toHaveBeenCalledWith(expect.objectContaining({ task: mockTask }), expect.any(Number));
     await runner.stop();
   });
 
   it('executes an allowed memory tool through the worker gateway', async () => {
     const provider = {
-      run: vi.fn()
+      run: vi
+        .fn()
         .mockResolvedValueOnce({
           content: 'Searching approved memory.',
           toolCalls: [{ id: crypto.randomUUID(), name: 'memory.search', arguments: { query: 'approved' } }],
@@ -217,43 +215,46 @@ describe('worker lifecycle and task execution tests', () => {
 
   it('executes deterministic lead scoring through the worker gateway', async () => {
     const provider = {
-      run: vi.fn()
+      run: vi
+        .fn()
         .mockResolvedValueOnce({
           content: 'Scoring the lead with the registered rubric.',
-          toolCalls: [{
-            id: crypto.randomUUID(),
-            name: 'lead.score',
-            arguments: {
-              leadId: 'gym-worker-1',
-              name: 'Worker Gym',
-              category: 'Fitness Center',
-              location: 'Palembang',
-              scores: {
-                businessTypeFit: 15,
-                channelCount: 10,
-                customerVolume: 10,
-                memberRetentionNeed: 15,
-                digitalPresenceQuality: 8,
-                responsiveness: 8,
-                csAutomationPotential: 10,
-                broadcastPotential: 8,
-                decisionMakerEase: 6,
-                dataFreshness: 10
-              },
-              evidence: {
-                businessTypeFit: 'Fitness center confirmed',
-                channelCount: 'WhatsApp and Instagram confirmed',
-                customerVolume: '600 members reported',
-                memberRetentionNeed: 'Retention program identified',
-                digitalPresenceQuality: 'Active digital profiles',
-                responsiveness: 'Response time observed',
-                csAutomationPotential: 'Manual support workflow identified',
-                broadcastPotential: 'Broadcast audience confirmed',
-                decisionMakerEase: 'Owner contact identified',
-                dataFreshness: 'Observed this week'
+          toolCalls: [
+            {
+              id: crypto.randomUUID(),
+              name: 'lead.score',
+              arguments: {
+                leadId: 'gym-worker-1',
+                name: 'Worker Gym',
+                category: 'Fitness Center',
+                location: 'Palembang',
+                scores: {
+                  businessTypeFit: 15,
+                  channelCount: 10,
+                  customerVolume: 10,
+                  memberRetentionNeed: 15,
+                  digitalPresenceQuality: 8,
+                  responsiveness: 8,
+                  csAutomationPotential: 10,
+                  broadcastPotential: 8,
+                  decisionMakerEase: 6,
+                  dataFreshness: 10
+                },
+                evidence: {
+                  businessTypeFit: 'Fitness center confirmed',
+                  channelCount: 'WhatsApp and Instagram confirmed',
+                  customerVolume: '600 members reported',
+                  memberRetentionNeed: 'Retention program identified',
+                  digitalPresenceQuality: 'Active digital profiles',
+                  responsiveness: 'Response time observed',
+                  csAutomationPotential: 'Manual support workflow identified',
+                  broadcastPotential: 'Broadcast audience confirmed',
+                  decisionMakerEase: 'Owner contact identified',
+                  dataFreshness: 'Observed this week'
+                }
               }
             }
-          }],
+          ],
           inputTokens: 1,
           outputTokens: 1,
           costUsd: 0.001,

@@ -32,7 +32,10 @@ export interface ResearchEvidence {
  * pin a hostname's resolved address across the provider's network request.
  */
 export interface ResearchProvider {
-  fetchSafe?(url: string, signal?: AbortSignal): Promise<{
+  fetchSafe?(
+    url: string,
+    signal?: AbortSignal
+  ): Promise<{
     content: string;
     sourceUrl: string;
     extractedAt: string;
@@ -41,17 +44,27 @@ export interface ResearchProvider {
     unresolvedQuestions: string[];
     confidence: number;
   }>;
-  search(query: string, limit: number, signal?: AbortSignal): Promise<Array<{
-    title: string;
-    url: string;
-    snippet: string;
-    confidence: number;
-    extractedAt: string;
-    freshness: ResearchFreshness;
-    sensitivity: ResearchSensitivity;
-    unresolvedQuestions: string[];
-  }>>;
-  lookupCompany(companyName: string, location: string, signal?: AbortSignal): Promise<{
+  search(
+    query: string,
+    limit: number,
+    signal?: AbortSignal
+  ): Promise<
+    Array<{
+      title: string;
+      url: string;
+      snippet: string;
+      confidence: number;
+      extractedAt: string;
+      freshness: ResearchFreshness;
+      sensitivity: ResearchSensitivity;
+      unresolvedQuestions: string[];
+    }>
+  >;
+  lookupCompany(
+    companyName: string,
+    location: string,
+    signal?: AbortSignal
+  ): Promise<{
     found: boolean;
     companyName: string;
     address: string;
@@ -65,7 +78,11 @@ export interface ResearchProvider {
     unresolvedQuestions: string[];
     confidence: number;
   }>;
-  enrichLead?(companyName: string, location: string, signal?: AbortSignal): Promise<{
+  enrichLead?(
+    companyName: string,
+    location: string,
+    signal?: AbortSignal
+  ): Promise<{
     found: boolean;
     companyName: string;
     location: string;
@@ -82,10 +99,7 @@ export interface ResearchProvider {
   }>;
 }
 
-export type CommunicationSender = (
-  input: CommunicationSendInput,
-  context: ToolContext
-) => Promise<CommunicationSendResult>;
+export type CommunicationSender = (input: CommunicationSendInput, context: ToolContext) => Promise<CommunicationSendResult>;
 
 export interface AuditSink {
   record(event: AuditRecord): Promise<unknown>;
@@ -94,10 +108,7 @@ export interface AuditSink {
 export interface ApprovalExecutionStore {
   claimExecution(token: ApprovalToken, currentPayload: unknown): Promise<{ id: string } | null>;
   getExecutionStatus(id: string): Promise<string | null>;
-  finalizeExecution(
-    id: string,
-    result: { success: boolean; output?: unknown; error?: string }
-  ): Promise<unknown>;
+  finalizeExecution(id: string, result: { success: boolean; output?: unknown; error?: string }): Promise<unknown>;
 }
 
 export interface ApprovalRequestStore {
