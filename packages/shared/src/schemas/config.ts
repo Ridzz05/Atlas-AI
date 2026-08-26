@@ -2,6 +2,15 @@ import { z } from 'zod';
 
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'groq', 'ollama', 'deepseek']);
+const StrictBooleanFromEnvSchema = z.preprocess(value => {
+  if (typeof value !== 'string') return value;
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === '') return false;
+  if (normalized === 'true') return true;
+  if (normalized === 'false') return false;
+  return value;
+}, z.boolean());
 
 export const EnvConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -27,7 +36,7 @@ export const EnvConfigSchema = z.object({
   GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(5.0),
   MAX_CONCURRENT_AGENT_RUNS: z.coerce.number().int().positive().default(3),
   MAX_DELEGATION_DEPTH: z.coerce.number().int().positive().default(2),
-  EXTERNAL_WRITES_ENABLED: z.coerce.boolean().default(false)
+  EXTERNAL_WRITES_ENABLED: StrictBooleanFromEnvSchema.default(false)
 }).superRefine((config, ctx) => {
   if (config.NODE_ENV === 'production' && !config.API_AUTH_TOKEN) {
     ctx.addIssue({

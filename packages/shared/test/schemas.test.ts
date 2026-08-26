@@ -108,6 +108,13 @@ describe('@atlas/shared schema tests', () => {
     expect(env.MEMORY_DELETION_GRACE_DAYS).toBe(7);
   });
 
+  it('parses the external writes environment flag strictly and fail-closed', () => {
+    expect(EnvConfigSchema.parse({ EXTERNAL_WRITES_ENABLED: 'false' }).EXTERNAL_WRITES_ENABLED).toBe(false);
+    expect(EnvConfigSchema.parse({ EXTERNAL_WRITES_ENABLED: 'true' }).EXTERNAL_WRITES_ENABLED).toBe(true);
+    expect(EnvConfigSchema.parse({ EXTERNAL_WRITES_ENABLED: '' }).EXTERNAL_WRITES_ENABLED).toBe(false);
+    expect(() => EnvConfigSchema.parse({ EXTERNAL_WRITES_ENABLED: 'yes' })).toThrow('EXTERNAL_WRITES_ENABLED');
+  });
+
   it('requires an API auth token in production', () => {
     expect(() => EnvConfigSchema.parse({ NODE_ENV: 'production' })).toThrow('API_AUTH_TOKEN');
   });
