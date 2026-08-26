@@ -70,7 +70,8 @@ export class AgentWorkerRunner {
       eventBus,
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
-      toolExecutor
+      toolExecutor,
+      approvalExecutionStore: options.approvalRepo
     });
 
     this.delegator = new TaskDelegator({
@@ -80,6 +81,7 @@ export class AgentWorkerRunner {
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
       toolExecutor,
+      approvalExecutionStore: options.approvalRepo,
       maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS
     });
 
@@ -95,13 +97,14 @@ export class AgentWorkerRunner {
       rootLogger.info(`Worker processing job for task ${job.task.id} (Agent: ${job.agent.id}, Role: ${job.agent.role})`);
 
       if (job.agent.role === 'orchestrator') {
-        return this.delegator.executePlan(job.task);
+        return this.delegator.executePlan(job.task, undefined, job.approvalResume);
       } else {
         return this.runner.run({
           task: job.task,
           agent: job.agent,
           initialPrompt: job.prompt,
-          runId: job.runId
+          runId: job.approvalResume?.runId || job.runId,
+          approvalToken: job.approvalResume?.token
         });
       }
     });

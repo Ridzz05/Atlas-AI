@@ -1,4 +1,5 @@
 import {
+  ApprovalToken,
   Task,
   Run,
   AgentDefinition,
@@ -8,11 +9,12 @@ import { ModelProvider, ChatMessage, ToolCallRequest } from '@atlas/providers';
 import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { TaskRepository, RunRepository } from '@atlas/database';
+import type { ApprovalExecutionStore } from '@atlas/tools';
 
 export interface ToolExecutor {
   execute(
     toolCall: ToolCallRequest,
-    context: { taskId: string; runId: string; agentId: string; signal?: AbortSignal }
+    context: { taskId: string; runId: string; agentId: string; approvalToken?: ApprovalToken; signal?: AbortSignal }
   ): Promise<Record<string, unknown>>;
 }
 
@@ -22,6 +24,7 @@ export interface AgentRunnerOptions {
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
   toolExecutor?: ToolExecutor;
+  approvalExecutionStore?: ApprovalExecutionStore;
 }
 
 export interface RunAgentInput {
@@ -29,6 +32,7 @@ export interface RunAgentInput {
   agent: AgentDefinition;
   initialPrompt: string;
   runId?: string;
+  approvalToken?: ApprovalToken;
   signal?: AbortSignal;
 }
 
@@ -97,7 +101,11 @@ export class AgentRunner {
     try {
       // 1. Create Run in DB if repo provided
       if (this.options.runRepo) {
-        await this.options.runRepo.create({ taskId, agentId }, runId);
+        if (input.approvalToken && input.runId) {
+          await this.options.runRepo.updateStatus(runId, 'active');
+        } else {
+          await this.options.runRepo.create({ taskId, agentId }, runId);
+        }
       }
       if (this.options.taskRepo) {
         await this.options.taskRepo.updateStatus(taskId, 'running');
@@ -184,6 +192,7 @@ export class AgentRunner {
                 taskId,
                 runId,
                 agentId,
+                approvalToken: input.approvalToken,
                 signal: controller.signal
               });
             }
@@ -215,6 +224,16 @@ export class AgentRunner {
       // If turns exhausted without stopping
       if (turnsCount >= maxTurns && !finalContent) {
         finalContent = 'Task completed: Maximum turns reached.';
+      }
+
+      if (input.approvalToken && this.options.approvalExecutionStore) {
+        const executionStatus = await this.options.approvalExecutionStore.getExecutionStatus(input.approvalToken.requestId);
+        if (executionStatus !== 'executed') {
+          const approvalError = new Error('Approved execution was not claimed and finalized by the protected tool.');
+          (approvalError as Error & { approvalPending?: boolean; approvalId?: string }).approvalPending = true;
+          (approvalError as Error & { approvalPending?: boolean; approvalId?: string }).approvalId = input.approvalToken.requestId;
+          throw approvalError;
+        }
       }
 
       // Update terminal status in DB

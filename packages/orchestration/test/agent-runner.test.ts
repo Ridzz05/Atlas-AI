@@ -222,4 +222,44 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.error).toContain('human approval');
     expect(summary.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
   });
+
+  it('resumes an existing run and refuses completion until approval is finalized', async () => {
+    const provider = new MockModelProvider({ cannedResponses: [{ content: 'Protected action completed.' }] });
+    const runRepo = {
+      create: vi.fn(),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const approvalExecutionStore = {
+      claimExecution: vi.fn(),
+      getExecutionStatus: vi.fn(async () => 'executed'),
+      finalizeExecution: vi.fn()
+    };
+    const approvalToken = {
+      requestId: '123e4567-e89b-12d3-a456-426614174004',
+      action: 'communication.send_approved',
+      payloadHash: 'payload-hash',
+      signature: 'signed-token',
+      expiresAt: Math.floor(Date.now() / 1000) + 300
+    };
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      approvalExecutionStore
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174005',
+      approvalToken,
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Resume protected action'
+    });
+
+    expect(summary.status).toBe('completed');
+    expect(runRepo.create).not.toHaveBeenCalled();
+    expect(runRepo.updateStatus).toHaveBeenCalledWith('123e4567-e89b-12d3-a456-426614174005', 'active');
+    expect(approvalExecutionStore.getExecutionStatus).toHaveBeenCalledWith(approvalToken.requestId);
+  });
 });

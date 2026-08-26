@@ -1,4 +1,4 @@
-import { Task, AgentDefinition } from '@atlas/shared';
+import { ApprovalToken, Task, AgentDefinition } from '@atlas/shared';
 import { AgentRunner, AgentRunSummary } from '../engine/agent-runner.js';
 import { rootLogger } from '@atlas/observability';
 
@@ -7,6 +7,13 @@ export interface TaskJobData {
   agent: AgentDefinition;
   prompt: string;
   runId?: string;
+  approvalResume?: ApprovalResumeContext;
+}
+
+export interface ApprovalResumeContext {
+  taskId: string;
+  runId: string;
+  token: ApprovalToken;
 }
 
 export type TaskJobHandler = (data: TaskJobData) => Promise<unknown>;

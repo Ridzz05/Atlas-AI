@@ -38,6 +38,7 @@ export type CommunicationSender = (
 
 export interface ApprovalExecutionStore {
   claimExecution(token: ApprovalToken, currentPayload: unknown): Promise<{ id: string } | null>;
+  getExecutionStatus(id: string): Promise<string | null>;
   finalizeExecution(
     id: string,
     result: { success: boolean; output?: unknown; error?: string }

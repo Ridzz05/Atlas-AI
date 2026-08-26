@@ -1,3 +1,4 @@
+import { ApprovalToken } from '@atlas/shared';
 import { ToolCallRequest } from '@atlas/providers';
 import { ToolContext, ToolRegistry } from '@atlas/tools';
 import { ToolExecutor } from './agent-runner.js';
@@ -12,13 +13,14 @@ export class ToolGatewayExecutor implements ToolExecutor {
 
   public async execute(
     toolCall: ToolCallRequest,
-    context: { taskId: string; runId: string; agentId: string; signal?: AbortSignal }
+    context: { taskId: string; runId: string; agentId: string; approvalToken?: ApprovalToken; signal?: AbortSignal }
   ): Promise<Record<string, unknown>> {
     const result = await this.options.registry.execute(toolCall.name, toolCall.arguments, {
       ...this.options.baseContext,
       taskId: context.taskId,
       runId: context.runId,
       agentId: context.agentId,
+      approvalToken: context.approvalToken,
       signal: context.signal
     });
 

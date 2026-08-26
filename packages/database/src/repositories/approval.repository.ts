@@ -165,6 +165,14 @@ export class ApprovalRepository {
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
+  public async getExecutionStatus(id: string): Promise<ApprovalStatus | null> {
+    const result = await this.db.query(
+      'SELECT status FROM approvals WHERE id = $1',
+      [id]
+    );
+    return result.rows[0]?.status || null;
+  }
+
   public async finalizeExecution(
     id: string,
     result: { success: boolean; output?: unknown; error?: string }

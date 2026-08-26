@@ -178,7 +178,12 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   });
 
   if (options.approvalRepo) {
-    registerApprovalRoutes(app, { approvalRepo: options.approvalRepo });
+    registerApprovalRoutes(app, {
+      approvalRepo: options.approvalRepo,
+      taskRepo: options.taskRepo,
+      taskQueue,
+      getAgentDefinition: (id: string) => registry.getOrThrow(id)
+    });
   }
 
   return app;

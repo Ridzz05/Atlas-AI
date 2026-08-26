@@ -203,6 +203,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         claimed.add(token.signature);
         return { id: token.requestId };
       }),
+      getExecutionStatus: vi.fn(async () => 'executing'),
       finalizeExecution: vi.fn(async (id: string, result: { success: boolean }) => ({ id, status: result.success ? 'executed' : 'revoked' }))
     };
     const sender = async () => ({

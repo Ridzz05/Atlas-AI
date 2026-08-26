@@ -229,9 +229,45 @@ Use \`/resume\` to unfreeze the system when ready.`;
   private async handleApproveDurable(requestId: string | undefined, actorId: string): Promise<string> {
     if (!requestId) return 'Please specify an approval request ID: `/approve <id>`';
     if (!this.ctx.approvalRepo) return `Approval control plane is not configured for \`${requestId}\`; no decision was recorded.`;
-    const approval = await this.ctx.approvalRepo.decide(requestId, 'approved', actorId);
+    let approval = await this.ctx.approvalRepo.decide(requestId, 'approved', actorId);
+    if (!approval && typeof (this.ctx.approvalRepo as any).findById === 'function') {
+      const existing = await this.ctx.approvalRepo.findById(requestId);
+      if (existing?.status === 'approved') approval = existing;
+    }
     if (!approval) return `Approval \`${requestId}\` was not changed. It may be missing, expired, or already decided.`;
-    return `Approval \`${requestId}\` recorded as APPROVED. No outbound side effect was executed by this command.`;
+
+    const canResume = typeof (this.ctx.approvalRepo as any).issueExecutionToken === 'function'
+      && this.ctx.taskRepo && this.ctx.taskQueue;
+    if (!canResume) {
+      return `Approval \`${requestId}\` recorded as APPROVED. No outbound side effect was executed by this command.`;
+    }
+
+    try {
+      const token = await this.ctx.approvalRepo.issueExecutionToken(approval.id);
+      const approvedTask = await this.ctx.taskRepo!.findById(approval.taskId);
+      const queueTask = approvedTask?.parentId
+        ? await this.ctx.taskRepo!.findById(approvedTask.parentId)
+        : approvedTask;
+      if (!token || !approvedTask || approvedTask.status !== 'approval_pending' || !queueTask) {
+        return `Approval \`${requestId}\` was recorded, but the paused task could not be resumed safely. Retry after the worker and database are ready.`;
+      }
+
+      await this.ctx.taskQueue!.enqueue({
+        task: queueTask,
+        agent: this.ctx.registry.getOrThrow(queueTask.assignedAgent),
+        prompt: queueTask.goal,
+        runId: approvedTask.parentId ? undefined : approval.runId,
+        approvalResume: {
+          taskId: approval.taskId,
+          runId: approval.runId,
+          token
+        }
+      });
+      return `Approval \`${requestId}\` recorded as APPROVED and the paused task was queued for one-time execution.`;
+    } catch (error) {
+      rootLogger.error('Telegram approval resume enqueue failed', { error: String(error), approvalId: approval.id });
+      return `Approval \`${requestId}\` was recorded, but the paused task could not be resumed safely. Retry the command.`;
+    }
   }
 
   private async handleRejectDurable(requestId: string | undefined, actorId: string): Promise<string> {

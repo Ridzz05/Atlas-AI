@@ -15,6 +15,8 @@ import { TaskPlanner } from '../planner/task-planner.js';
 import { TaskSynthesizer } from '../synthesizer/task-synthesizer.js';
 import { QAGate, QAResult } from '../qa/qa-gate.js';
 import { PlanValidator } from '../planner/plan-validator.js';
+import { ApprovalResumeContext } from '../queue/task-queue.js';
+import type { ApprovalExecutionStore } from '@atlas/tools';
 
 export interface MultiAgentDelegatorOptions {
   provider: ModelProvider;
@@ -23,6 +25,7 @@ export interface MultiAgentDelegatorOptions {
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
   toolExecutor?: ToolExecutor;
+  approvalExecutionStore?: ApprovalExecutionStore;
   maxConcurrency?: number;
 }
 
@@ -50,7 +53,8 @@ export class TaskDelegator {
       eventBus: options.eventBus,
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
-      toolExecutor: options.toolExecutor
+      toolExecutor: options.toolExecutor,
+      approvalExecutionStore: options.approvalExecutionStore
     });
 
     this.planner = new TaskPlanner({
@@ -74,7 +78,11 @@ export class TaskDelegator {
     this.maxConcurrency = options.maxConcurrency || 3;
   }
 
-  public async executePlan(parentTask: Task, signal?: AbortSignal): Promise<DelegationResult> {
+  public async executePlan(
+    parentTask: Task,
+    signal?: AbortSignal,
+    approvalResume?: ApprovalResumeContext
+  ): Promise<DelegationResult> {
     rootLogger.info(`Starting multi-agent delegation for parent task ${parentTask.id}`);
 
     // 1. Generate Structured Plan if not already attached
@@ -89,8 +97,29 @@ export class TaskDelegator {
 
     const subtaskResults = new Map<string, { agentId: string; content: string }>();
     const completedStepIds = new Set<string>();
-    const pendingSteps = [...plan.steps];
+    const existingChildren = this.options.taskRepo && typeof (this.options.taskRepo as any).findChildren === 'function'
+      ? await this.options.taskRepo.findChildren(parentTask.id)
+      : [];
+    const existingChildrenByStep = new Map<string, Task>();
     let totalCostUsd = 0;
+
+    for (const child of existingChildren) {
+      const stepId = typeof child.context.stepId === 'string' ? child.context.stepId : undefined;
+      if (!stepId) continue;
+      existingChildrenByStep.set(stepId, child);
+      if (child.status === 'completed') {
+        const summary = typeof child.result?.summary === 'string' ? child.result.summary : '';
+        subtaskResults.set(stepId, { agentId: child.assignedAgent, content: summary });
+        completedStepIds.add(stepId);
+        totalCostUsd += Number(child.result?.totalCostUsd || 0);
+      }
+    }
+
+    if (approvalResume && !existingChildren.some(child => child.id === approvalResume.taskId)) {
+      throw new Error(`Approval resume target task not found under parent ${parentTask.id}.`);
+    }
+
+    const pendingSteps = plan.steps.filter(step => !completedStepIds.has(step.id));
 
     // 2. Execute Dependency Graph iteratively
     while (pendingSteps.length > 0) {
@@ -136,7 +165,11 @@ export class TaskDelegator {
           : `OBJECTIVE: ${step.objective}`;
 
         // Create child task record in DB if repository available
-        let childTask: Task = {
+        const existingChild = existingChildrenByStep.get(step.id);
+        const resumableChild = existingChild && approvalResume && existingChild.id === approvalResume.taskId
+          ? existingChild
+          : undefined;
+        let childTask: Task = resumableChild || {
           id: crypto.randomUUID(),
           parentId: parentTask.id,
           title: `Subtask: ${step.id} (${step.agent})`,
@@ -154,7 +187,7 @@ export class TaskDelegator {
           completedAt: null
         };
 
-        if (this.options.taskRepo) {
+        if (this.options.taskRepo && !existingChild) {
           childTask = await this.options.taskRepo.create({
             title: childTask.title,
             goal: childTask.goal,
@@ -170,7 +203,9 @@ export class TaskDelegator {
           task: childTask,
           agent,
           initialPrompt: prompt,
-          signal
+          signal,
+          runId: approvalResume?.taskId === childTask.id ? approvalResume.runId : undefined,
+          approvalToken: approvalResume?.taskId === childTask.id ? approvalResume.token : undefined
         });
 
         if (summary.status === 'waiting_approval') {

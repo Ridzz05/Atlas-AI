@@ -163,4 +163,95 @@ describe('agent-service Task and Multi-Agent APIs', () => {
       'Looks good'
     );
   });
+
+  it('issues a one-time token and requeues a paused child through its parent task', async () => {
+    const parentId = '123e4567-e89b-12d3-a456-426614174010';
+    const childId = '123e4567-e89b-12d3-a456-426614174011';
+    const runId = '123e4567-e89b-12d3-a456-426614174012';
+    const approvalId = '123e4567-e89b-12d3-a456-426614174013';
+    const parent = {
+      id: parentId,
+      parentId: null,
+      title: 'Parent task',
+      goal: 'Resume the protected action',
+      assignedAgent: 'chief',
+      depth: 0,
+      status: 'approval_pending',
+      priority: 'normal',
+      context: {},
+      plan: null,
+      result: null,
+      error: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      completedAt: null
+    };
+    const child = {
+      ...parent,
+      id: childId,
+      parentId,
+      title: 'Protected child',
+      assignedAgent: 'hermes',
+      depth: 1,
+      status: 'approval_pending'
+    };
+    const resumeTaskRepo: any = {
+      findById: vi.fn(async (id: string) => id === parentId ? parent : id === childId ? child : null)
+    };
+    const resumeQueue: any = {
+      enqueue: vi.fn(async () => 'resume-job'),
+      process: vi.fn(),
+      close: vi.fn()
+    };
+    const token = {
+      requestId: approvalId,
+      action: 'communication.send_approved',
+      payloadHash: 'payload-hash',
+      signature: 'signed-once',
+      expiresAt: Math.floor(Date.now() / 1000) + 300
+    };
+    const resumeApprovalRepo: any = {
+      decide: vi.fn(async () => ({
+        id: approvalId,
+        taskId: childId,
+        runId,
+        agentId: 'hermes',
+        action: token.action,
+        target: '+628123456789',
+        payload: { recipient: '+628123456789', channel: 'whatsapp', content: 'Approved' },
+        payloadHash: token.payloadHash,
+        reason: 'Approved action',
+        riskLevel: 'high',
+        status: 'approved',
+        requestedAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        decidedAt: new Date().toISOString(),
+        decidedBy: 'api-owner',
+        decisionNote: null
+      })),
+      issueExecutionToken: vi.fn(async () => token)
+    };
+    const resumeServer = buildServer({
+      config,
+      taskRepo: resumeTaskRepo,
+      taskQueue: resumeQueue,
+      approvalRepo: resumeApprovalRepo,
+      registry: defaultAgentRegistry,
+      processQueue: false
+    });
+
+    const response = await resumeServer.inject({
+      method: 'POST',
+      url: `/api/v1/approvals/${approvalId}/decision`,
+      payload: { status: 'approved' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(resumeApprovalRepo.issueExecutionToken).toHaveBeenCalledWith(approvalId);
+    expect(resumeQueue.enqueue).toHaveBeenCalledWith(expect.objectContaining({
+      task: parent,
+      runId: undefined,
+      approvalResume: { taskId: childId, runId, token }
+    }));
+  });
 });
