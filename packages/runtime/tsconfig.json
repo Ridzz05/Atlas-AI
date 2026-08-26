@@ -13,7 +13,8 @@
     { "path": "../memory" },
     { "path": "../providers" },
     { "path": "../agents" },
-    { "path": "../orchestration" }
+    { "path": "../orchestration" },
+    { "path": "../tools" }
   ],
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "test"]

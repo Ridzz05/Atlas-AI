@@ -112,6 +112,7 @@ export class RubricEngine {
   private static readonly rubrics = new Map<string, LeadRubricDefinition>([
     [DEFAULT_LEAD_RUBRIC.version, DEFAULT_LEAD_RUBRIC]
   ]);
+  private static defaultVersion = DEFAULT_LEAD_RUBRIC.version;
 
   public static register(rubric: LeadRubricDefinition): void {
     const validated = LeadRubricDefinitionSchema.parse(rubric);
@@ -121,7 +122,25 @@ export class RubricEngine {
     this.rubrics.set(validated.version, this.cloneRubric(validated));
   }
 
-  public static getRubric(version = DEFAULT_LEAD_RUBRIC.version): LeadRubricDefinition {
+  public static hydrate(rubrics: LeadRubricDefinition[], defaultVersion: string): void {
+    const validatedRubrics = rubrics.map(rubric => LeadRubricDefinitionSchema.parse(rubric));
+    const next = new Map<string, LeadRubricDefinition>();
+    for (const rubric of validatedRubrics) {
+      if (next.has(rubric.version)) {
+        throw new Error(`Rubric version '${rubric.version}' is duplicated during hydration.`);
+      }
+      next.set(rubric.version, this.cloneRubric(rubric));
+    }
+    if (!next.has(defaultVersion)) {
+      throw new Error(`Active rubric version '${defaultVersion}' is not present during hydration.`);
+    }
+
+    this.rubrics.clear();
+    for (const [version, rubric] of next) this.rubrics.set(version, rubric);
+    this.defaultVersion = defaultVersion;
+  }
+
+  public static getRubric(version = this.defaultVersion): LeadRubricDefinition {
     const rubric = this.rubrics.get(version);
     if (!rubric) {
       throw new Error(`Rubric version '${version}' is not registered.`);

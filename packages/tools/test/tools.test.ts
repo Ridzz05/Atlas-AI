@@ -719,6 +719,35 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(result.status).toBe('qualified');
   });
 
+  it('hydrates persisted rubric versions and selects the active version atomically', () => {
+    const activeRubric = {
+      ...DEFAULT_LEAD_RUBRIC,
+      version: 'v2-hydrated',
+      thresholds: { qualified: 70, needsReview: 40 }
+    };
+
+    try {
+      RubricEngine.hydrate([DEFAULT_LEAD_RUBRIC, activeRubric], activeRubric.version);
+
+      expect(RubricEngine.getRubric()).toEqual(activeRubric);
+      expect(RubricEngine.getRubric(DEFAULT_LEAD_RUBRIC.version)).toEqual(DEFAULT_LEAD_RUBRIC);
+    } finally {
+      RubricEngine.hydrate([DEFAULT_LEAD_RUBRIC], DEFAULT_LEAD_RUBRIC.version);
+    }
+  });
+
+  it('rejects duplicate or missing active rubric versions without replacing the current set', () => {
+    expect(() => RubricEngine.hydrate(
+      [DEFAULT_LEAD_RUBRIC, DEFAULT_LEAD_RUBRIC],
+      DEFAULT_LEAD_RUBRIC.version
+    )).toThrow('is duplicated during hydration');
+
+    expect(RubricEngine.getRubric().version).toBe(DEFAULT_LEAD_RUBRIC.version);
+    expect(() => RubricEngine.hydrate([DEFAULT_LEAD_RUBRIC], 'missing-version'))
+      .toThrow('is not present during hydration');
+    expect(RubricEngine.getRubric().version).toBe(DEFAULT_LEAD_RUBRIC.version);
+  });
+
   it('rejects malformed or unknown rubric versions', () => {
     expect(() => RubricEngine.register({
       ...DEFAULT_LEAD_RUBRIC,

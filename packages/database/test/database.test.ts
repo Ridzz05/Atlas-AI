@@ -14,6 +14,7 @@ describe('@atlas/database tests', () => {
     expect(files).toContain('006_durable_budget_reservations.sql');
     expect(files).toContain('007_run_leases.sql');
     expect(files).toContain('008_memory_maintenance.sql');
+    expect(files).toContain('009_persisted_lead_rubrics.sql');
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
@@ -44,6 +45,11 @@ describe('@atlas/database tests', () => {
       if (file === '008_memory_maintenance.sql') {
         expect(content).toContain('idx_memory_items_expiry_lifecycle');
         expect(content).toContain('expires_at');
+      }
+      if (file === '009_persisted_lead_rubrics.sql') {
+        expect(content).toContain('lead_rubrics');
+        expect(content).toContain('is_active');
+        expect(content).toContain('idx_lead_rubrics_single_active');
       }
     }
   });

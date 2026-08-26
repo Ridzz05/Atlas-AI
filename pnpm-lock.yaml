@@ -470,6 +470,9 @@ importers:
       '@atlas/shared':
         specifier: workspace:*
         version: link:../shared
+      '@atlas/tools':
+        specifier: workspace:*
+        version: link:../tools
     devDependencies:
       '@types/node':
         specifier: ^22.13.9

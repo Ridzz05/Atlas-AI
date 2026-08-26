@@ -23,6 +23,7 @@
     "@atlas/events": "workspace:*",
     "@atlas/orchestration": "workspace:*",
     "@atlas/providers": "workspace:*",
+    "@atlas/tools": "workspace:*",
     "@atlas/shared": "workspace:*"
   },
   "devDependencies": {
