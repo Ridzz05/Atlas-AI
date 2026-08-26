@@ -103,6 +103,25 @@ describe('worker lifecycle and task execution tests', () => {
     await runner.stop();
   });
 
+  it('does not duplicate a task while its base or deferred queue job is pending', async () => {
+    const taskRepo = {
+      list: vi.fn().mockResolvedValue([mockTask])
+    } as any;
+    const taskQueue = {
+      hasPending: vi.fn().mockResolvedValue(true),
+      enqueue: vi.fn().mockResolvedValue(mockTask.id),
+      process: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({ config, taskRepo, taskQueue });
+
+    await runner.start();
+
+    expect(taskQueue.hasPending).toHaveBeenCalledWith(mockTask.id);
+    expect(taskQueue.enqueue).not.toHaveBeenCalled();
+    await runner.stop();
+  });
+
   it('retries queued-task recovery while the worker remains online', async () => {
     vi.useFakeTimers();
     try {

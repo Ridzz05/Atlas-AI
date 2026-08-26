@@ -311,6 +311,10 @@ export class AgentWorkerRunner {
           continue;
         }
 
+        if (this.taskQueue.hasPending && (await this.taskQueue.hasPending(task.id))) {
+          continue;
+        }
+
         await this.taskQueue.enqueue({
           task,
           agent,

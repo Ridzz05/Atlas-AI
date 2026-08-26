@@ -21,6 +21,7 @@ export type TaskJobHandler = (data: TaskJobData) => Promise<unknown>;
 export interface TaskQueue {
   enqueue(data: TaskJobData): Promise<string>;
   defer?(data: TaskJobData, delayMs?: number): Promise<string>;
+  hasPending?(taskId: string): Promise<boolean>;
   process(concurrency: number, handler: TaskJobHandler): void;
   healthCheck(): Promise<boolean>;
   close(): Promise<void>;
@@ -34,9 +35,14 @@ export class InMemoryTaskQueue implements TaskQueue {
   private concurrency = 1;
   private closed = false;
   private deferredTimers = new Map<string, NodeJS.Timeout>();
+  private pendingTaskIds = new Set<string>();
+  private deferredTaskIds = new Set<string>();
 
   public async enqueue(data: TaskJobData): Promise<string> {
-    const jobId = data.runId || crypto.randomUUID();
+    const jobId = data.runId || data.task.id;
+    if (this.pendingTaskIds.has(data.task.id)) return jobId;
+
+    this.pendingTaskIds.add(data.task.id);
     this.queue.push(data);
     rootLogger.debug(`Task enqueued: ${data.task.id}, queue length: ${this.queue.length}`);
     this.dispatch();
@@ -44,15 +50,21 @@ export class InMemoryTaskQueue implements TaskQueue {
   }
 
   public async defer(data: TaskJobData, delayMs = 5000): Promise<string> {
-    const jobId = `deferred:${data.runId || data.task.id}`;
-    if (!this.deferredTimers.has(jobId)) {
+    const jobId = `deferred:${data.task.id}`;
+    if (!this.deferredTaskIds.has(data.task.id)) {
+      this.deferredTaskIds.add(data.task.id);
       const timer = setTimeout(() => {
-        this.deferredTimers.delete(jobId);
+        this.deferredTimers.delete(data.task.id);
+        this.deferredTaskIds.delete(data.task.id);
         void this.enqueue(data);
       }, delayMs);
-      this.deferredTimers.set(jobId, timer);
+      this.deferredTimers.set(data.task.id, timer);
     }
     return jobId;
+  }
+
+  public async hasPending(taskId: string): Promise<boolean> {
+    return this.pendingTaskIds.has(taskId) || this.deferredTaskIds.has(taskId);
   }
 
   public process(concurrency: number, handler: TaskJobHandler): void {
@@ -80,6 +92,7 @@ export class InMemoryTaskQueue implements TaskQueue {
         } catch (err) {
           rootLogger.error(`Error processing job for task ${item.task.id}`, { error: String(err) });
         } finally {
+          this.pendingTaskIds.delete(item.task.id);
           this.activeCount--;
           this.dispatch();
         }
@@ -91,6 +104,8 @@ export class InMemoryTaskQueue implements TaskQueue {
     this.closed = true;
     this.isProcessing = false;
     this.queue = [];
+    this.pendingTaskIds.clear();
+    this.deferredTaskIds.clear();
     for (const timer of this.deferredTimers.values()) clearTimeout(timer);
     this.deferredTimers.clear();
   }

@@ -23,8 +23,7 @@ export class BullMqTaskQueue implements TaskQueue {
 
   public async enqueue(data: TaskJobData): Promise<string> {
     if (this.closed) throw new Error(`Queue '${this.queueName}' is closed`);
-    const job = await this.queue.add('agent-task', data, {
-      jobId: data.runId || data.task.id,
+    const job = await this.addOrReplaceTerminalJob(data, data.runId || data.task.id, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 1000 },
       removeOnComplete: { age: 86400, count: 1000 },
@@ -36,16 +35,30 @@ export class BullMqTaskQueue implements TaskQueue {
 
   public async defer(data: TaskJobData, delayMs = 5000): Promise<string> {
     if (this.closed) throw new Error(`Queue '${this.queueName}' is closed`);
-    const job = await this.queue.add('agent-task', data, {
-      jobId: `deferred:${data.runId || data.task.id}:${crypto.randomUUID()}`,
+    const job = await this.addOrReplaceTerminalJob(data, `deferred:${data.runId || data.task.id}`, {
       delay: delayMs,
       attempts: 3,
       backoff: { type: 'exponential', delay: 1000 },
-      removeOnComplete: { age: 86400, count: 1000 },
-      removeOnFail: { age: 604800, count: 5000 }
+      removeOnComplete: true,
+      removeOnFail: true
     });
 
     return String(job.id);
+  }
+
+  public async hasPending(taskId: string): Promise<boolean> {
+    if (this.closed) return false;
+
+    for (const jobId of [taskId, `deferred:${taskId}`]) {
+      const job = await this.queue.getJob(jobId);
+      if (!job) continue;
+      const state = await job.getState();
+      if (state === 'waiting' || state === 'active' || state === 'delayed' || state === 'prioritized' || state === 'waiting-children') {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   public process(concurrency: number, handler: TaskJobHandler): void {
@@ -86,5 +99,28 @@ export class BullMqTaskQueue implements TaskQueue {
     await this.worker?.close();
     await this.queue.close();
     this.worker = null;
+  }
+
+  private async addOrReplaceTerminalJob(
+    data: TaskJobData,
+    jobId: string,
+    options: {
+      delay?: number;
+      attempts: number;
+      backoff: { type: 'exponential'; delay: number };
+      removeOnComplete: boolean | { age: number; count: number };
+      removeOnFail: boolean | { age: number; count: number };
+    }
+  ) {
+    const existing = await this.queue.getJob(jobId);
+    if (existing) {
+      const state = await existing.getState();
+      if (state === 'waiting' || state === 'active' || state === 'delayed' || state === 'prioritized' || state === 'waiting-children') {
+        return existing;
+      }
+      await existing.remove();
+    }
+
+    return this.queue.add('agent-task', data, { jobId, ...options });
   }
 }

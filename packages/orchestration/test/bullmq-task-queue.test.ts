@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { BullMqTaskQueue } from '../src/queue/bullmq-task-queue.js';
 
 const add = vi.fn().mockResolvedValue({ id: 'job-1' });
+const getJob = vi.fn().mockResolvedValue(null);
 const getJobCounts = vi.fn().mockResolvedValue({ waiting: 0, active: 0 });
 const queueClose = vi.fn().mockResolvedValue(undefined);
 const workerClose = vi.fn().mockResolvedValue(undefined);
@@ -10,6 +11,7 @@ const workerOn = vi.fn();
 vi.mock('bullmq', () => ({
   Queue: class FakeQueue {
     add = add;
+    getJob = getJob;
     getJobCounts = getJobCounts;
     close = queueClose;
   },
@@ -100,8 +102,61 @@ describe('BullMqTaskQueue', () => {
       expect.objectContaining({
         delay: 5000,
         attempts: 3,
-        jobId: expect.stringMatching(/^deferred:task-deferred:/)
+        jobId: 'deferred:task-deferred',
+        removeOnComplete: true,
+        removeOnFail: true
       })
+    );
+    await queue.close();
+  });
+
+  it('reports an existing waiting or delayed task job as pending', async () => {
+    const pendingJob = { getState: vi.fn().mockResolvedValue('delayed') };
+    getJob.mockResolvedValueOnce(null).mockResolvedValueOnce(pendingJob);
+    const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-pending' });
+
+    await expect(queue.hasPending('task-pending')).resolves.toBe(true);
+    expect(getJob).toHaveBeenNthCalledWith(1, 'task-pending');
+    expect(getJob).toHaveBeenNthCalledWith(2, 'deferred:task-pending');
+    await queue.close();
+  });
+
+  it('does not create a second deferred job while the first one is delayed', async () => {
+    const pendingJob = { id: 'deferred:task-locked', getState: vi.fn().mockResolvedValue('delayed') };
+    getJob.mockResolvedValue(pendingJob);
+    const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-defer-dedup' });
+
+    const jobId = await queue.defer(
+      {
+        task: { id: 'task-locked' } as never,
+        agent: {} as never,
+        prompt: 'stay deferred'
+      },
+      5000
+    );
+
+    expect(jobId).toBe('deferred:task-locked');
+    expect(add).not.toHaveBeenCalled();
+    await queue.close();
+  });
+
+  it('removes terminal jobs before re-enqueueing a still-queued task', async () => {
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const terminalJob = { getState: vi.fn().mockResolvedValue('failed'), remove };
+    getJob.mockResolvedValue(terminalJob);
+    const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-requeue' });
+
+    await queue.enqueue({
+      task: { id: 'task-requeue' } as never,
+      agent: {} as never,
+      prompt: 'requeue task'
+    });
+
+    expect(remove).toHaveBeenCalledOnce();
+    expect(add).toHaveBeenCalledWith(
+      'agent-task',
+      expect.objectContaining({ prompt: 'requeue task' }),
+      expect.objectContaining({ jobId: 'task-requeue' })
     );
     await queue.close();
   });
