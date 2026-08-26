@@ -8,10 +8,10 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `cdffa46`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `95aba52`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions). API input validation, queue readiness, and request-ID correlation regressions also pass.
-- `pnpm lint`: runs a repository source-hygiene gate over 144 files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
+- `pnpm lint`: runs a repository source-hygiene gate over 144 files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, Compose config validation, and a Docker Compose boot/readiness/backup-restore smoke job; the remote job still needs to execute successfully.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
 - Telegram polling, durable approval decisions, update claims, pause/emergency control state, and durable active-run cancellation are wired; cross-restart recovery still needs an integration drill.
 - Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, realtime refresh, and read-only environment-backed settings use authenticated APIs. Event reconnect replay is implemented; no sample operational data remains in the dashboard.
@@ -53,7 +53,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 3. **No real outbound connector is configured.** Approved execution now mints an exact, durable, one-time token and resumes the paused task, but `EXTERNAL_WRITES_ENABLED` must remain false until a real connector, owner decision, and integration tests are approved.
 4. **Research is deliberately fail-closed rather than live.** Without an injected verified provider, search/company lookup returns no external facts. A real adapter with source, freshness, confidence, and prompt-injection boundaries is still required for the demo workflow.
 5. **Dashboard observability is intentionally read-only for governance.** Authenticated event SSE with replay, read-only artifact/memory/audit APIs, durable aggregate cost/budget metrics, and environment-backed settings are exposed. Mutable settings remain deployment-only by design.
-6. **Operational gates are incomplete.** Lint is now a real CI gate, but there is no verified backup restore drill and Docker boot/recovery remains untested here.
+6. **Operational gates are incomplete.** Lint is now a real CI gate and CI automation now covers Compose boot/readiness and backup restore, but no successful Docker run has been observed here and alerting/retention/rollback remain.
 
 ### Required / P1 — make the core system reliable
 
@@ -81,7 +81,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ### Required / P4 — release and operations gates
 
-1. Add formatter enforcement and extend CI with integration, migration, and Docker Compose recovery checks; CI now runs the repository lint gate, typecheck, unit tests, production build, and Compose configuration validation.
+1. Add formatter enforcement and extend CI with integration, migration, and Docker Compose recovery checks; CI now runs the repository lint gate, typecheck, unit tests, production build, Compose configuration validation, and the Compose smoke/backup-restore job (first successful remote run pending).
 2. Add integration/e2e tests for DB+Redis, restart recovery, duplicate Telegram updates, approval execute-once, rejected approval no-side-effect, malicious content, budget exhaustion, and emergency stop.
 3. Production Compose now passes the application’s `MODEL_PROVIDER`, `MODEL_API_KEY`, `MODEL_BASE_URL`, and `MODEL_NAME` settings; the shared schema allowlists providers, maps provider-specific endpoints, and rejects mock/default-secret or incomplete provider configuration in production. Verify the clean-environment secret policy in CI and remove any remaining non-production defaults before launch.
 4. Mount/persist artifact storage, add backup verification and restore drills, and add alerting, retention policy, and rollback instructions; worker/Telegram dependency-aware readiness endpoints are now implemented.
@@ -147,11 +147,11 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `cdffa46`. The full code gate through `cdffa46` passed: `pnpm.cmd lint` (144 files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). The latest runtime suite passed (3 tests), including the dependency-aware `/health` and `/ready` contract. The Compose slices `58a42de`, `ee63986`, and `cdffa46` add service healthchecks, healthy-dependency ordering, environment-driven Caddy hostname/TLS configuration, and dependency-aware worker/Telegram readiness; Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, and restart recovery remain unverified.
+Execution is committed through `95aba52`. The full code gate through `95aba52` passed: `pnpm.cmd lint` (144 files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). The latest database suite passed (30 tests), including the PostgreSQL migration advisory-lock contract. The Compose slices `58a42de`, `ee63986`, and `cdffa46` add service healthchecks, healthy-dependency ordering, environment-driven Caddy hostname/TLS configuration, and dependency-aware worker/Telegram readiness; `95aba52` adds the Docker Compose boot/readiness and backup-restore CI smoke job. Docker is unavailable in this environment, so a successful PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, backup restore, and restart recovery remain unverified.
 
 Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/Redis-backed rate limiting with fail-closed outage behavior, dependency-aware worker/Telegram readiness and Compose healthchecks for API, worker, Telegram, dashboard, and Caddy, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, explicit provider adapter routing with production configuration validation, and the CI lint/build/Compose gates.
 
-Remaining release blockers: no approved outbound connector, no verified real research adapters, no Docker boot/recovery/backup drill, formatter enforcement, production recovery/lease observability, and a configured per-agent aggregate budget policy if required by the owner.
+Remaining release blockers: no approved outbound connector, no verified real research adapters, no successful Docker boot/recovery/backup run yet, formatter enforcement, production recovery/lease observability, and a configured per-agent aggregate budget policy if required by the owner.
 
 ## Release gate
 

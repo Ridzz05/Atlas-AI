@@ -39,6 +39,14 @@ docker compose -f docker-compose.prod.yml up -d --build
 ./scripts/healthcheck.sh
 ```
 
+For a clean-host verification that also exercises image builds, dependency-aware worker/Telegram readiness, agent seeding, and PostgreSQL backup/restore, run:
+
+```bash
+bash ./scripts/ci-compose-smoke.sh
+```
+
+The smoke test uses an isolated Compose project and removes its temporary containers and volumes when it finishes. Run it only against a disposable verification environment.
+
 ### 2.2 Zero-Downtime Application Update
 ```bash
 # Pull newest code
