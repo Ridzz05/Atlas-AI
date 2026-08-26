@@ -30,6 +30,9 @@ jobs:
       - name: Dependency audit
         run: pnpm audit --audit-level high
 
+      - name: Dependency signature audit
+        run: pnpm audit signatures
+
       - name: Lint source files
         run: pnpm lint
 
