@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling, plan validation, durable approval request/decision/token/claim/finalize/resume, and API-backed dashboard task/approval/agent views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Dashboard artifacts, memory, audit, and settings APIs plus realtime events are not exposed. Compose boot and recovery drills require a Docker host.
+> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling with durable update/control state, plan validation, durable approval request/decision/token/claim/finalize/resume, PostgreSQL event streaming, metadata APIs, and API-backed dashboard task/approval/agent/artifact/audit/memory views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Full task/tool-call history, backup/recovery drills, and clean Compose boot still require a Docker host and release CI.
 
 ---
 

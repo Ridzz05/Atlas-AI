@@ -55,7 +55,6 @@ export default function CommandCenterPage() {
     const stream = new EventSource('/api/atlas/events/stream');
     const refresh = () => { void loadOverview(); };
     stream.onmessage = refresh;
-    stream.onerror = () => stream.close();
     return () => stream.close();
   }, []);
 

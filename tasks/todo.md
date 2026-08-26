@@ -36,13 +36,13 @@
 - [x] Implement Telegram polling transport, allowlist, response delivery, and callback acknowledgement.
 - [x] Route Telegram and dashboard approval/task mutations through durable repositories where available.
 - [x] Replace dashboard operational sample data with API-backed pages and honest unavailable states.
-- [ ] Add authenticated realtime events plus cross-process deduplication/reconnect behavior.
+- [ ] Add reconnect replay semantics for authenticated realtime events; the PostgreSQL-backed SSE stream and cross-process event delivery are implemented.
 
 ## Checkpoint: User lifecycle
 
 - [x] Telegram `/new` and dashboard task creation enqueue persisted tasks through the shared runtime.
 - [x] Dashboard task/status/approval flows work after refresh against the API.
-- [ ] Duplicate Telegram updates remain deduplicated across process restart.
+- [x] Duplicate Telegram updates remain deduplicated across process restart through PostgreSQL claims.
 - [ ] Emergency stop blocks intake and cancels active runs durably.
 
 ## Phase 4 — Make research and memory truthful
@@ -58,12 +58,12 @@
 - [ ] Add lint/format scripts and CI gates for lint, typecheck, test, build, migrations, and Compose config.
 - [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
 - [x] Align production environment variable names and remove insecure production Compose fallbacks.
-- [ ] Persist artifact metadata and verify backup/restore operations.
+- [x] Persist artifact metadata and expose read-only artifact, memory, and audit APIs; backup/restore verification remains open.
 - [x] Update implementation blueprint and runbook with current phase status and known limitations.
 
 ## Current execution checkpoint
 
-Implemented through commit `2b28ec2`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling, API-backed dashboard control surfaces, and honest unavailable states for unimplemented dashboard capabilities. Full local gates pass: typecheck 26/26, test 26/26, build 15/15. Docker-backed boot/recovery, real providers/connectors, durable Telegram controls, realtime dashboard events, audit APIs, and CI lint gates remain open.
+Implemented through commit `2c83b0e`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE, artifact/audit repositories, memory query API, and API-backed dashboard observability pages. Full local gates pass: typecheck 26/26, test 26/26, build 15/15. Docker-backed boot/recovery, real providers/connectors, full task/tool-call history, reconnect replay, backup restore, and CI lint gates remain open.
 
 ## Final release checkpoint
 

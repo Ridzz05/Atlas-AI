@@ -4,17 +4,17 @@
 
 Audit basis: `ATLAS_AI_OS_IMPLEMENTATION.md`, source tree, Docker/operations files, environment key map, test/build commands, and git history as of 26 August 2026.
 
-Current verdict: **the repository now has a durable, typed, testable multi-service MVP, but the production release gate is still open**. Runtime composition, PostgreSQL migrations, BullMQ, Telegram polling, API/dashboard control paths, plan validation, and durable approval resume are implemented. Do not enable external writes or call the stack production-ready until Docker-backed boot/recovery, real research adapters, durable Telegram controls, and an approved outbound connector are verified.
+Current verdict: **the repository now has a durable, typed, testable multi-service MVP, but the production release gate is still open**. Runtime composition, PostgreSQL migrations, BullMQ, Telegram polling and durable control state, API/dashboard control paths, plan validation, and durable approval resume are implemented. Do not enable external writes or call the stack production-ready until Docker-backed boot/recovery, real research adapters, active-run recovery, and an approved outbound connector are verified.
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `7be9e43`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `2c83b0e`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions).
 - `pnpm lint`: exits 0 but executes **zero tasks**; no workspace package defines a `lint` script.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
-- Telegram polling and durable approval decisions are wired, but Telegram deduplication and emergency-stop state are still process-local.
-- Dashboard tasks, approvals, agents, command intake, and overview metrics use the API; artifacts, memory, audit, and settings now show explicit unavailable states until their APIs are implemented. No sample operational data remains in the dashboard.
+- Telegram polling, durable approval decisions, update claims, and pause/emergency control state are wired; active-run cancellation and cross-restart recovery still need an integration drill.
+- Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, and realtime refresh use authenticated APIs. Event reconnect replay and settings APIs remain open; no sample operational data remains in the dashboard.
 
 ## Target architecture and dependency order
 
@@ -38,40 +38,40 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 | Phase 0 — Foundation | Implemented locally | Shared runtime, migrations, agent seeding, auth/CORS, environment validation, and readiness checks are wired. Clean Compose boot is still unverified because Docker is unavailable here. |
 | Phase 1 — Task engine | Implemented locally | BullMQ/Redis, retries/idempotency, worker shutdown, PostgreSQL events, plans/runs/tasks, and queue-backed execution are wired. Lease recovery/global budget enforcement still need production drills. |
 | Phase 2 — Delegation | Mostly implemented | Plan validation, depth guard, fail-closed QA, approval-pending propagation, and parent resume are wired. Full persisted dependency/tool-call/audit history remains incomplete. |
-| Phase 3 — Telegram | Mostly implemented | Polling transport, allowlist, response delivery, callbacks, and durable approval decisions are wired. Deduplication, pause, and emergency-stop state are process-local. |
-| Phase 4 — Memory | Incomplete | Database/lexical memory stores exist, but runtime agent wiring, dashboard query API, freshness jobs, and canonical-memory audit are incomplete. |
+| Phase 3 — Telegram | Mostly implemented | Polling transport, allowlist, response delivery, callbacks, PostgreSQL update deduplication, and durable pause/emergency control state are wired. Active-run cancellation and recovery drills remain. |
+| Phase 4 — Memory | Incomplete | Database/lexical memory stores and authenticated dashboard query APIs exist, but MemoryTools agent wiring, freshness jobs, and canonical-memory audit are incomplete. |
 | Phase 5 — Tools/workflow | Mostly implemented with safe gaps | Tool gateway, output schemas, artifact containment, durable approval request/claim/finalize/resume, and fail-closed unverified research are wired. Real research/enrichment adapters and an outbound connector remain intentionally disabled. |
-| Phase 6 — Dashboard | Partially connected | Tasks, approvals, agents, overview, and command intake use the API with loading/error/empty states. No realtime stream; artifacts, memory, audit, and settings APIs are not exposed. |
-| Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, readiness, and runbook exist. Rate limiting and Telegram controls are process-local; Compose boot, recovery, backup restore, alerting, and CI lint gates remain. |
+| Phase 6 — Dashboard | Mostly connected | Tasks, approvals, agents, overview, command intake, artifacts, audit, and memory use API loading/error/empty states. Authenticated SSE refresh is wired; event replay/reconnect semantics and settings APIs remain. |
+| Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, readiness, and runbook exist. Rate limiting remains process-local; Compose boot, recovery, backup restore, alerting, and CI lint gates remain. |
 
 ## Findings ordered by leverage
 
 ### Critical / P0 — block production
 
 1. **Compose boot and recovery are not verified in this environment.** The code paths now construct shared PostgreSQL/BullMQ runtime services, but Docker is unavailable, so empty-DB migration, cross-process execution, restart recovery, and outage readiness remain release blockers.
-2. **Telegram control state is not durable.** Polling, allowlist, delivery, callbacks, and approval decisions work locally, but update deduplication, pause, and emergency-stop state are process-local and can be lost on restart.
+2. **Telegram active-run control is not fully durable.** Update deduplication and pause/emergency control state are persisted, but active-run cancellation propagation and restart recovery still require an integration drill.
 3. **No real outbound connector is configured.** Approved execution now mints an exact, durable, one-time token and resumes the paused task, but `EXTERNAL_WRITES_ENABLED` must remain false until a real connector, owner decision, and integration tests are approved.
 4. **Research is deliberately fail-closed rather than live.** Without an injected verified provider, search/company lookup returns no external facts. A real adapter with source, freshness, confidence, and prompt-injection boundaries is still required for the demo workflow.
-5. **Dashboard observability is incomplete.** Tasks, approvals, agents, command intake, and overview metrics are API-backed; no authenticated realtime stream exists, and artifact, memory, audit, and settings query/mutation APIs are not exposed.
-6. **Rate limiting and Telegram guards are process-local.** API bearer auth and strict CORS are present, but rate-limit buckets and Telegram dedup/emergency state do not coordinate across replicas.
-7. **Operational gates are incomplete.** There are no configured lint tasks, no Docker Compose/recovery CI gate, no verified backup restore drill, and no durable audit-event query path.
+5. **Dashboard observability is incomplete.** Authenticated event SSE and read-only artifact/memory/audit APIs are exposed, but reconnect replay, aggregate cost views, and settings APIs are not complete.
+6. **Rate limiting is process-local.** API bearer auth and strict CORS are present, but rate-limit buckets do not coordinate across replicas; Telegram update/control state now uses PostgreSQL.
+7. **Operational gates are incomplete.** There are no configured lint tasks, no Docker Compose/recovery CI gate, and no verified backup restore drill.
 
 ### Required / P1 — make the core system reliable
 
 1. Add a single runtime composition/bootstrap layer shared by API, worker, and Telegram so dependencies are constructed consistently.
-2. Run migrations and seed the five agent definitions before readiness. Populate `agents`, persist plans, child dependencies, runs, messages, tool calls, artifacts, approvals, and audit events.
+2. Run migrations and seed the five agent definitions before readiness. Populate `agents`, persist plans, child dependencies, runs, messages, tool calls, artifacts, approvals, and audit events. Artifact metadata and successful tool-call audit writes are now wired; plans/messages/tool-call records remain.
 3. BullMQ/Redis, job idempotency, attempts/backoff, and graceful shutdown are implemented. Add lease/heartbeat observability, stale-run recovery, and durable cancellation propagation.
-4. Add durable event publication/subscription (PostgreSQL outbox plus Redis pub/sub is sufficient for the MVP) and expose an authenticated SSE/WebSocket stream to the dashboard.
+4. Add durable event publication/subscription (PostgreSQL outbox plus Redis pub/sub is sufficient for the MVP) and expose an authenticated SSE/WebSocket stream to the dashboard. The PostgreSQL outbox/SSE path is now implemented; replay semantics remain.
 5. Enforce global daily/per-run/agent budgets and configured `MAX_DELEGATION_DEPTH`; plan agent IDs, max eight steps, unique IDs, dependency references, and cycles are now validated before execution. Persisted budget accounting remains a release follow-up.
 6. Enforce agent tool allowlists and data scopes in `ToolRegistry`; validate output with `outputSchema`; persist every call and audit record.
 7. Implemented durable approval request/decision/token/claim/finalize/resume flow with exact payload hash and atomic compare-and-set. Keep external writes disabled until a real connector is explicitly configured.
 
 ### Required / P2 — restore the user control plane
 
-1. Implement Telegram polling or webhook mode with secret verification, outbound response delivery, callback acknowledgement, persistent update deduplication, and dependency injection into the command router.
+1. Implement Telegram polling or webhook mode with secret verification, outbound response delivery, callback acknowledgement, persistent update deduplication, durable control state, and dependency injection into the command router. Active-run cancellation/recovery remains.
 2. Route `/new`, `/status`, `/task`, `/stop`, `/pause`, `/resume`, `/emergency_stop`, and approval actions through the same control service as the web UI.
 3. Add API authentication suitable for the single-user MVP, strict CORS, rate limits, request IDs, and owner-only mutation checks.
-4. Dashboard tasks, approvals, agents, command intake, and overview now use API queries with loading/error/empty states. Add an authenticated realtime event stream and APIs for the remaining capability pages.
+4. Dashboard tasks, approvals, agents, command intake, overview, artifacts, audit, and memory now use authenticated API queries with loading/error/empty states. Add event replay/reconnect semantics and the remaining settings API.
 
 ### Required / P3 — make intelligence truthful and useful
 
@@ -148,11 +148,11 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `2b28ec2`. The full local gates pass: `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
+Execution is committed through `2c83b0e`. The full local gates pass: `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
 
-Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY`, production API auth/CORS/rate limiting, artifact containment, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling transport, API-backed dashboard control surfaces, and explicit unavailable states for unimplemented dashboard capabilities.
+Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, audit/memory metadata APIs, and API-backed dashboard observability pages.
 
-Remaining release blockers: no approved outbound connector, no verified real research adapters, Telegram deduplication/pause/emergency-stop state is process-local, no authenticated realtime dashboard stream, no durable audit query path, no Docker boot/recovery/backup drill, and no configured lint/CI gate.
+Remaining release blockers: no approved outbound connector, no verified real research adapters, active-run cancellation/recovery drills, full plan/message/tool-call persistence, event replay semantics, no Docker boot/recovery/backup drill, and no configured lint/CI gate.
 
 ## Release gate
 
