@@ -6,7 +6,7 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 
 async function proxy(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const { path } = await context.params;
-  const baseUrl = (process.env.ATLAS_API_BASE_URL || 'http://agent-service:4000').replace(/\/$/, '');
+  const baseUrl = (process.env.ATLAS_API_BASE_URL || 'http://agent-service:4000/api/v1').replace(/\/$/, '');
   const targetUrl = `${baseUrl}/${path.map(segment => encodeURIComponent(segment)).join('/')}${request.nextUrl.search}`;
   const headers = new Headers(request.headers);
   headers.delete('host');

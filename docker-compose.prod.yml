@@ -192,7 +192,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost/api}
-      ATLAS_API_BASE_URL: http://agent-service:4000
+      ATLAS_API_BASE_URL: http://agent-service:4000/api/v1
       ATLAS_API_AUTH_TOKEN: ${API_AUTH_TOKEN:?API_AUTH_TOKEN must be set}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]

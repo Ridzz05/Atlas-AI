@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { NextRequest } from 'next/server';
 import { defaultAgentRegistry } from '@atlas/agents';
 import { EventTypeSchema } from '@atlas/shared';
 import { subscribeToAtlasEvents } from '../src/lib/event-stream';
+import { GET as proxyGet } from '../src/app/api/atlas/[...path]/route';
 
 class FakeEventSource {
   private listeners = new Map<string, Set<EventListener>>();
@@ -56,5 +60,37 @@ describe('@atlas/dashboard Integration Tests', () => {
     stream.emit('task.updated');
     expect(refresh).toHaveBeenCalledTimes(3);
     expect(EventTypeSchema.options).toContain('task.updated');
+  });
+
+  it('proxies dashboard API paths to the versioned agent-service API', async () => {
+    const previousBaseUrl = process.env.ATLAS_API_BASE_URL;
+    delete process.env.ATLAS_API_BASE_URL;
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const response = await proxyGet(
+        new NextRequest('http://dashboard.test/api/atlas/control'),
+        { params: Promise.resolve({ path: ['control'] }) }
+      );
+
+      expect(response.status).toBe(200);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://agent-service:4000/api/v1/control',
+        expect.objectContaining({ method: 'GET', cache: 'no-store' })
+      );
+    } finally {
+      if (previousBaseUrl === undefined) delete process.env.ATLAS_API_BASE_URL;
+      else process.env.ATLAS_API_BASE_URL = previousBaseUrl;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('keeps production Compose aligned with the versioned dashboard proxy target', () => {
+    const compose = readFileSync(resolve(process.cwd(), '../../docker-compose.prod.yml'), 'utf8');
+    expect(compose).toContain('ATLAS_API_BASE_URL: http://agent-service:4000/api/v1');
   });
 });
