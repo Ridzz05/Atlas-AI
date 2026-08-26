@@ -68,7 +68,7 @@ export class BraveResearchProvider implements ResearchProvider {
     this.fetchImpl = options.fetchImpl || fetch;
     this.now = options.now || (() => new Date());
     this.safeFetcher = new SafeWebFetcher({
-      fetchImpl: this.fetchImpl,
+      fetchImpl: options.fetchImpl,
       dnsLookup: options.dnsLookup,
       maxResponseBytes: options.maxResponseBytes,
       maxRedirects: options.maxRedirects,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BraveResearchProvider, createResearchProvider, isPublicIpAddress } from '../src/index.js';
+import { BraveResearchProvider, createResearchProvider, isPublicIpAddress, SafeWebFetcher } from '../src/index.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -12,6 +12,7 @@ describe('BraveResearchProvider', () => {
   it('recognizes private, reserved, and public IPv4/IPv6 DNS results', () => {
     expect(isPublicIpAddress('10.0.0.1')).toBe(false);
     expect(isPublicIpAddress('169.254.169.254')).toBe(false);
+    expect(isPublicIpAddress('192.0.2.1')).toBe(false);
     expect(isPublicIpAddress('::1')).toBe(false);
     expect(isPublicIpAddress('fc00::1')).toBe(false);
     expect(isPublicIpAddress('::ffff:127.0.0.1')).toBe(false);
@@ -182,6 +183,33 @@ describe('BraveResearchProvider', () => {
     });
     expect(dnsLookup).toHaveBeenCalledTimes(2);
     expect(fetchImpl.mock.calls.every(([, init]) => init?.redirect === 'manual')).toBe(true);
+  });
+
+  it('passes the validated DNS address to the outbound transport to prevent DNS rebinding', async () => {
+    const requestImpl = vi.fn().mockResolvedValue(
+      new Response('Pinned public content', {
+        headers: { 'content-type': 'text/plain' }
+      })
+    );
+    const fetcher = new SafeWebFetcher({
+      requestImpl,
+      fetchImpl: vi.fn().mockResolvedValue(
+        new Response('Pinned public content', {
+          headers: { 'content-type': 'text/plain' }
+        })
+      ),
+      dnsLookup: vi.fn().mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+    });
+
+    await expect(fetcher.fetch('https://example.com/research')).resolves.toMatchObject({
+      content: 'Pinned public content',
+      sourceUrl: 'https://example.com/research'
+    });
+    expect(requestImpl).toHaveBeenCalledWith(
+      'https://example.com/research',
+      { address: '93.184.216.34', family: 4 },
+      expect.objectContaining({ redirect: 'manual' })
+    );
   });
 
   it('rejects private DNS results and oversized responses before exposing content', async () => {

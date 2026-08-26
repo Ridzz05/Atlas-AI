@@ -1,4 +1,7 @@
 import { lookup as defaultDnsLookup } from 'node:dns/promises';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
+import { Readable } from 'node:stream';
 import type { ResearchFreshness, ResearchSensitivity } from '../types.js';
 import { isPublicIpAddress, SafeWebUrlSchema } from './url-safety.js';
 
@@ -9,8 +12,12 @@ export interface DnsLookupRecord {
 
 export type DnsLookup = (hostname: string, options: { all: true; verbatim: true }) => Promise<DnsLookupRecord[]>;
 
+export type PinnedRequest = (url: string, address: DnsLookupRecord, init: RequestInit) => Promise<Response>;
+
 export interface SafeWebFetcherOptions {
+  /** Test seam; production uses the pinned Node transport when this is omitted. */
   fetchImpl?: typeof fetch;
+  requestImpl?: PinnedRequest;
   dnsLookup?: DnsLookup;
   maxResponseBytes?: number;
   maxRedirects?: number;
@@ -22,7 +29,7 @@ const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 const TEXT_CONTENT_TYPES = new Set(['application/json', 'application/xhtml+xml', 'application/xml', 'text/html', 'text/plain', 'text/xml']);
 
 export class SafeWebFetcher {
-  private readonly fetchImpl: typeof fetch;
+  private readonly requestImpl: PinnedRequest;
   private readonly dnsLookup: DnsLookup;
   private readonly maxResponseBytes: number;
   private readonly maxRedirects: number;
@@ -30,7 +37,7 @@ export class SafeWebFetcher {
   private readonly now: () => Date;
 
   constructor(options: SafeWebFetcherOptions = {}) {
-    this.fetchImpl = options.fetchImpl || fetch;
+    this.requestImpl = options.requestImpl || (options.fetchImpl ? (url, _address, init) => options.fetchImpl!(url, init) : requestPinned);
     this.dnsLookup = options.dnsLookup || ((hostname, lookupOptions) => defaultDnsLookup(hostname, lookupOptions));
     this.maxResponseBytes = options.maxResponseBytes ?? 100_000;
     this.maxRedirects = options.maxRedirects ?? 3;
@@ -63,8 +70,8 @@ export class SafeWebFetcher {
     let currentUrl = this.parseSafeUrl(url);
 
     for (let redirectCount = 0; redirectCount <= this.maxRedirects; redirectCount++) {
-      await this.assertPublicDns(currentUrl.hostname);
-      const request = await this.fetchWithTimeout(currentUrl.toString(), signal);
+      const resolvedAddress = await this.assertPublicDns(currentUrl.hostname);
+      const request = await this.fetchWithTimeout(currentUrl.toString(), resolvedAddress, signal);
       try {
         const response = request.response;
 
@@ -111,7 +118,7 @@ export class SafeWebFetcher {
     return new URL(parsed.data);
   }
 
-  private async assertPublicDns(hostname: string): Promise<void> {
+  private async assertPublicDns(hostname: string): Promise<DnsLookupRecord> {
     let records: DnsLookupRecord[];
     let timedOut = false;
     let timeout: NodeJS.Timeout | undefined;
@@ -135,10 +142,14 @@ export class SafeWebFetcher {
     if (!records.length || records.some(record => !isPublicIpAddress(record.address))) {
       throw new Error(`Safe web fetch rejected private or non-public DNS result for '${hostname}'.`);
     }
+    const firstRecord = records[0];
+    if (!firstRecord) throw new Error(`Safe web fetch could not resolve public hostname '${hostname}'.`);
+    return firstRecord;
   }
 
   private async fetchWithTimeout(
     url: string,
+    address: DnsLookupRecord,
     signal?: AbortSignal
   ): Promise<{ response: Response; didTimeout: () => boolean; cleanup: () => void }> {
     const controller = new AbortController();
@@ -159,7 +170,7 @@ export class SafeWebFetcher {
     };
 
     try {
-      const response = await this.fetchImpl(url, {
+      const response = await this.requestImpl(url, address, {
         method: 'GET',
         redirect: 'manual',
         headers: {
@@ -222,4 +233,57 @@ export class SafeWebFetcher {
       throw new Error(`Safe web fetch response exceeds ${this.maxResponseBytes} bytes.`);
     }
   }
+}
+
+function requestPinned(url: string, address: DnsLookupRecord, init: RequestInit): Promise<Response> {
+  const parsed = new URL(url);
+  const requestFunction = parsed.protocol === 'https:' ? httpsRequest : httpRequest;
+  const headers = new Headers(init.headers);
+  headers.set('host', parsed.host);
+
+  return new Promise((resolve, reject) => {
+    const request = requestFunction(
+      {
+        protocol: parsed.protocol,
+        hostname: address.address,
+        family: address.family,
+        port: parsed.port ? Number(parsed.port) : parsed.protocol === 'https:' ? 443 : 80,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: init.method || 'GET',
+        headers: Object.fromEntries(headers.entries()),
+        signal: init.signal || undefined,
+        ...(parsed.protocol === 'https:' ? { servername: parsed.hostname.replace(/^\[|\]$/g, '') } : {})
+      },
+      response => {
+        const status = response.statusCode || 0;
+        if (status < 200 || status > 599) {
+          response.resume();
+          reject(new Error(`Safe web fetch received invalid HTTP status ${status}.`));
+          return;
+        }
+
+        const responseHeaders = new Headers();
+        for (const [name, value] of Object.entries(response.headers)) {
+          if (Array.isArray(value)) {
+            for (const item of value) responseHeaders.append(name, item);
+          } else if (value !== undefined) {
+            responseHeaders.set(name, value);
+          }
+        }
+
+        const hasNoBody = status === 204 || status === 205 || status === 304;
+        if (hasNoBody) response.resume();
+        const body = hasNoBody ? null : (Readable.toWeb(response) as ReadableStream<Uint8Array>);
+        resolve(
+          new Response(body, {
+            status,
+            statusText: response.statusMessage,
+            headers: responseHeaders
+          })
+        );
+      }
+    );
+    request.once('error', reject);
+    request.end();
+  });
 }
