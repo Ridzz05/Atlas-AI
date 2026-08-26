@@ -8,7 +8,7 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `ef7694e`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `784394e`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions). API input validation, queue readiness, and request-ID correlation regressions also pass.
 - `pnpm lint`: runs a repository source-hygiene gate over 161 files, and `pnpm format:check` enforces Prettier 3.9.6 formatting. CI now runs formatting, dependency and signature audits, lint, typecheck, test, production build, Compose config validation, and a Docker Compose boot/readiness/restart/backup-restore/auth smoke job; the remote job still needs to execute successfully. The latest audit reports zero high/critical vulnerabilities and registry signatures are verified for 332 packages.
@@ -45,11 +45,15 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 | Phase 6 — Dashboard | Mostly connected | Tasks, approvals, agents, overview, command intake, durable communications feed, artifacts, audit, memory, cost/budget metrics, durable pause/resume/emergency-stop controls, and read-only governance settings use API loading/error/empty states. Tasks and Communications use authenticated SSE refresh, with durable event replay/reconnect semantics and no raw tool payload rendering. Rubric mutations use the authenticated agent-service API while dashboard governance settings remain read-only. |
 | Phase 7 — Hardening | Partially implemented | Auth, CORS, Redis-backed rate limiting with fail-closed outage behavior, secret checks, fail-closed DB/queue readiness, request-ID correlation, dependency-aware worker/Telegram readiness, Compose service healthchecks, patched dashboard dependencies, high-severity dependency audit, runbook, repository lint gate, and Prettier formatting gate exist. Compose boot, recovery, backup restore, and alerting remain. |
 
+## Queue recovery integrity checkpoint
+
+Commit `784394e` closes the recovery duplicate window: BullMQ now detects pending base/deferred jobs, replaces terminal jobs before requeueing, and uses a stable removable deferred-job ID; in-memory recovery applies the same task-level deduplication. Queue/worker regression coverage passes 18/18 tests. Cross-process behavior remains a Docker smoke-test gate.
+
 ## Findings ordered by leverage
 
 ### Critical / P0 — block production
 
-1. **Compose boot and recovery are not verified in this environment.** The code paths now construct shared PostgreSQL/BullMQ runtime services and CI automates boot/readiness/restart/backup checks, but Docker is unavailable, so a successful run, cross-process execution, restart recovery, and outage readiness remain release blockers.
+1. **Compose boot and recovery are not verified in this environment.** The code paths now construct shared PostgreSQL/BullMQ runtime services, guard recovery against active/deferred duplicate jobs, and CI automates boot/readiness/restart/backup checks, but Docker is unavailable, so a successful run, cross-process execution, restart recovery, and outage readiness remain release blockers.
 2. **Telegram active-run recovery is not yet demonstrated.** Update deduplication, pause/emergency control state, and cancellation propagation are persisted, but restart recovery still requires an integration drill.
 3. **No real outbound connector is configured.** Approved execution now mints an exact, durable, one-time token and resumes the paused task, but `EXTERNAL_WRITES_ENABLED` must remain false until a real connector, owner decision, and integration tests are approved.
 4. **Research is implemented but deliberately opt-in and not live-verified here.** `98ea6f6` and `a083c83` add a Brave adapter with source, freshness, confidence, sensitivity, unresolved-question evidence, public-DNS/redirect/size/timeout controls, DNS-pinned transport, and an untrusted-content boundary. A clean environment with an approved API key must still verify provider behavior and operations.

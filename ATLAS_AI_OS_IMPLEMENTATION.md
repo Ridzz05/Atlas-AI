@@ -23,6 +23,8 @@
 
 ---
 
+> Queue recovery integrity checkpoint (26 August 2026): commit `784394e` prevents queued-task recovery from creating a second execution when a base or deferred BullMQ job is already pending, replaces terminal queue records before recovery requeue, and uses stable removable deferred-job IDs. The queue/worker regression slice passes 18/18 tests; cross-process behavior still requires the Docker smoke run.
+
 ## 1. Ringkasan Eksekutif
 
 ATLAS AI OS adalah sistem tempat satu manusia berkomunikasi dengan satu agent utama bernama **Chief**. Chief bertugas memahami tujuan, menyusun rencana, membagi pekerjaan kepada specialist agents, mengawasi hasil, meminta pemeriksaan QA, dan mengembalikan ringkasan final kepada manusia.

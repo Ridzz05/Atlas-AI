@@ -10,6 +10,8 @@ This document provides operational instructions, deployment guidelines, disaster
 
 > Compose verification checkpoint (26 August 2026): commits `2b109c5` and `3411cf5` isolate smoke-test container names using `ATLAS_CONTAINER_PREFIX` and verify that API task intake creates a durable message record. Commit `ef7694e` makes backup/restore scripts use the same prefix while preserving the default production container name. Run the smoke test on a Docker-capable host before release.
 
+> Queue recovery checkpoint (26 August 2026): commit `784394e` prevents periodic recovery from duplicating a task whose base or deferred queue job is still pending and replaces terminal BullMQ records before requeueing. The local queue/worker regression slice passes 18/18; verify cross-process behavior with the Compose smoke test.
+
 ## 1. System Architecture & Inventory
 
 | Service | Port | Tech Stack | Role |
@@ -171,7 +173,7 @@ Dashboard, API, and Telegram use the same PostgreSQL-backed control state. Emerg
 3. In the Dashboard, select **Resume system**, or in Telegram send `/resume` to unfreeze the engine.
 
 ### 4.3 Queued task recovery
-The worker scans persisted tasks with status `queued` in pages before accepting new queue work and repeats the scan every `QUEUE_RECOVERY_INTERVAL_SECONDS` (default: 30). It re-enqueues each task with the task/run identifier as the durable idempotency key. This repairs both the startup failure window and a later PostgreSQL/Redis enqueue interruption. Review worker logs for `Requeued persisted tasks awaiting worker delivery` after a restart or queue outage, and verify the task reaches a terminal state during the recovery drill.
+The worker scans persisted tasks with status `queued` in pages before accepting new queue work and repeats the scan every `QUEUE_RECOVERY_INTERVAL_SECONDS` (default: 30). It checks for pending base/deferred jobs before requeueing, uses the task/run identifier as the durable idempotency key, and replaces terminal queue records when a still-queued task needs recovery. Deferred jobs use a stable, removable identifier so pause/emergency-stop retries do not accumulate duplicate executions. This repairs both the startup failure window and a later PostgreSQL/Redis enqueue interruption. Review worker logs for `Requeued persisted tasks awaiting worker delivery` after a restart or queue outage, and verify the task reaches a terminal state during the recovery drill.
 
 ---
 
