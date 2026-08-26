@@ -59,7 +59,7 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
     <div className="p-6 bg-[#111827] rounded-xl border border-gray-800 shadow-xl relative overflow-hidden">
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
         <div>
-          <h2 className="text-sm font-semibold text-white tracking-wide">REAL-TIME MULTI-AGENT TOPOLOGY</h2>
+          <h2 className="text-sm font-semibold text-white tracking-wide">MULTI-AGENT TOPOLOGY</h2>
           <p className="text-xs text-gray-400">Deterministic event-derived state graph (Depth 0 → Depth 2)</p>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-mono text-gray-400">

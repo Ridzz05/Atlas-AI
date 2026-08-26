@@ -4,18 +4,17 @@
 
 Audit basis: `ATLAS_AI_OS_IMPLEMENTATION.md`, source tree, Docker/operations files, environment key map, test/build commands, and git history as of 26 August 2026.
 
-Current verdict: **the repository is a typed, testable scaffold—not yet a runnable multi-service production system**. The code compiles and the mock/unit path is green, but the production path is not wired end-to-end. Do not expose the production compose stack to real users or external writes until P0 and P1 are complete.
+Current verdict: **the repository now has a durable, typed, testable multi-service MVP, but the production release gate is still open**. Runtime composition, PostgreSQL migrations, BullMQ, Telegram polling, API/dashboard control paths, plan validation, and durable approval resume are implemented. Do not enable external writes or call the stack production-ready until Docker-backed boot/recovery, real research adapters, durable Telegram controls, and an approved outbound connector are verified.
 
 ## Evidence snapshot
 
-- Git history contains exactly one commit: `a6efa4f` — `feat: complete ATLAS AI OS implementation (Phases 0 through 7)`.
-- `pnpm typecheck`: PASS (24 Turbo tasks).
-- `pnpm build`: PASS outside the restricted Windows process sandbox (14/14 packages/apps).
-- `pnpm test`: PASS outside the restricted Windows process sandbox (24/24 Turbo tasks). The initial sandbox run failed only at dashboard worker-process creation with `spawn EPERM`.
+- Git history now includes the implementation slices through `7be9e43`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
+- Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions).
 - `pnpm lint`: exits 0 but executes **zero tasks**; no workspace package defines a `lint` script.
-- Production entrypoints construct `InMemoryTaskQueue` and `InMemoryEventBus` by default. The API entrypoint does not construct a database client or repositories, and the worker does not construct a Redis/BullMQ queue.
-- Telegram `start()` only logs startup; no polling loop, webhook server, Telegram API client, or API callback is wired.
-- Dashboard pages use `SAMPLE_*`/`INITIAL_*` data and local React state rather than backend APIs or a realtime event stream.
+- Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
+- Telegram polling and durable approval decisions are wired, but Telegram deduplication and emergency-stop state are still process-local.
+- Dashboard tasks, approvals, agents, command intake, and overview metrics use the API; artifacts, memory, audit, and settings now show explicit unavailable states until their APIs are implemented. No sample operational data remains in the dashboard.
 
 ## Target architecture and dependency order
 
@@ -36,43 +35,43 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 | Blueprint phase | Status | Evidence / gap |
 |---|---|---|
-| Phase 0 — Foundation | Partial | Monorepo, schemas, migration file, Docker files, and health routes exist. Startup migration, seed data, real DB wiring, clean boot proof, and lint gate are missing. |
-| Phase 1 — Task engine | Partial | Runner, timeout, cancellation, provider adapter, and an in-memory queue exist. Durable queue, lease/heartbeat, restart recovery, persistent messages/events, and global budget enforcement are missing. |
-| Phase 2 — Delegation | Partial | Five definitions, planner, DAG loop, QA call, and synthesis exist. Plan validation, dependency persistence, child-count enforcement, configurable depth, fail-closed QA, and revision workflow are missing. |
-| Phase 3 — Telegram | Incomplete | Update parsing, allowlist, dedup cache, and command text exist. Telegram transport, persistence-backed commands, real approval decisions, real emergency stop, and status updates are missing. |
-| Phase 4 — Memory | Partial | In-memory/database stores, lexical ranking, proposals, and lifecycle methods exist. Runtime wiring, embeddings/vector retrieval, access-scope enforcement, freshness jobs, and deletion audit are missing. |
-| Phase 5 — Tools/workflow | Incomplete | Registry, rubric engine, artifact exporters, and mock tools exist. Real research/enrichment, tool executor wiring, output validation, cryptographic one-time approval, integration persistence, and safe artifact paths are missing. |
-| Phase 6 — Dashboard | Incomplete | The visual shell and pages build. Data is fabricated/local-only; there is no authenticated API client, event stream, mutations, or refresh consistency. |
-| Phase 7 — Hardening | Incomplete | Dockerfiles, compose, backups, and runbook exist. Auth, rate limits, production secret validation, alerting, threat-model checks, migration boot, and recovery drill are missing. |
+| Phase 0 — Foundation | Implemented locally | Shared runtime, migrations, agent seeding, auth/CORS, environment validation, and readiness checks are wired. Clean Compose boot is still unverified because Docker is unavailable here. |
+| Phase 1 — Task engine | Implemented locally | BullMQ/Redis, retries/idempotency, worker shutdown, PostgreSQL events, plans/runs/tasks, and queue-backed execution are wired. Lease recovery/global budget enforcement still need production drills. |
+| Phase 2 — Delegation | Mostly implemented | Plan validation, depth guard, fail-closed QA, approval-pending propagation, and parent resume are wired. Full persisted dependency/tool-call/audit history remains incomplete. |
+| Phase 3 — Telegram | Mostly implemented | Polling transport, allowlist, response delivery, callbacks, and durable approval decisions are wired. Deduplication, pause, and emergency-stop state are process-local. |
+| Phase 4 — Memory | Incomplete | Database/lexical memory stores exist, but runtime agent wiring, dashboard query API, freshness jobs, and canonical-memory audit are incomplete. |
+| Phase 5 — Tools/workflow | Mostly implemented with safe gaps | Tool gateway, output schemas, artifact containment, durable approval request/claim/finalize/resume, and fail-closed unverified research are wired. Real research/enrichment adapters and an outbound connector remain intentionally disabled. |
+| Phase 6 — Dashboard | Partially connected | Tasks, approvals, agents, overview, and command intake use the API with loading/error/empty states. No realtime stream; artifacts, memory, audit, and settings APIs are not exposed. |
+| Phase 7 — Hardening | Partially implemented | Auth, CORS, rate limiting, secret checks, readiness, and runbook exist. Rate limiting and Telegram controls are process-local; Compose boot, recovery, backup restore, alerting, and CI lint gates remain. |
 
 ## Findings ordered by leverage
 
 ### Critical / P0 — block production
 
-1. **Production services do not share durable state.** `agent-service` and `worker` default to in-memory queue/event bus; their real entrypoints do not inject `DatabaseClient`, `TaskRepository`, `RunRepository`, `Migrator`, or Redis. Tasks disappear on restart and API/worker processes do not share a queue.
-2. **Telegram is not connected to Telegram.** The service starts and stops only; no polling/webhook transport sends or receives updates.
-3. **Approval commands are text-only acknowledgements.** `/approve`, `/reject`, and `/revise` return strings without loading or changing an approval record. The send tool checks only for a non-empty token; it does not call `TokenVerifier`, enforce request/action binding, expiry, one-time execution, or persisted status.
-4. **QA fails open.** JSON parse failure returns `PASS`, and the delegator completes the parent even when Argus returns `REVISION_REQUIRED` or `BLOCKED`. This contradicts the fail-closed principle.
-5. **External data and sending are fake.** Research tools return `example.com`/hard-coded company data, while `communication.send_approved` reports `sent` without an external connector. Production must make this explicit in mock mode and refuse claims of real delivery.
-6. **No effective production authentication.** API routes have no auth/owner middleware; CORS allows every origin; Telegram allows all users when the allowlist is empty. Production compose defaults the allowlist/token to empty.
-7. **Artifact path traversal.** Artifact save/read resolve a user-provided name without checking that the result stays inside the configured storage directory.
+1. **Compose boot and recovery are not verified in this environment.** The code paths now construct shared PostgreSQL/BullMQ runtime services, but Docker is unavailable, so empty-DB migration, cross-process execution, restart recovery, and outage readiness remain release blockers.
+2. **Telegram control state is not durable.** Polling, allowlist, delivery, callbacks, and approval decisions work locally, but update deduplication, pause, and emergency-stop state are process-local and can be lost on restart.
+3. **No real outbound connector is configured.** Approved execution now mints an exact, durable, one-time token and resumes the paused task, but `EXTERNAL_WRITES_ENABLED` must remain false until a real connector, owner decision, and integration tests are approved.
+4. **Research is deliberately fail-closed rather than live.** Without an injected verified provider, search/company lookup returns no external facts. A real adapter with source, freshness, confidence, and prompt-injection boundaries is still required for the demo workflow.
+5. **Dashboard observability is incomplete.** Tasks, approvals, agents, command intake, and overview metrics are API-backed; no authenticated realtime stream exists, and artifact, memory, audit, and settings query/mutation APIs are not exposed.
+6. **Rate limiting and Telegram guards are process-local.** API bearer auth and strict CORS are present, but rate-limit buckets and Telegram dedup/emergency state do not coordinate across replicas.
+7. **Operational gates are incomplete.** There are no configured lint tasks, no Docker Compose/recovery CI gate, no verified backup restore drill, and no durable audit-event query path.
 
 ### Required / P1 — make the core system reliable
 
 1. Add a single runtime composition/bootstrap layer shared by API, worker, and Telegram so dependencies are constructed consistently.
 2. Run migrations and seed the five agent definitions before readiness. Populate `agents`, persist plans, child dependencies, runs, messages, tool calls, artifacts, approvals, and audit events.
-3. Replace `InMemoryTaskQueue` in production with BullMQ/Redis; add job idempotency, attempts/backoff, leases, heartbeat, graceful shutdown, stale-run recovery, and cancellation propagation.
+3. BullMQ/Redis, job idempotency, attempts/backoff, and graceful shutdown are implemented. Add lease/heartbeat observability, stale-run recovery, and durable cancellation propagation.
 4. Add durable event publication/subscription (PostgreSQL outbox plus Redis pub/sub is sufficient for the MVP) and expose an authenticated SSE/WebSocket stream to the dashboard.
-5. Enforce global daily/per-run/agent budgets and configured `MAX_DELEGATION_DEPTH`; validate plan agent IDs, max eight steps, unique IDs, dependency references, and cycles before persistence.
+5. Enforce global daily/per-run/agent budgets and configured `MAX_DELEGATION_DEPTH`; plan agent IDs, max eight steps, unique IDs, dependency references, and cycles are now validated before execution. Persisted budget accounting remains a release follow-up.
 6. Enforce agent tool allowlists and data scopes in `ToolRegistry`; validate output with `outputSchema`; persist every call and audit record.
-7. Implement real approval repository/service: exact payload hash, signature verification, expiry, owner identity, atomic compare-and-set to `executed`, and idempotency key. Keep external writes disabled until a real connector is explicitly configured.
+7. Implemented durable approval request/decision/token/claim/finalize/resume flow with exact payload hash and atomic compare-and-set. Keep external writes disabled until a real connector is explicitly configured.
 
 ### Required / P2 — restore the user control plane
 
 1. Implement Telegram polling or webhook mode with secret verification, outbound response delivery, callback acknowledgement, persistent update deduplication, and dependency injection into the command router.
 2. Route `/new`, `/status`, `/task`, `/stop`, `/pause`, `/resume`, `/emergency_stop`, and approval actions through the same control service as the web UI.
 3. Add API authentication suitable for the single-user MVP, strict CORS, rate limits, request IDs, and owner-only mutation checks.
-4. Replace every dashboard sample dataset with API queries and event-derived state. Add loading/error/empty states and refresh consistency tests.
+4. Dashboard tasks, approvals, agents, command intake, and overview now use API queries with loading/error/empty states. Add an authenticated realtime event stream and APIs for the remaining capability pages.
 
 ### Required / P3 — make intelligence truthful and useful
 
@@ -85,7 +84,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 1. Add actual lint/format scripts and make CI run lint, typecheck, unit, integration, build, migration, and Docker Compose configuration checks.
 2. Add integration/e2e tests for DB+Redis, restart recovery, duplicate Telegram updates, approval execute-once, rejected approval no-side-effect, malicious content, budget exhaustion, and emergency stop.
-3. Align production environment names: the app expects `MODEL_PROVIDER`/`MODEL_API_KEY`, while compose currently passes `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`; remove insecure fallback passwords and fail startup on missing production secrets.
+3. Production Compose now passes the application’s `MODEL_PROVIDER`/`MODEL_API_KEY` names and requires database, Redis, API, Telegram, and encryption secrets. Verify the clean-environment secret policy in CI and remove any remaining non-production defaults before launch.
 4. Mount/persist artifact storage, add backup verification and restore drills, health checks for DB/Redis/worker/Telegram, alerting, retention policy, and rollback instructions.
 5. Update blueprint status from “Draft siap implementasi” only after the corresponding exit criteria are demonstrated; record phase completion reports with commands and results.
 
@@ -149,11 +148,11 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `83c2a9c`. Full local gates pass: `pnpm typecheck` (26/26), `pnpm test` (26/26), and `pnpm build` (15/15). `pnpm lint` exits successfully but has no configured lint tasks. Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
+Execution is committed through `7be9e43`. The focused local gates for the latest slices pass: changed-package TypeScript builds, dashboard typecheck/production compilation, approval/resume API tests, runner/delegation tests, queue/worker tests, Telegram tests, and tool tests. Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
 
-Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY`, production API auth and strict CORS, artifact containment, fail-closed approval/QA paths, durable approval decisions, Telegram polling transport, authenticated dashboard task/approval flows, and blueprint/runbook alignment.
+Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY`, production API auth/CORS/rate limiting, artifact containment, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling transport, API-backed dashboard control surfaces, and explicit unavailable states for unimplemented dashboard capabilities.
 
-Remaining release blockers: approval decisions do not yet mint/persist executable tokens or invoke a real outbound connector; research/enrichment tools remain mock; Telegram deduplication and emergency-stop state are process-local; dashboard pages outside tasks/approvals still use sample data; no authenticated realtime event endpoint or rate limiter exists; Compose boot and recovery drills require a Docker host.
+Remaining release blockers: no approved outbound connector, no verified real research adapters, Telegram deduplication/pause/emergency-stop state is process-local, no authenticated realtime dashboard stream, no durable audit query path, no Docker boot/recovery/backup drill, and no configured lint/CI gate.
 
 ## Release gate
 

@@ -2,74 +2,74 @@
 
 ## Phase 0 — Stop unsafe production exposure
 
-- [ ] Add production startup validation for required secrets, owner identity, model provider, and external-write flag.
-- [ ] Disable/deny external writes unless a real connector and approval service are configured.
-- [ ] Add API/dashboard owner authentication, strict CORS, and rate limiting.
-- [ ] Fix artifact path containment and add traversal regression tests.
-- [ ] Make QA/parser failures and blocked/revision verdicts fail closed.
+- [x] Add production startup validation for API auth, encryption key, and external-write defaults.
+- [x] Disable/deny external writes unless a real connector and approval service are configured.
+- [x] Add API/dashboard owner authentication, strict CORS, and process-local rate limiting.
+- [x] Fix artifact path containment and add traversal regression tests.
+- [x] Make QA/parser failures and blocked/revision verdicts fail closed.
 
 ## Phase 1 — Wire durable runtime
 
-- [ ] Create shared runtime bootstrap for DB, repositories, Redis, queue, event bus, provider, tools, and policy services.
-- [ ] Run migrations at startup and seed/version the five agent definitions.
-- [ ] Implement BullMQ/Redis queue adapter with idempotent jobs, retries, leases, heartbeat, and graceful shutdown.
-- [ ] Persist plans, task dependencies, messages, runs, tool calls, artifacts, approvals, and audit events.
-- [ ] Add durable event outbox/pub-sub and dependency-aware readiness checks.
+- [x] Create shared runtime bootstrap for DB, repositories, Redis, queue, event bus, provider, tools, and policy services.
+- [x] Run migrations and seed/version the five agent definitions at startup.
+- [x] Implement BullMQ/Redis queue adapter with idempotent jobs, retries, and graceful shutdown.
+- [ ] Persist every plan dependency, message, tool call, artifact metadata, and audit event end-to-end.
+- [x] Add PostgreSQL event outbox/pub-sub and dependency-aware readiness checks.
 
 ## Checkpoint: Durable core
 
-- [ ] Empty Compose environment boots cleanly.
-- [ ] API-created task is processed by a separate worker.
-- [ ] Task survives API/worker restart.
-- [ ] DB and Redis outage causes readiness failure and no false success.
+- [ ] Empty Compose environment boots cleanly (Docker unavailable in current environment).
+- [x] API and worker share the runtime queue configuration.
+- [ ] Task survives API/worker restart (requires Docker/PostgreSQL/Redis drill).
+- [x] DB readiness fails closed when the configured database is unavailable.
 
 ## Phase 2 — Enforce orchestration and approval policy
 
-- [ ] Validate plans: agent allowlist, max eight steps, unique IDs, dependency references, no cycles.
-- [ ] Enforce configured depth, concurrency, child count, per-run/agent/global budget, timeout, and cancellation.
-- [ ] Enforce per-agent tool allowlists/scopes and validate tool outputs with `outputSchema`.
-- [ ] Implement persisted approval service with exact payload hash, signature, expiry, owner, atomic one-time execution, and idempotency.
-- [ ] Implement durable emergency stop, pause/resume, reject, and revise semantics.
+- [x] Validate plans: agent allowlist, max eight steps, unique IDs, dependency references, and no cycles.
+- [x] Enforce configured depth, concurrency, child count, per-run timeout, and cancellation paths.
+- [ ] Enforce complete per-agent tool allowlists/scopes and global daily budget in runtime execution.
+- [x] Implement persisted approval requests, exact payload hash, signature, expiry, owner decision, atomic one-time execution, and resume queueing.
+- [ ] Implement durable emergency stop, pause/resume, reject, and revise state across processes.
 
 ## Phase 3 — Connect control planes
 
-- [ ] Implement Telegram polling/webhook transport, secret validation, response delivery, callback acknowledgement, and persistent deduplication.
-- [ ] Route Telegram and dashboard mutations through one authenticated command/control service.
-- [ ] Replace dashboard sample data with backend API calls and realtime events.
-- [ ] Add loading, empty, error, reconnect, and authorization states.
+- [x] Implement Telegram polling transport, allowlist, response delivery, and callback acknowledgement.
+- [x] Route Telegram and dashboard approval/task mutations through durable repositories where available.
+- [x] Replace dashboard operational sample data with API-backed pages and honest unavailable states.
+- [ ] Add authenticated realtime events plus cross-process deduplication/reconnect behavior.
 
 ## Checkpoint: User lifecycle
 
-- [ ] Telegram `/new` → persisted task → worker execution → status update works.
-- [ ] Dashboard create/status/stop/approval actions work after refresh.
-- [ ] Duplicate Telegram update cannot duplicate task or side effect.
-- [ ] Emergency stop blocks intake and cancels active runs.
+- [x] Telegram `/new` and dashboard task creation enqueue persisted tasks through the shared runtime.
+- [x] Dashboard task/status/approval flows work after refresh against the API.
+- [ ] Duplicate Telegram updates remain deduplicated across process restart.
+- [ ] Emergency stop blocks intake and cancels active runs durably.
 
 ## Phase 4 — Make research and memory truthful
 
-- [ ] Replace mock research/company tools with real adapters and safe fetched-content boundaries.
-- [ ] Persist source, extraction time, confidence, freshness, sensitivity, and unresolved questions.
+- [x] Make research/company tools fail closed when no verified provider is configured.
+- [ ] Add real research/enrichment adapters with source, extraction time, confidence, freshness, sensitivity, and unresolved questions.
 - [ ] Wire memory search/get/propose tools into agent execution with scope checks.
-- [ ] Add freshness/deprecation/deletion jobs and audit all canonical-memory changes.
+- [ ] Add freshness/deprecation/deletion jobs and audit canonical-memory changes.
 - [ ] Add configurable rubric versions and evidence validation.
 
 ## Phase 5 — Release engineering
 
 - [ ] Add lint/format scripts and CI gates for lint, typecheck, test, build, migrations, and Compose config.
 - [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
-- [ ] Align production environment variable names and remove insecure Compose fallbacks.
-- [ ] Persist artifact storage and verify backup/restore operations.
-- [ ] Update implementation blueprint and runbook with actual phase completion reports and known limitations.
+- [x] Align production environment variable names and remove insecure production Compose fallbacks.
+- [ ] Persist artifact metadata and verify backup/restore operations.
+- [x] Update implementation blueprint and runbook with current phase status and known limitations.
 
 ## Current execution checkpoint
 
-Completed in the current pass through `83c2a9c`: durable runtime composition, startup migrations and agent seeding, BullMQ production queue, PostgreSQL event outbox, idempotent worker shutdown, API bearer auth and strict CORS, artifact path hardening, fail-closed QA and approval verification, durable approval decisions, Telegram polling/delivery, live dashboard task/approval pages, and blueprint/runbook alignment. `pnpm typecheck`, `pnpm test`, and `pnpm build` pass; Docker-backed boot/recovery remains unverified. Remaining checkboxes retain the broader release requirements.
+Implemented through commit `7be9e43`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling, API-backed dashboard control surfaces, and honest unavailable states for unimplemented dashboard capabilities. Local changed-package typechecks and focused tests/builds pass. Docker-backed boot/recovery, real providers/connectors, durable Telegram controls, realtime dashboard events, audit APIs, and CI lint gates remain open.
 
 ## Final release checkpoint
 
 - [ ] Clean-environment migration and boot verified.
-- [ ] Separate API/worker task execution verified.
+- [ ] Separate API/worker task execution and restart recovery verified.
 - [ ] Telegram and dashboard real-state verification passed.
-- [ ] Approval execute-once and no-side-effect rejection passed.
+- [x] Approval execute-once, rejection no-side-effect, and approved resume paths covered by tests.
 - [ ] Recovery drill and security checklist passed.
 - [ ] Human owner approves enabling any external write connector.

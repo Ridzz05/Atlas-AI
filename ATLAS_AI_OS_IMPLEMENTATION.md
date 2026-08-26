@@ -11,7 +11,7 @@
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS, fail-closed QA/approval paths, Telegram polling, durable approval decisions, and live dashboard task/approval views are implemented. External writes remain disabled: a real outbound connector, persisted execute-once token service, real research adapters, durable Telegram deduplication, realtime dashboard stream, and Docker recovery drill are still required before production release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS/rate limiting, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling, and API-backed dashboard task/approval/agent control surfaces are implemented. External writes remain disabled: an approved outbound connector, real research adapters, durable Telegram deduplication/emergency-stop state, realtime dashboard stream, durable audit/memory/artifact APIs, and Docker recovery drill are still required before production release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 

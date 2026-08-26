@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, API auth/CORS, Telegram polling, approval decision persistence, and dashboard task/approval views are implemented and tested. Do not enable external writes yet: no approved outbound connector or persisted execute-once token service is configured. Compose boot and recovery drills require a Docker host.
+> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling, plan validation, durable approval request/decision/token/claim/finalize/resume, and API-backed dashboard task/approval/agent views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Dashboard artifacts, memory, audit, and settings APIs plus realtime events are not exposed. Compose boot and recovery drills require a Docker host.
 
 ---
 
@@ -14,7 +14,7 @@ This document provides operational instructions, deployment guidelines, disaster
 | `agent-service` | 4000 | Fastify, TypeScript | Core API, HTTP endpoints, task intake |
 | `worker` | — | Node.js, BullMQ | Background async multi-agent execution loop |
 | `telegram-bot` | — | Node.js | Telegram Mobile Control Plane |
-| `dashboard` | 3000 | Next.js 15, Tailwind | Real-time Web Management Control Room |
+| `dashboard` | 3000 | Next.js 15, Tailwind | API-backed Web Management Control Room |
 | `postgres` | 5432 | PostgreSQL 16 + pgvector | Relational state, memory, vectors, audit |
 | `redis` | 6379 | Redis 7 Alpine | Distributed task queue and pub/sub bus |
 
@@ -81,15 +81,14 @@ Add to crontab (`crontab -e`):
 ### 4.1 Emergency Stop
 When an unexpected agent behavior or runaway task is detected:
 1. **Via Telegram**: Send `/emergency_stop` to the Telegram bot.
-2. **Via Web Dashboard**: Click the **Emergency Stop** button in the sidebar.
 3. **Via Shell**:
    ```bash
    docker compose -f docker-compose.prod.yml stop worker
    ```
-*Effect:* Instantly halts active agent executions, freezes new intake, and blocks all external mutations.
+*Current limitation:* Telegram emergency stop is the supported control. The dashboard intentionally exposes an informational warning until a durable emergency-stop API exists. Stopping the worker halts new background execution, but does not replace durable cancellation/state management.
 
 ### 4.2 System Recovery / Resume
-1. Inspect audit logs in the Dashboard (`/audit`) or PostgreSQL:
+1. Inspect available database records in PostgreSQL (the dashboard audit query is not exposed yet):
    ```sql
    SELECT * FROM audit_events ORDER BY timestamp DESC LIMIT 20;
    ```
