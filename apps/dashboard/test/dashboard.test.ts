@@ -145,6 +145,8 @@ describe('@atlas/dashboard Integration Tests', () => {
       expect(compose).toContain(`container_name: \${ATLAS_CONTAINER_PREFIX:-atlas}_${service}_prod`);
     }
     expect(smoke).toContain('export ATLAS_CONTAINER_PREFIX');
+    expect(smoke).toContain('assert_task_intake_persistence');
+    expect(smoke).toContain('/api/v1/messages?taskId=');
   });
 
   it('routes the dashboard proxy path through Next.js before direct API paths in Caddy', () => {

@@ -71,6 +71,23 @@ assert_api_authentication() {
   "${COMPOSE[@]}" exec -T agent-service node -e "Promise.all([fetch('http://127.0.0.1:4000/api/v1/agents'), fetch('http://127.0.0.1:4000/api/v1/agents', { headers: { authorization: 'Bearer ' + process.env.API_AUTH_TOKEN } })]).then(async ([unauthorized, authorized]) => { if (unauthorized.status !== 401 || !authorized.ok) { console.error('API authentication assertion failed:', unauthorized.status, authorized.status, await unauthorized.text(), await authorized.text()); process.exit(1); } }).catch(error => { console.error(error); process.exit(1); });"
 }
 
+assert_task_intake_persistence() {
+  local task_id=""
+  local message_result=""
+
+  task_id="$("${COMPOSE[@]}" exec -T agent-service node -e "fetch('http://127.0.0.1:4000/api/v1/tasks', { method: 'POST', headers: { authorization: 'Bearer ' + process.env.API_AUTH_TOKEN, 'content-type': 'application/json' }, body: JSON.stringify({ title: 'CI intake persistence', goal: 'CI intake persistence check', assignedAgent: 'chief' }) }).then(async response => { if (response.status !== 201) { console.error(await response.text()); process.exit(1); } const task = await response.json(); process.stdout.write(task.id); }).catch(error => { console.error(error); process.exit(1); });")"
+  if [[ ! "$task_id" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+    echo "API task intake returned an invalid task id: ${task_id}" >&2
+    return 1
+  fi
+
+  message_result="$("${COMPOSE[@]}" exec -T -e "CI_INTAKE_TASK_ID=${task_id}" agent-service node -e "const taskId = process.env.CI_INTAKE_TASK_ID; fetch('http://127.0.0.1:4000/api/v1/messages?taskId=' + encodeURIComponent(taskId), { headers: { authorization: 'Bearer ' + process.env.API_AUTH_TOKEN } }).then(async response => { const body = await response.json().catch(() => ({})); const found = response.ok && body.durable === true && Array.isArray(body.data) && body.data.some(message => message.senderId === 'api-owner' && message.content === 'CI intake persistence check'); if (!found) { console.error('Durable task intake message assertion failed:', response.status, JSON.stringify(body)); process.exit(1); } process.stdout.write('ok'); }).catch(error => { console.error(error); process.exit(1); });")"
+  if [[ "$message_result" != "ok" ]]; then
+    echo "Durable task intake message assertion returned: ${message_result}" >&2
+    return 1
+  fi
+}
+
 assert_task_recovered() {
   local task_id="$1"
   local status=""
@@ -98,6 +115,8 @@ wait_for_health redis
 wait_for_health agent-service
 assert_ready agent-service http://127.0.0.1:4000/ready
 assert_api_authentication
+echo "==> Verifying durable API task intake history..."
+assert_task_intake_persistence
 
 echo "==> Verifying recovery of a durable queued task before worker startup..."
 recovery_task_id="00000000-0000-4000-8000-000000000001"
