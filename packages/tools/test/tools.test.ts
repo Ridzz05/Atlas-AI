@@ -52,6 +52,38 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(result.error).toContain("Invalid output from tool 'test.malformed_output'");
   });
 
+  it('aborts a running tool when the gateway timeout expires', async () => {
+    const registry = new ToolRegistry();
+    let aborted = false;
+    registry.register({
+      name: 'test.timeout_abort',
+      description: 'Test-only tool that waits for cancellation.',
+      inputSchema: z.object({}),
+      outputSchema: z.object({ completed: z.boolean() }),
+      riskLevel: 'read',
+      requiresApproval: false,
+      timeoutMs: 10,
+      async execute(context) {
+        return new Promise(resolve => {
+          context.signal?.addEventListener('abort', () => {
+            aborted = true;
+            resolve({ completed: true });
+          }, { once: true });
+        });
+      }
+    });
+
+    const result = await registry.execute('test.timeout_abort', {}, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned'
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Tool 'test.timeout_abort' timed out");
+    expect(aborted).toBe(true);
+  });
+
   it('registers and executes read research tools safely', async () => {
     const registry = new ToolRegistry();
     registry.register(WebSearchTool);

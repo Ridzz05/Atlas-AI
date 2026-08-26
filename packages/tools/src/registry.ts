@@ -151,14 +151,33 @@ export class ToolRegistry {
       }
     }
 
-    // 4. Execute with timeout
+    // 4. Execute with timeout and cancellation propagation
+    const executionController = new AbortController();
+    const forwardAbort = () => executionController.abort(context.signal?.reason);
+    if (context.signal) {
+      if (context.signal.aborted) {
+        forwardAbort();
+      } else {
+        context.signal.addEventListener('abort', forwardAbort, { once: true });
+      }
+    }
+    let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeoutHandle = setTimeout(() => {
+        const timeoutError = new Error(`Tool '${name}' timed out after ${tool.timeoutMs}ms`);
+        reject(timeoutError);
+        executionController.abort(timeoutError.message);
+      }, tool.timeoutMs);
+    });
+
     try {
       const rawOutput = await Promise.race([
-        tool.execute(context, parseResult.data),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`Tool '${name}' timed out after ${tool.timeoutMs}ms`)), tool.timeoutMs)
-        )
+        tool.execute({ ...context, signal: executionController.signal }, parseResult.data),
+        timeoutPromise
       ]);
+      if (executionController.signal.aborted) {
+        throw new Error(String(executionController.signal.reason || 'Tool execution aborted'));
+      }
       const outputValidation = tool.outputSchema.safeParse(rawOutput);
       if (!outputValidation.success) {
         throw new Error(
@@ -216,6 +235,9 @@ export class ToolRegistry {
         durationMs,
         riskLevel: tool.riskLevel
       };
+    } finally {
+      if (timeoutHandle) clearTimeout(timeoutHandle);
+      context.signal?.removeEventListener('abort', forwardAbort);
     }
   }
 }

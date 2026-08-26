@@ -32,7 +32,7 @@ export interface ResearchEvidence {
  * pin a hostname's resolved address across the provider's network request.
  */
 export interface ResearchProvider {
-  fetchSafe?(url: string): Promise<{
+  fetchSafe?(url: string, signal?: AbortSignal): Promise<{
     content: string;
     sourceUrl: string;
     extractedAt: string;
@@ -41,7 +41,7 @@ export interface ResearchProvider {
     unresolvedQuestions: string[];
     confidence: number;
   }>;
-  search(query: string, limit: number): Promise<Array<{
+  search(query: string, limit: number, signal?: AbortSignal): Promise<Array<{
     title: string;
     url: string;
     snippet: string;
@@ -51,7 +51,7 @@ export interface ResearchProvider {
     sensitivity: ResearchSensitivity;
     unresolvedQuestions: string[];
   }>>;
-  lookupCompany(companyName: string, location: string): Promise<{
+  lookupCompany(companyName: string, location: string, signal?: AbortSignal): Promise<{
     found: boolean;
     companyName: string;
     address: string;
@@ -65,7 +65,7 @@ export interface ResearchProvider {
     unresolvedQuestions: string[];
     confidence: number;
   }>;
-  enrichLead?(companyName: string, location: string): Promise<{
+  enrichLead?(companyName: string, location: string, signal?: AbortSignal): Promise<{
     found: boolean;
     companyName: string;
     location: string;

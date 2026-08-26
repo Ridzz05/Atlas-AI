@@ -134,7 +134,7 @@ export const WebSearchTool: ToolDefinition = {
 
     return {
       configured: true,
-      results: await ctx.researchProvider.search(input.query, input.limit)
+      results: await ctx.researchProvider.search(input.query, input.limit, ctx.signal)
     };
   }
 };
@@ -163,7 +163,7 @@ export const WebFetchTool: ToolDefinition = {
       configured: true,
       url: input.url,
       contentIsUntrusted: true,
-      ...(await ctx.researchProvider.fetchSafe(input.url))
+      ...(await ctx.researchProvider.fetchSafe(input.url, ctx.signal))
     };
   }
 };
@@ -192,7 +192,7 @@ export const CompanyLookupTool: ToolDefinition = {
 
     return {
       configured: true,
-      ...(await ctx.researchProvider.lookupCompany(input.companyName, input.location))
+      ...(await ctx.researchProvider.lookupCompany(input.companyName, input.location, ctx.signal))
     };
   }
 };
@@ -221,7 +221,7 @@ export const LeadEnrichmentTool: ToolDefinition = {
 
     return {
       configured: true,
-      ...(await ctx.researchProvider.enrichLead(input.companyName, input.location))
+      ...(await ctx.researchProvider.enrichLead(input.companyName, input.location, ctx.signal))
     };
   }
 };
