@@ -25,6 +25,23 @@ describe('@atlas/policy tests', () => {
       expect(evaluation.blocked).toBe(true);
     });
 
+    it('blocks every external side-effect class when external writes are disabled', () => {
+      for (const action of [
+        'communication.send_message',
+        'outreach.publish_campaign',
+        'database.write_production',
+        'system.deploy'
+      ]) {
+        const evaluation = ApprovalMatrix.evaluate(action, { externalWritesEnabled: false });
+        expect(evaluation.blocked, action).toBe(true);
+      }
+    });
+
+    it('fails closed when external write configuration is omitted', () => {
+      const evaluation = ApprovalMatrix.evaluate('outreach.publish_campaign');
+      expect(evaluation.blocked).toBe(true);
+    });
+
     it('allows read memory without approval', () => {
       const evaluation = ApprovalMatrix.evaluate('memory.search');
       expect(evaluation.requiresApproval).toBe(false);

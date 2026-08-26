@@ -25,6 +25,14 @@ export class ApprovalMatrix {
     'memory.delete_canonical'
   ]);
 
+  private static readonly EXTERNAL_WRITE_ACTIONS = new Set([
+    'communication.send_approved',
+    'communication.send_message',
+    'outreach.publish_campaign',
+    'database.write_production',
+    'system.deploy'
+  ]);
+
   public static evaluate(action: string, options?: { externalWritesEnabled?: boolean }): ActionPolicy {
     if (this.BLOCKED_ACTIONS.has(action)) {
       return {
@@ -36,7 +44,7 @@ export class ApprovalMatrix {
     }
 
     if (this.HUMAN_APPROVAL_REQUIRED_ACTIONS.has(action)) {
-      if (options?.externalWritesEnabled === false && action.startsWith('communication.send')) {
+      if (this.EXTERNAL_WRITE_ACTIONS.has(action) && options?.externalWritesEnabled !== true) {
         return {
           requiresApproval: true,
           blocked: true,
