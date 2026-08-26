@@ -15,12 +15,27 @@ export interface CommunicationSendResult {
   timestamp: string;
 }
 
+export type ResearchFreshness = 'fresh' | 'aging' | 'stale' | 'unknown';
+export type ResearchSensitivity = 'public' | 'internal' | 'sensitive';
+
+export interface ResearchEvidence {
+  extractedAt: string;
+  freshness: ResearchFreshness;
+  sensitivity: ResearchSensitivity;
+  unresolvedQuestions: string[];
+  confidence: number;
+}
+
 export interface ResearchProvider {
   search(query: string, limit: number): Promise<Array<{
     title: string;
     url: string;
     snippet: string;
     confidence: number;
+    extractedAt: string;
+    freshness: ResearchFreshness;
+    sensitivity: ResearchSensitivity;
+    unresolvedQuestions: string[];
   }>>;
   lookupCompany(companyName: string, location: string): Promise<{
     found: boolean;
@@ -29,6 +44,12 @@ export interface ResearchProvider {
     phone?: string;
     instagram?: string;
     estimatedMembers?: number;
+    sourceUrl: string;
+    extractedAt: string;
+    freshness: ResearchFreshness;
+    sensitivity: ResearchSensitivity;
+    unresolvedQuestions: string[];
+    confidence: number;
   }>;
 }
 

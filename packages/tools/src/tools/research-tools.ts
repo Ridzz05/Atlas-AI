@@ -1,6 +1,35 @@
 import { z } from 'zod';
 import { ToolDefinition } from '../types.js';
 
+const ResearchEvidenceSchema = z.object({
+  extractedAt: z.string().datetime({ offset: true }),
+  freshness: z.enum(['fresh', 'aging', 'stale', 'unknown']),
+  sensitivity: z.enum(['public', 'internal', 'sensitive']),
+  unresolvedQuestions: z.array(z.string().min(1)),
+  confidence: z.number().min(0).max(1)
+});
+
+const CompanyLookupUnavailableSchema = z.object({
+  configured: z.literal(false),
+  found: z.literal(false),
+  companyName: z.string(),
+  address: z.string(),
+  warning: z.string()
+});
+
+const CompanyLookupConfiguredSchema = z.object({
+  configured: z.literal(true),
+  found: z.boolean(),
+  companyName: z.string(),
+  address: z.string(),
+  phone: z.string().optional(),
+  instagram: z.string().optional(),
+  estimatedMembers: z.number().optional(),
+  sourceUrl: z.string().url(),
+  ...ResearchEvidenceSchema.shape,
+  warning: z.string().optional()
+});
+
 export const WebSearchTool: ToolDefinition = {
   name: 'web.search',
   description: 'Search external web sources for verified company or business information.',
@@ -12,9 +41,9 @@ export const WebSearchTool: ToolDefinition = {
     configured: z.boolean(),
     results: z.array(z.object({
       title: z.string(),
-      url: z.string(),
+      url: z.string().url(),
       snippet: z.string(),
-      confidence: z.number()
+      ...ResearchEvidenceSchema.shape
     })),
     warning: z.string().optional()
   }),
@@ -44,16 +73,7 @@ export const CompanyLookupTool: ToolDefinition = {
     companyName: z.string().min(1),
     location: z.string().default('Palembang')
   }),
-  outputSchema: z.object({
-    configured: z.boolean(),
-    found: z.boolean(),
-    companyName: z.string(),
-    address: z.string(),
-    phone: z.string().optional(),
-    instagram: z.string().optional(),
-    estimatedMembers: z.number().optional(),
-    warning: z.string().optional()
-  }),
+  outputSchema: z.union([CompanyLookupUnavailableSchema, CompanyLookupConfiguredSchema]),
   riskLevel: 'read',
   requiresApproval: false,
   timeoutMs: 5000,

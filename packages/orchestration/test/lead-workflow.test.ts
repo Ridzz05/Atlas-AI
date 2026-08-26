@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   ArtifactService,
   RubricEngine,
+  LEAD_DIMENSIONS,
   LeadScoringInput
 } from '@atlas/tools';
 import { defaultAgentRegistry } from '@atlas/agents';
@@ -9,6 +10,10 @@ import { MockModelProvider } from '@atlas/providers';
 import { InMemoryEventBus } from '@atlas/events';
 import { TaskDelegator } from '../src/index.js';
 import { Task } from '@atlas/shared';
+
+const completeLeadEvidence = Object.fromEntries(
+  LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`])
+);
 
 describe('First Demonstration Scenario: Palembang Gym Lead Intelligence', () => {
   it('executes full end-to-end gym intelligence workflow without outbound send', async () => {
@@ -121,7 +126,7 @@ Successfully gathered and analyzed 30 gym leads in Palembang.
         decisionMakerEase: Math.min(6, 3 + (i % 4)),
         dataFreshness: 9
       },
-      evidence: { channelCount: 'IG + WA verified' }
+      evidence: { ...completeLeadEvidence, channelCount: 'IG + WA verified' }
     }));
 
     const scoredLeads = RubricEngine.rank(rawLeads.map(l => RubricEngine.calculate(l)));

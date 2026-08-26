@@ -10,11 +10,17 @@ import {
   createArtifactTools,
   ArtifactService,
   RubricEngine,
+  DEFAULT_LEAD_RUBRIC,
+  LEAD_DIMENSIONS,
   LeadScoringInput,
   createMemoryTools
 } from '../src/index.js';
 import { TokenVerifier } from '@atlas/policy';
 import { InMemoryMemoryStore, MemoryRetriever, MemoryProposalService, MemoryTools } from '@atlas/memory';
+
+const completeLeadEvidence = Object.fromEntries(
+  LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`])
+);
 
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('rejects malformed tool output before returning it to orchestration', async () => {
@@ -66,6 +72,77 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(companyRes.success).toBe(true);
     expect((companyRes.output as any).found).toBe(false);
     expect((companyRes.output as any).configured).toBe(false);
+  });
+
+  it('rejects research provider results that omit evidence metadata', async () => {
+    const registry = new ToolRegistry();
+    registry.register(WebSearchTool);
+
+    const result = await registry.execute('web.search', { query: 'gyms in Palembang' }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      researchProvider: {
+        search: vi.fn().mockResolvedValue([{
+          title: 'Gym result',
+          url: 'https://example.com/gym',
+          snippet: 'Gym profile',
+          confidence: 0.9
+        }]),
+        lookupCompany: vi.fn()
+      } as any
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid output from tool 'web.search'");
+  });
+
+  it('accepts research results only when evidence metadata is complete', async () => {
+    const registry = new ToolRegistry();
+    registry.register(WebSearchTool);
+    registry.register(CompanyLookupTool);
+    const evidence = {
+      extractedAt: '2026-08-26T00:00:00.000Z',
+      freshness: 'fresh' as const,
+      sensitivity: 'public' as const,
+      unresolvedQuestions: [],
+      confidence: 0.9
+    };
+
+    const searchResult = await registry.execute('web.search', { query: 'gyms in Palembang' }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      researchProvider: {
+        search: vi.fn().mockResolvedValue([{
+          title: 'Gym result',
+          url: 'https://example.com/gym',
+          snippet: 'Gym profile',
+          ...evidence
+        }]),
+        lookupCompany: vi.fn()
+      } as any
+    });
+
+    expect(searchResult.success).toBe(true);
+
+    const companyResult = await registry.execute('company.lookup', { companyName: 'Gym result' }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      researchProvider: {
+        search: vi.fn(),
+        lookupCompany: vi.fn().mockResolvedValue({
+          found: true,
+          companyName: 'Gym result',
+          address: 'Palembang',
+          sourceUrl: 'https://example.com/gym',
+          ...evidence
+        })
+      } as any
+    });
+
+    expect(companyResult.success).toBe(true);
   });
 
   it('blocks communication.send_approved if approval token is missing', async () => {
@@ -314,7 +391,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         decisionMakerEase: 6,
         dataFreshness: 10
       },
-      evidence: { memberCount: '600 members', channels: 'WA, IG, FB' }
+      evidence: { ...completeLeadEvidence, memberCount: '600 members', channels: 'WA, IG, FB' }
     };
 
     const gym2: LeadScoringInput = {
@@ -334,7 +411,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         decisionMakerEase: 5,
         dataFreshness: 5
       },
-      evidence: { memberCount: '50 members' }
+      evidence: { ...completeLeadEvidence, memberCount: '50 members' }
     };
 
     const evaluated1 = RubricEngine.calculate(gym1);
@@ -350,6 +427,100 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(ranked[0]?.name).toBe('Mega Fitness Palembang');
     expect(ranked[0]?.rank).toBe(1);
     expect(ranked[1]?.rank).toBe(2);
+  });
+
+  it('does not qualify a lead when positive scores lack per-dimension evidence', () => {
+    const result = RubricEngine.calculate({
+      leadId: 'gym-evidence-gap',
+      name: 'Evidence Gap Gym',
+      category: 'Fitness Center',
+      location: 'Palembang',
+      scores: {
+        businessTypeFit: 15,
+        channelCount: 10,
+        customerVolume: 10,
+        memberRetentionNeed: 15,
+        digitalPresenceQuality: 8,
+        responsiveness: 8,
+        csAutomationPotential: 10,
+        broadcastPotential: 8,
+        decisionMakerEase: 6,
+        dataFreshness: 10
+      },
+      evidence: {
+        businessTypeFit: 'Fitness center confirmed'
+      }
+    });
+
+    expect(result.totalScore).toBe(100);
+    expect(result.evidenceComplete).toBe(false);
+    expect(result.missingEvidence).toContain('channelCount');
+    expect(result.status).toBe('needs_review');
+  });
+
+  it('supports registered rubric versions with validated weights and thresholds', () => {
+    RubricEngine.register({
+      ...DEFAULT_LEAD_RUBRIC,
+      version: 'v2-test',
+      maxScores: {
+        ...DEFAULT_LEAD_RUBRIC.maxScores,
+        businessTypeFit: 10,
+        channelCount: 15
+      },
+      thresholds: {
+        qualified: 70,
+        needsReview: 40
+      }
+    });
+
+    const result = RubricEngine.calculate({
+      leadId: 'gym-v2',
+      name: 'Versioned Gym',
+      category: 'Fitness Center',
+      location: 'Palembang',
+      scores: {
+        businessTypeFit: 10,
+        channelCount: 15,
+        customerVolume: 10,
+        memberRetentionNeed: 15,
+        digitalPresenceQuality: 8,
+        responsiveness: 8,
+        csAutomationPotential: 10,
+        broadcastPotential: 8,
+        decisionMakerEase: 6,
+        dataFreshness: 10
+      },
+      evidence: {
+        businessTypeFit: 'Fitness center confirmed',
+        channelCount: 'WhatsApp and Instagram confirmed',
+        customerVolume: '600 members reported',
+        memberRetentionNeed: 'Retention program identified',
+        digitalPresenceQuality: 'Active digital profiles',
+        responsiveness: 'Response time observed',
+        csAutomationPotential: 'Manual support workflow identified',
+        broadcastPotential: 'Broadcast audience confirmed',
+        decisionMakerEase: 'Owner contact identified',
+        dataFreshness: 'Observed this week'
+      }
+    }, { rubricVersion: 'v2-test' });
+
+    expect(result.rubricVersion).toBe('v2-test');
+    expect(result.totalScore).toBe(100);
+    expect(result.evidenceComplete).toBe(true);
+    expect(result.status).toBe('qualified');
+  });
+
+  it('rejects malformed or unknown rubric versions', () => {
+    expect(() => RubricEngine.register({
+      ...DEFAULT_LEAD_RUBRIC,
+      version: 'invalid-total',
+      maxScores: {
+        ...DEFAULT_LEAD_RUBRIC.maxScores,
+        businessTypeFit: 14
+      }
+    })).toThrow('must sum to 100');
+
+    expect(() => RubricEngine.getRubric('missing-version')).toThrow('is not registered');
   });
 
   it('generates CSV and Markdown artifacts properly', () => {
@@ -372,7 +543,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         decisionMakerEase: 5,
         dataFreshness: 9
       },
-      evidence: {}
+      evidence: completeLeadEvidence
     });
 
     const csvMeta = artifactService.exportLeadsCsv([sampleLead], 'test_leads.csv');
@@ -382,6 +553,8 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const reportMeta = artifactService.exportScoringReport([sampleLead], 'test_report.md');
     expect(reportMeta.sizeBytes).toBeGreaterThan(0);
     expect(artifactService.read('test_report.md')).toContain('Lead Scoring & ICP Evaluation Report');
+    expect(artifactService.read('test_report.md')).toContain('Rubric version: v1');
+    expect(artifactService.read('test_report.md')).toContain('**Incomplete evidence:** 0 leads');
   });
 
   it('rejects artifact paths that escape the storage root', () => {
