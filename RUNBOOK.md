@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, Tool Gateway timeout cancellation propagation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools with verified-only search and scheduled expiry/deprecation cleanup plus canonical-memory audit records, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, authenticated and audited agent-service rubric control API, safe research tool boundaries including public-hostname target validation, research output evidence contracts, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, patched dashboard dependencies, repository formatting enforcement, fail-closed handling for every registered external/production side effect, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. The latest high-severity dependency audit reports zero high/critical findings and all 332 installed packages have verified registry signatures. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
+> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, Tool Gateway timeout cancellation propagation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools with verified-only search and scheduled expiry/deprecation cleanup plus canonical-memory audit records, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, authenticated and audited agent-service rubric control API, opt-in Brave research adapter with bounded safe fetch and untrusted-content evidence boundaries, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, patched dashboard dependencies, repository formatting enforcement, fail-closed handling for every registered external/production side effect, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. The latest high-severity dependency audit reports zero high/critical findings and all 332 installed packages have verified registry signatures. Do not enable external writes yet: no approved outbound connector is configured, and the research provider is not live-verified. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
 
 ---
 
@@ -112,9 +112,24 @@ The worker runs memory maintenance before accepting queue work and then on the c
 
 ### 3.6 Research provider network boundary
 
-`web.fetch_safe` accepts only credential-free HTTP(S) URLs with named public hostnames. It rejects literal IPv4/IPv6 targets and `localhost`, `.local`, and `.internal` hostnames before provider access. Any approved provider must additionally validate DNS results, every redirect target, response size, and request timeout; do not inject an arbitrary fetch client as a research provider.
+`web.fetch_safe` accepts only credential-free HTTP(S) URLs with named public hostnames. It rejects literal IPv4/IPv6 targets and `localhost`, `.local`, and `.internal` hostnames before provider access. The built-in `SafeWebFetcher` additionally validates public DNS results and every redirect target, bounds response size, accepts only text-like content types, and enforces request/body timeouts. Fetched content remains untrusted data and must not be treated as instructions or canonical facts. Any approved provider must apply equivalent controls; do not inject an arbitrary fetch client as a research provider.
 
 Tool Gateway timeouts propagate an `AbortSignal` to research providers. Provider implementations must honor that signal and still enforce their own DNS, redirect, response-size, and request-timeout controls; a provider that ignores cancellation is not release-ready.
+
+### 3.7 Optional Brave research provider
+
+Research is fail-closed by default. Leave these values unchanged when no approved research credential is available:
+
+```dotenv
+RESEARCH_PROVIDER=none
+RESEARCH_API_KEY=
+RESEARCH_COUNTRY=ID
+RESEARCH_SEARCH_LANG=id
+```
+
+After approving a Brave Search API credential, set `RESEARCH_PROVIDER=brave` and `RESEARCH_API_KEY` in the deployment secret environment. The worker constructs the provider and receives only the research configuration; the API and dashboard do not need the key. The adapter sends search requests to the official Brave Search API host, does not log the key, limits query/result sizes, and returns evidence with confidence `0.5` plus unresolved verification questions. Do not promote its results to verified memory or enable external writes solely because a search result exists.
+
+Before enabling this in production, run the provider-to-Tool-Gateway tests, perform a live search with a disposable approved key, confirm API-key redaction in logs, and complete the clean-host recovery/security drill. Revoke the disposable key after verification.
 
 ---
 

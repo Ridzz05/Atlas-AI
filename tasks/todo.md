@@ -51,7 +51,8 @@
 
 - [x] Make research/company tools fail closed when no verified provider is configured.
 - [x] Register truthful `web.fetch_safe`/`lead.enrich` boundaries, deterministic `lead.score`, and runtime `policy.verify`; enforce safe URLs and untrusted fetched content.
-- [ ] Add real research/enrichment adapters with source, extraction time, confidence, freshness, sensitivity, and unresolved questions.
+- [x] Add an opt-in Brave research/enrichment adapter with source, extraction time, confidence, freshness, sensitivity, unresolved questions, bounded safe fetch, and untrusted-content handling.
+- [ ] Verify the Brave provider against an approved live API key and a clean environment; keep `RESEARCH_PROVIDER=none` until then.
 - [x] Enforce `MemoryItem.expiresAt` at store, retrieval, and `memory.get` boundaries so expired or malformed-expiry facts cannot surface or block a fresh proposal.
 - [x] Wire memory search/get/propose tools into agent execution with scope checks; agent allowlists intentionally deny propose-write until policy grants it.
 - [x] Add scheduled memory expiry/deprecation/deletion maintenance and audit canonical-memory changes; worker configuration controls interval and deletion grace period.
@@ -62,6 +63,7 @@
 - [x] Add repository lint and Prettier formatting gates and run them in CI.
 - [x] Add mandatory dependency audit and signature CI gates; the latest lockfile audit reports zero high/critical findings and registry signatures are verified for 332 packages.
 - [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
+- [x] Add local provider security regressions and a provider-to-Tool-Gateway vertical test for unsafe URLs, DNS, redirects, response bounds, timeouts, evidence, and untrusted content.
 - [x] Align production environment variable names, remove insecure production Compose fallbacks, and fail closed on incomplete/unsupported model-provider configuration.
 - [x] Add production Compose healthchecks and healthy-dependency ordering; Docker boot verification remains open.
 - [x] Add dependency-aware `/ready` endpoints for worker and Telegram and route Compose healthchecks through them; Docker boot verification remains open.
@@ -71,7 +73,7 @@
 
 ## Current execution checkpoint
 
-Current release state supersedes the historical implementation inventory below: the latest implementation commit is `76837ea`, with the watchdog timeout classification regression covered by the orchestration suite. The latest local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15; Docker-backed recovery and real provider/connector validation remain release criteria.
+Current release state supersedes the historical implementation inventory below: the latest implementation commit is `98ea6f6`, with the Brave provider, safe fetch, runtime wiring, and provider-to-Tool-Gateway tests covered locally. The latest local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15; Docker-backed recovery and live provider/connector validation remain release criteria.
 
 Follow-up reliability slices `61bb83f`, `bfdbb09`, and `4121b3d` add startup, paginated, periodic, and Compose-smoke verification for persisted queued-task recovery. Commit `60211ed` synchronizes the recovery checkpoint and runbook; `6268918` hardens backup/restore and documents application rollback; commits `e2992df` and `1d00576` preserve provider completion limits and truncation signals; `76837ea` classifies watchdog-triggered provider aborts as `timed_out` without changing user/process cancellation. The local worker regression suite now passes 10 tests; a real cross-process restart/restore drill and alert delivery remain Docker/operations release criteria.
 
