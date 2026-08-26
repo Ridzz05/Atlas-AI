@@ -61,7 +61,10 @@ jobs:
         run: docker compose -f docker-compose.prod.yml config --quiet
 
       - name: Validate operational shell scripts
-        run: bash -n scripts/backup-db.sh scripts/restore-db.sh scripts/healthcheck.sh scripts/ci-compose-smoke.sh
+        run: |
+          for script in scripts/backup-db.sh scripts/restore-db.sh scripts/healthcheck.sh scripts/ci-compose-smoke.sh; do
+            bash -n "$script"
+          done
 
   compose-smoke:
     needs: validate
