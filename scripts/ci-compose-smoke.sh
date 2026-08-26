@@ -3,7 +3,9 @@ set -euo pipefail
 
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.prod.yml}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-atlas-ci}"
+ATLAS_CONTAINER_PREFIX="${ATLAS_CONTAINER_PREFIX:-${COMPOSE_PROJECT_NAME}}"
 export COMPOSE_PROJECT_NAME
+export ATLAS_CONTAINER_PREFIX
 
 : "${POSTGRES_PASSWORD:=ci-postgres-password}"
 : "${REDIS_PASSWORD:=ci-redis-password}"

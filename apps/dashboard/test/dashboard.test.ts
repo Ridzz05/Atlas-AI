@@ -137,6 +137,16 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(compose).toContain('ATLAS_API_BASE_URL: http://agent-service:4000/api/v1');
   });
 
+  it('keeps Compose smoke containers isolated without changing the production default names', () => {
+    const compose = readFileSync(resolve(process.cwd(), '../../docker-compose.prod.yml'), 'utf8');
+    const smoke = readFileSync(resolve(process.cwd(), '../../scripts/ci-compose-smoke.sh'), 'utf8');
+
+    for (const service of ['postgres', 'redis', 'agent_service', 'worker', 'telegram_bot', 'dashboard', 'caddy']) {
+      expect(compose).toContain(`container_name: \${ATLAS_CONTAINER_PREFIX:-atlas}_${service}_prod`);
+    }
+    expect(smoke).toContain('export ATLAS_CONTAINER_PREFIX');
+  });
+
   it('routes the dashboard proxy path through Next.js before direct API paths in Caddy', () => {
     const caddy = readFileSync(resolve(process.cwd(), '../../Caddyfile'), 'utf8');
     const dashboardProxyIndex = caddy.indexOf('handle /api/atlas/*');

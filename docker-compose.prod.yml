@@ -3,7 +3,7 @@ version: '3.9'
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: atlas_postgres_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_postgres_prod
     restart: always
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-atlas_os}
@@ -29,7 +29,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: atlas_redis_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_redis_prod
     restart: always
     command: redis-server --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD must be set} --appendonly yes
     volumes:
@@ -54,7 +54,7 @@ services:
     build:
       context: .
       dockerfile: apps/agent-service/Dockerfile
-    container_name: atlas_agent_service_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_agent_service_prod
     restart: always
     environment:
       NODE_ENV: production
@@ -108,7 +108,7 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
-    container_name: atlas_worker_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_worker_prod
     restart: always
     environment:
       NODE_ENV: production
@@ -165,7 +165,7 @@ services:
     build:
       context: .
       dockerfile: apps/telegram-bot/Dockerfile
-    container_name: atlas_telegram_bot_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_telegram_bot_prod
     restart: always
     environment:
       NODE_ENV: production
@@ -211,7 +211,7 @@ services:
     build:
       context: .
       dockerfile: apps/dashboard/Dockerfile
-    container_name: atlas_dashboard_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_dashboard_prod
     restart: always
     environment:
       NODE_ENV: production
@@ -247,7 +247,7 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: atlas_caddy_prod
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_caddy_prod
     restart: always
     environment:
       ATLAS_DOMAIN: ${ATLAS_DOMAIN:-localhost}
