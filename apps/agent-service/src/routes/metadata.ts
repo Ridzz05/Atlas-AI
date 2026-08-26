@@ -56,6 +56,19 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     }
   });
 
+  app.get('/api/v1/recovery', async (_req, reply) => {
+    if (!options.runRepo || typeof (options.runRepo as any).getLeaseSummary !== 'function') {
+      return reply.status(200).send({ data: null, durable: false });
+    }
+
+    try {
+      const data = await (options.runRepo as RunRepository).getLeaseSummary();
+      return reply.status(200).send({ data, durable: true });
+    } catch {
+      return reply.status(503).send({ error: 'Recovery metrics are unavailable.' });
+    }
+  });
+
   app.get('/api/v1/artifacts', async (req, reply) => {
     const query = req.query as { taskId?: string; limit?: string };
     const limit = parseLimit(query.limit, 'Artifact');

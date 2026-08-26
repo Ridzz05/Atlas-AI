@@ -37,6 +37,14 @@ interface CostSummaryResponse {
   data: { costs: CostMetrics | null; budget: BudgetMetrics | null };
   durable: boolean;
 }
+interface LeaseMetrics {
+  checkedAt: string;
+  activeLeaseCount: number;
+  expiredLeaseCount: number;
+  unleasedExecutableRunCount: number;
+  cancellationRequestedCount: number;
+}
+interface RecoverySummaryResponse { data: LeaseMetrics | null; durable: boolean; }
 
 const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status'] => {
   const assigned = tasks.filter(task => task.assignedAgent === agentId);
@@ -50,20 +58,23 @@ export default function CommandCenterPage() {
   const [tasks, setTasks] = useState<ApiTask[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [costMetrics, setCostMetrics] = useState<CostSummaryResponse['data'] | null>(null);
+  const [recoveryMetrics, setRecoveryMetrics] = useState<LeaseMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const loadOverview = async () => {
     setLoading(true);
     try {
-      const [taskResponse, approvalResponse, costResponse] = await Promise.all([
+      const [taskResponse, approvalResponse, costResponse, recoveryResponse] = await Promise.all([
         atlasFetch<TaskListResponse>('/tasks?limit=100'),
         atlasFetch<ApprovalListResponse>('/approvals?status=pending&limit=100'),
-        atlasFetch<CostSummaryResponse>('/costs')
+        atlasFetch<CostSummaryResponse>('/costs'),
+        atlasFetch<RecoverySummaryResponse>('/recovery')
       ]);
       setTasks(taskResponse.data);
       setPendingApprovals(approvalResponse.count);
       setCostMetrics(costResponse.data);
+      setRecoveryMetrics(recoveryResponse.data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load the live command center.');
@@ -120,6 +131,13 @@ export default function CommandCenterPage() {
         </div>
 
         <AgentGraph agents={graphAgents} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Worker lease recovery telemetry">
+          <Metric label="ACTIVE LEASES" value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.activeLeaseCount)} icon={<Clock className="w-5 h-5" />} tone="indigo" />
+          <Metric label="EXPIRED LEASES" value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.expiredLeaseCount)} icon={<AlertCircle className="w-5 h-5" />} tone="amber" />
+          <Metric label="UNLEASED RUNS" value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.unleasedExecutableRunCount)} icon={<Clock className="w-5 h-5" />} tone="cyan" />
+          <Metric label="CANCEL REQUESTS" value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.cancellationRequestedCount)} icon={<RefreshCw className="w-5 h-5" />} tone="emerald" />
+        </div>
 
         <div className="p-6 bg-[#111827] rounded-xl border border-gray-800">
           <div className="flex items-center justify-between mb-4"><h2 className="text-sm font-semibold text-white">Recent Execution Pipeline</h2><Link href="/tasks" className="text-xs text-indigo-400 hover:text-indigo-300">View All Tasks →</Link></div>

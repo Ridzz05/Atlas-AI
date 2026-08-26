@@ -25,6 +25,14 @@ export interface CostSummary {
   byAgent: CostByAgent[];
 }
 
+export interface LeaseSummary {
+  checkedAt: string;
+  activeLeaseCount: number;
+  expiredLeaseCount: number;
+  unleasedExecutableRunCount: number;
+  cancellationRequestedCount: number;
+}
+
 export class RunRepository {
   constructor(private db: DatabaseClient) {}
 
@@ -99,6 +107,42 @@ export class RunRepository {
         costUsd: Number(row.cost_usd || 0),
         runCount: Number(row.run_count || 0)
       }))
+    };
+  }
+
+  public async getLeaseSummary(now = new Date()): Promise<LeaseSummary> {
+    const checkedAt = now.toISOString();
+    const result = await this.db.query(`
+      SELECT
+        COUNT(*) FILTER (
+          WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+            AND worker_id IS NOT NULL
+            AND lease_expires_at IS NOT NULL
+            AND lease_expires_at >= $1
+        )::int AS active_lease_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+            AND lease_expires_at IS NOT NULL
+            AND lease_expires_at < $1
+        )::int AS expired_lease_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+            AND worker_id IS NULL
+        )::int AS unleased_executable_run_count,
+        COUNT(*) FILTER (
+          WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+            AND cancel_requested = TRUE
+        )::int AS cancellation_requested_count
+      FROM runs
+    `, [checkedAt]);
+
+    const summary = result.rows[0] || {};
+    return {
+      checkedAt,
+      activeLeaseCount: Number(summary.active_lease_count || 0),
+      expiredLeaseCount: Number(summary.expired_lease_count || 0),
+      unleasedExecutableRunCount: Number(summary.unleased_executable_run_count || 0),
+      cancellationRequestedCount: Number(summary.cancellation_requested_count || 0)
     };
   }
 

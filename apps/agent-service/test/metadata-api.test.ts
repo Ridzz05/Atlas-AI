@@ -85,6 +85,35 @@ describe('agent-service metadata endpoints', () => {
     });
   });
 
+  it('returns durable worker lease telemetry', async () => {
+    const server = buildServer({
+      config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
+      runRepo: {
+        getLeaseSummary: vi.fn().mockResolvedValue({
+          checkedAt: '2026-08-26T10:00:00.000Z',
+          activeLeaseCount: 2,
+          expiredLeaseCount: 1,
+          unleasedExecutableRunCount: 3,
+          cancellationRequestedCount: 1
+        })
+      } as any
+    });
+
+    const response = await server.inject({ method: 'GET', url: '/api/v1/recovery' });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body)).toEqual({
+      data: {
+        checkedAt: '2026-08-26T10:00:00.000Z',
+        activeLeaseCount: 2,
+        expiredLeaseCount: 1,
+        unleasedExecutableRunCount: 3,
+        cancellationRequestedCount: 1
+      },
+      durable: true
+    });
+  });
+
   it('rejects unsupported memory filters and invalid ids', async () => {
     const server = buildServer({
       config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),

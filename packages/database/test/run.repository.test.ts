@@ -62,6 +62,32 @@ describe('RunRepository cancellation state', () => {
     expect(summary.periodEnd).toBe('2026-08-27T00:00:00.000Z');
   });
 
+  it('returns durable worker lease telemetry', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rows: [{
+        active_lease_count: '2',
+        expired_lease_count: '1',
+        unleased_executable_run_count: '3',
+        cancellation_requested_count: '1'
+      }] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    const summary = await repository.getLeaseSummary(new Date('2026-08-26T10:00:00.000Z'));
+
+    expect(summary).toEqual({
+      checkedAt: '2026-08-26T10:00:00.000Z',
+      activeLeaseCount: 2,
+      expiredLeaseCount: 1,
+      unleasedExecutableRunCount: 3,
+      cancellationRequestedCount: 1
+    });
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('lease_expires_at < $1'),
+      ['2026-08-26T10:00:00.000Z']
+    );
+  });
+
   it('records a cancellation request durably for an active run', async () => {
     const db = {
       query: vi.fn().mockResolvedValue({ rows: [{
