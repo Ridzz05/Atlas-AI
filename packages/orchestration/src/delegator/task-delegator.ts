@@ -49,6 +49,7 @@ export interface DelegationResult {
 
 export class TaskDelegator {
   private runner: AgentRunner;
+  private stageRunner?: AgentRunner;
   private planner: TaskPlanner;
   private synthesizer: TaskSynthesizer;
   private qaGate: QAGate;
@@ -71,10 +72,24 @@ export class TaskDelegator {
       cancellationStore: options.cancellationStore
     });
 
+    if (options.runRepo && options.budgetRepo) {
+      this.stageRunner = new AgentRunner({
+        provider: options.provider,
+        eventBus: options.eventBus,
+        runRepo: options.runRepo,
+        messageRepo: options.messageRepo,
+        budgetRepo: options.budgetRepo,
+        globalDailyBudgetUsd: options.globalDailyBudgetUsd,
+        workerId: options.workerId,
+        leaseSeconds: options.leaseSeconds
+      });
+    }
+
     this.planner = new TaskPlanner({
       provider: options.provider,
       registry: options.registry,
-      messageRepo: options.messageRepo
+      messageRepo: options.messageRepo,
+      runner: this.stageRunner
     });
 
     const chiefAgent = options.registry.getOrThrow('chief');
@@ -83,13 +98,15 @@ export class TaskDelegator {
     this.synthesizer = new TaskSynthesizer({
       provider: options.provider,
       chiefAgent,
-      messageRepo: options.messageRepo
+      messageRepo: options.messageRepo,
+      runner: this.stageRunner
     });
 
     this.qaGate = new QAGate({
       provider: options.provider,
       argusAgent,
-      messageRepo: options.messageRepo
+      messageRepo: options.messageRepo,
+      runner: this.stageRunner
     });
 
     this.maxConcurrency = options.maxConcurrency || 3;

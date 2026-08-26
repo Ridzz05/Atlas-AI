@@ -4,11 +4,13 @@ import { AgentRegistry } from '@atlas/agents';
 import { MessageRepository } from '@atlas/database';
 import { rootLogger } from '@atlas/observability';
 import { PlanValidator } from './plan-validator.js';
+import type { AgentRunner } from '../engine/agent-runner.js';
 
 export interface TaskPlannerOptions {
   provider: ModelProvider;
   registry: AgentRegistry;
   messageRepo?: MessageRepository;
+  runner?: AgentRunner;
 }
 
 export class TaskPlanner {
@@ -54,12 +56,14 @@ RULES:
 4. If outreach or external mutation is needed, add it to approval_points.
 5. Return ONLY the JSON object.`;
 
-    const result = await this.options.provider.run({
-      runId: crypto.randomUUID(),
-      agentId: 'chief',
-      messages: [{ role: 'user', content: prompt }],
-      signal
-    });
+    const resultContent = this.options.runner
+      ? await this.runThroughDurableRunner(task, prompt, signal)
+      : (await this.options.provider.run({
+        runId: crypto.randomUUID(),
+        agentId: 'chief',
+        messages: [{ role: 'user', content: prompt }],
+        signal
+      })).content;
 
     if (this.options.messageRepo) {
       await this.options.messageRepo.create({
@@ -73,13 +77,13 @@ RULES:
         taskId: task.id,
         senderType: 'agent',
         senderId: 'chief',
-        content: result.content,
+        content: resultContent,
         metadata: { stage: 'planning' }
       });
     }
 
     try {
-      const cleaned = result.content.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      const cleaned = resultContent.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
       const parsed = JSON.parse(cleaned);
       const plan = TaskPlanSchema.parse(parsed);
       return PlanValidator.assertValid(plan, { registry: this.options.registry });
@@ -161,5 +165,19 @@ RULES:
       approval_points: [],
       estimated_cost_usd: 0.40
     };
+  }
+
+  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<string> {
+    const chiefAgent = this.options.registry.getOrThrow('chief');
+    const summary = await this.options.runner!.run({
+      task,
+      agent: chiefAgent,
+      initialPrompt: prompt,
+      signal
+    });
+    if (summary.status !== 'completed') {
+      throw new Error(`Planning run failed: ${summary.error || summary.status}`);
+    }
+    return summary.finalContent;
   }
 }

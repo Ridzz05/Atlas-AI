@@ -3,11 +3,13 @@ import { ModelProvider } from '@atlas/providers';
 import { QAResult } from '../qa/qa-gate.js';
 import { rootLogger } from '@atlas/observability';
 import { MessageRepository } from '@atlas/database';
+import type { AgentRunner } from '../engine/agent-runner.js';
 
 export interface TaskSynthesizerOptions {
   provider: ModelProvider;
   chiefAgent: AgentDefinition;
   messageRepo?: MessageRepository;
+  runner?: AgentRunner;
 }
 
 export class TaskSynthesizer {
@@ -48,13 +50,15 @@ INSTRUCTIONS:
 3. If human approval is required for next actions (such as sending messages), state this explicitly.
 4. Keep the presentation concise, structured, and easy to read.`;
 
-    const result = await this.options.provider.run({
-      runId: crypto.randomUUID(),
-      agentId: 'chief',
-      messages: [{ role: 'user', content: prompt }],
-      systemPrompt: this.options.chiefAgent.systemPrompt,
-      signal
-    });
+    const resultContent = this.options.runner
+      ? await this.runThroughDurableRunner(parentTask, prompt, signal)
+      : (await this.options.provider.run({
+        runId: crypto.randomUUID(),
+        agentId: 'chief',
+        messages: [{ role: 'user', content: prompt }],
+        systemPrompt: this.options.chiefAgent.systemPrompt,
+        signal
+      })).content;
 
     if (this.options.messageRepo) {
       await this.options.messageRepo.create({
@@ -68,11 +72,24 @@ INSTRUCTIONS:
         taskId: parentTask.id,
         senderType: 'agent',
         senderId: 'chief',
-        content: result.content,
+        content: resultContent,
         metadata: { stage: 'synthesis' }
       });
     }
 
-    return result.content;
+    return resultContent;
+  }
+
+  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<string> {
+    const summary = await this.options.runner!.run({
+      task,
+      agent: this.options.chiefAgent,
+      initialPrompt: prompt,
+      signal
+    });
+    if (summary.status !== 'completed') {
+      throw new Error(`Synthesis run failed: ${summary.error || summary.status}`);
+    }
+    return summary.finalContent;
   }
 }

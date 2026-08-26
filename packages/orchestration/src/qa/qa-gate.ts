@@ -2,6 +2,7 @@ import { Task, AgentDefinition } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
 import { rootLogger } from '@atlas/observability';
 import { MessageRepository } from '@atlas/database';
+import type { AgentRunner } from '../engine/agent-runner.js';
 
 export type QAVerdict = 'PASS' | 'PASS_WITH_WARNINGS' | 'REVISION_REQUIRED' | 'BLOCKED';
 
@@ -16,6 +17,7 @@ export interface QAGateOptions {
   provider: ModelProvider;
   argusAgent: AgentDefinition;
   messageRepo?: MessageRepository;
+  runner?: AgentRunner;
 }
 
 export class QAGate {
@@ -61,13 +63,15 @@ RULES:
 - If numbers or claims are dubious, choose REVISION_REQUIRED.
 - If policy or forbidden actions are attempted, choose BLOCKED.`;
 
-    const modelResult = await this.options.provider.run({
-      runId: crypto.randomUUID(),
-      agentId: 'argus',
-      messages: [{ role: 'user', content: prompt }],
-      systemPrompt: this.options.argusAgent.systemPrompt,
-      signal
-    });
+    const modelContent = this.options.runner
+      ? await this.runThroughDurableRunner(parentTask, prompt, signal)
+      : (await this.options.provider.run({
+        runId: crypto.randomUUID(),
+        agentId: 'argus',
+        messages: [{ role: 'user', content: prompt }],
+        systemPrompt: this.options.argusAgent.systemPrompt,
+        signal
+      })).content;
 
     if (this.options.messageRepo) {
       await this.options.messageRepo.create({
@@ -81,13 +85,13 @@ RULES:
         taskId: parentTask.id,
         senderType: 'agent',
         senderId: 'argus',
-        content: modelResult.content,
+        content: modelContent,
         metadata: { stage: 'qa' }
       });
     }
 
     try {
-      const cleaned = modelResult.content.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
+      const cleaned = modelContent.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();
       const parsed = JSON.parse(cleaned) as {
         verdict?: unknown;
         findings?: unknown;
@@ -130,5 +134,18 @@ RULES:
         passed: false
       };
     }
+  }
+
+  private async runThroughDurableRunner(task: Task, prompt: string, signal?: AbortSignal): Promise<string> {
+    const summary = await this.options.runner!.run({
+      task,
+      agent: this.options.argusAgent,
+      initialPrompt: prompt,
+      signal
+    });
+    if (summary.status !== 'completed') {
+      throw new Error(`QA run failed: ${summary.error || summary.status}`);
+    }
+    return summary.finalContent;
   }
 }

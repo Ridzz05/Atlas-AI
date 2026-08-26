@@ -175,4 +175,46 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
     expect(result.approvalId).toBe('123e4567-e89b-12d3-a456-426614174003');
     expect(result.finalSynthesis).toContain('waiting for human approval');
   });
+
+  it('routes planner, specialist, QA, and synthesis model calls through durable budget accounting', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: JSON.stringify({
+            goal: 'Budgeted task',
+            steps: [{ id: 'step_1', agent: 'ned', objective: 'Return evidence', depends_on: [] }],
+            approval_points: [],
+            estimated_cost_usd: 0.1
+          })
+        },
+        { content: 'Evidence with citations.' },
+        { content: JSON.stringify({ verdict: 'PASS', findings: [], recommendations: [] }) },
+        { content: 'Budgeted synthesis.' }
+      ]
+    });
+    const runRepo = {
+      create: vi.fn(),
+      acquireLease: vi.fn(async () => ({ id: 'leased-run' })),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const budgetRepo = {
+      reserve: vi.fn(async ({ runId }: { runId: string }) => ({ id: `reservation-${runId}` })),
+      commit: vi.fn(async (id: string, costUsd: number) => ({ id, status: 'committed', committedCostUsd: costUsd }))
+    } as any;
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      budgetRepo,
+      globalDailyBudgetUsd: 5
+    });
+
+    const result = await delegator.executePlan(parentTask);
+
+    expect(result.status).toBe('completed');
+    expect(budgetRepo.reserve).toHaveBeenCalledTimes(4);
+    expect(budgetRepo.commit).toHaveBeenCalledTimes(4);
+  });
 });
