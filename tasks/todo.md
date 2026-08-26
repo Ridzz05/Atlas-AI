@@ -73,7 +73,7 @@
 
 ## Current execution checkpoint
 
-Current release state supersedes the historical implementation inventory below: the latest implementation commit is `98ea6f6`, with the Brave provider, safe fetch, runtime wiring, and provider-to-Tool-Gateway tests covered locally. The latest local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15; Docker-backed recovery and live provider/connector validation remain release criteria.
+Current release state supersedes the historical implementation inventory below: the latest implementation commit is `a083c83`, with the Brave provider, DNS-pinned safe fetch, runtime wiring, and provider-to-Tool-Gateway tests covered locally. The latest local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15; Docker-backed recovery and live provider/connector validation remain release criteria.
 
 Follow-up reliability slices `61bb83f`, `bfdbb09`, and `4121b3d` add startup, paginated, periodic, and Compose-smoke verification for persisted queued-task recovery. Commit `60211ed` synchronizes the recovery checkpoint and runbook; `6268918` hardens backup/restore and documents application rollback; commits `e2992df` and `1d00576` preserve provider completion limits and truncation signals; `76837ea` classifies watchdog-triggered provider aborts as `timed_out` without changing user/process cancellation. The local worker regression suite now passes 10 tests; a real cross-process restart/restore drill and alert delivery remain Docker/operations release criteria.
 

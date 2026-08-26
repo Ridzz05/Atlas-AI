@@ -112,7 +112,7 @@ The worker runs memory maintenance before accepting queue work and then on the c
 
 ### 3.6 Research provider network boundary
 
-`web.fetch_safe` accepts only credential-free HTTP(S) URLs with named public hostnames. It rejects literal IPv4/IPv6 targets and `localhost`, `.local`, and `.internal` hostnames before provider access. The built-in `SafeWebFetcher` additionally validates public DNS results and every redirect target, bounds response size, accepts only text-like content types, and enforces request/body timeouts. Fetched content remains untrusted data and must not be treated as instructions or canonical facts. Any approved provider must apply equivalent controls; do not inject an arbitrary fetch client as a research provider.
+`web.fetch_safe` accepts only credential-free HTTP(S) URLs with named public hostnames. It rejects literal IPv4/IPv6 targets and `localhost`, `.local`, and `.internal` hostnames before provider access. The built-in `SafeWebFetcher` additionally validates all DNS results, pins the first validated public address into the Node HTTP(S) transport, validates every redirect target, bounds response size, accepts only text-like content types, and enforces request/body timeouts. Fetched content remains untrusted data and must not be treated as instructions or canonical facts. Any approved provider must apply equivalent controls; the `fetchImpl` override is a test seam and must not be injected in production.
 
 Tool Gateway timeouts propagate an `AbortSignal` to research providers. Provider implementations must honor that signal and still enforce their own DNS, redirect, response-size, and request-timeout controls; a provider that ignores cancellation is not release-ready.
 
