@@ -63,7 +63,7 @@
 
 ## Current execution checkpoint
 
-Implemented through commit `7be9e43`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling, API-backed dashboard control surfaces, and honest unavailable states for unimplemented dashboard capabilities. Local changed-package typechecks and focused tests/builds pass. Docker-backed boot/recovery, real providers/connectors, durable Telegram controls, realtime dashboard events, audit APIs, and CI lint gates remain open.
+Implemented through commit `2b28ec2`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling, API-backed dashboard control surfaces, and honest unavailable states for unimplemented dashboard capabilities. Full local gates pass: typecheck 26/26, test 26/26, build 15/15. Docker-backed boot/recovery, real providers/connectors, durable Telegram controls, realtime dashboard events, audit APIs, and CI lint gates remain open.
 
 ## Final release checkpoint
 

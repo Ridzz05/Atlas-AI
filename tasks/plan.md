@@ -148,7 +148,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ## Implementation checkpoint — 26 August 2026
 
-Execution is committed through `7be9e43`. The focused local gates for the latest slices pass: changed-package TypeScript builds, dashboard typecheck/production compilation, approval/resume API tests, runner/delegation tests, queue/worker tests, Telegram tests, and tool tests. Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
+Execution is committed through `2b28ec2`. The full local gates pass: `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot and restart recovery remain unverified.
 
 Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY`, production API auth/CORS/rate limiting, artifact containment, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling transport, API-backed dashboard control surfaces, and explicit unavailable states for unimplemented dashboard capabilities.
 
