@@ -27,6 +27,15 @@ export interface ResearchEvidence {
 }
 
 export interface ResearchProvider {
+  fetchSafe?(url: string): Promise<{
+    content: string;
+    sourceUrl: string;
+    extractedAt: string;
+    freshness: ResearchFreshness;
+    sensitivity: ResearchSensitivity;
+    unresolvedQuestions: string[];
+    confidence: number;
+  }>;
   search(query: string, limit: number): Promise<Array<{
     title: string;
     url: string;
@@ -41,6 +50,21 @@ export interface ResearchProvider {
     found: boolean;
     companyName: string;
     address: string;
+    phone?: string;
+    instagram?: string;
+    estimatedMembers?: number;
+    sourceUrl: string;
+    extractedAt: string;
+    freshness: ResearchFreshness;
+    sensitivity: ResearchSensitivity;
+    unresolvedQuestions: string[];
+    confidence: number;
+  }>;
+  enrichLead?(companyName: string, location: string): Promise<{
+    found: boolean;
+    companyName: string;
+    location: string;
+    category: string;
     phone?: string;
     instagram?: string;
     estimatedMembers?: number;

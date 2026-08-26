@@ -4,7 +4,11 @@ import { z } from 'zod';
 import {
   ToolRegistry,
   WebSearchTool,
+  WebFetchTool,
   CompanyLookupTool,
+  LeadEnrichmentTool,
+  LeadScoringTool,
+  PolicyVerifyTool,
   CreateDraftTool,
   SendApprovedCommunicationTool,
   createArtifactTools,
@@ -72,6 +76,211 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(companyRes.success).toBe(true);
     expect((companyRes.output as any).found).toBe(false);
     expect((companyRes.output as any).configured).toBe(false);
+  });
+
+  it('returns no fetched facts when the safe web provider is unavailable', async () => {
+    const registry = new ToolRegistry();
+    registry.register(WebFetchTool);
+
+    const result = await registry.execute('web.fetch_safe', {
+      url: 'https://example.com/research'
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      allowedTools: ['web.fetch_safe']
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.output as any).configured).toBe(false);
+    expect((result.output as any).content).toBeNull();
+    expect((result.output as any).warning).toContain('No verified safe web provider');
+  });
+
+  it('accepts safe web content only with evidence and an untrusted-content marker', async () => {
+    const registry = new ToolRegistry();
+    registry.register(WebFetchTool);
+
+    const result = await registry.execute('web.fetch_safe', {
+      url: 'https://example.com/research'
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      allowedTools: ['web.fetch_safe'],
+      researchProvider: {
+        fetchSafe: vi.fn().mockResolvedValue({
+          content: 'Untrusted business page content',
+          sourceUrl: 'https://example.com/research',
+          extractedAt: '2026-08-26T00:00:00.000Z',
+          freshness: 'fresh',
+          sensitivity: 'public',
+          unresolvedQuestions: ['Owner identity is not confirmed'],
+          confidence: 0.81
+        })
+      }
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.output as any).configured).toBe(true);
+    expect((result.output as any).contentIsUntrusted).toBe(true);
+    expect((result.output as any).confidence).toBe(0.81);
+  });
+
+  it('rejects unsafe web URL schemes and credential-bearing URLs before provider access', async () => {
+    const registry = new ToolRegistry();
+    registry.register(WebFetchTool);
+    const fetchSafe = vi.fn();
+    const context = {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      allowedTools: ['web.fetch_safe'],
+      researchProvider: { fetchSafe }
+    } as any;
+
+    const fileResult = await registry.execute('web.fetch_safe', { url: 'file:///etc/passwd' }, context);
+    const credentialResult = await registry.execute('web.fetch_safe', { url: 'https://user:secret@example.com/page' }, context);
+
+    expect(fileResult.success).toBe(false);
+    expect(credentialResult.success).toBe(false);
+    expect(fetchSafe).not.toHaveBeenCalled();
+  });
+
+  it('lets Argus inspect policy without bypassing the runtime write flag', async () => {
+    const registry = new ToolRegistry();
+    registry.register(PolicyVerifyTool);
+
+    const result = await registry.execute('policy.verify', {
+      action: 'system.deploy'
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'argus',
+      allowedTools: ['policy.verify'],
+      externalWritesEnabled: false
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.output as any).blocked).toBe(true);
+    expect((result.output as any).requiresApproval).toBe(true);
+  });
+
+  it('exposes lead enrichment as an honest unavailable result without a provider', async () => {
+    const registry = new ToolRegistry();
+    registry.register(LeadEnrichmentTool);
+
+    const result = await registry.execute('lead.enrich', {
+      companyName: 'Unknown Gym',
+      location: 'Palembang'
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'layla',
+      allowedTools: ['lead.enrich']
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.output as any).configured).toBe(false);
+    expect((result.output as any).found).toBe(false);
+    expect((result.output as any).warning).toContain('No verified lead enrichment provider');
+  });
+
+  it('accepts provider-backed lead enrichment only with complete evidence', async () => {
+    const registry = new ToolRegistry();
+    registry.register(LeadEnrichmentTool);
+
+    const result = await registry.execute('lead.enrich', {
+      companyName: 'Verified Gym',
+      location: 'Palembang'
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'layla',
+      allowedTools: ['lead.enrich'],
+      researchProvider: {
+        enrichLead: vi.fn().mockResolvedValue({
+          found: true,
+          companyName: 'Verified Gym',
+          location: 'Palembang',
+          category: 'Fitness Center',
+          estimatedMembers: 600,
+          sourceUrl: 'https://example.com/verified-gym',
+          extractedAt: '2026-08-26T00:00:00.000Z',
+          freshness: 'fresh',
+          sensitivity: 'public',
+          unresolvedQuestions: [],
+          confidence: 0.92
+        })
+      }
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.output as any).configured).toBe(true);
+    expect((result.output as any).found).toBe(true);
+    expect((result.output as any).confidence).toBe(0.92);
+  });
+
+  it('routes lead scoring through the deterministic rubric tool', async () => {
+    const registry = new ToolRegistry();
+    registry.register(LeadScoringTool);
+
+    const result = await registry.execute('lead.score', {
+      leadId: 'gym-tool-1',
+      name: 'Deterministic Gym',
+      category: 'Fitness Center',
+      location: 'Palembang',
+      scores: {
+        businessTypeFit: 15,
+        channelCount: 10,
+        customerVolume: 10,
+        memberRetentionNeed: 15,
+        digitalPresenceQuality: 8,
+        responsiveness: 8,
+        csAutomationPotential: 10,
+        broadcastPotential: 8,
+        decisionMakerEase: 6,
+        dataFreshness: 10
+      },
+      evidence: completeLeadEvidence
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'layla',
+      allowedTools: ['lead.score']
+    });
+
+    expect(result.success).toBe(true);
+    expect((result.output as any).totalScore).toBe(100);
+    expect((result.output as any).status).toBe('qualified');
+    expect((result.output as any).evidenceComplete).toBe(true);
+  });
+
+  it('rejects lead enrichment output without research evidence metadata', async () => {
+    const registry = new ToolRegistry();
+    registry.register(LeadEnrichmentTool);
+
+    const result = await registry.execute('lead.enrich', {
+      companyName: 'Malformed Gym',
+      location: 'Palembang'
+    }, {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'layla',
+      allowedTools: ['lead.enrich'],
+      researchProvider: {
+        enrichLead: vi.fn().mockResolvedValue({
+          found: true,
+          companyName: 'Malformed Gym',
+          location: 'Palembang',
+          category: 'Gym',
+          sourceUrl: 'https://example.com/gym'
+        })
+      } as any
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid output from tool 'lead.enrich'");
   });
 
   it('rejects research provider results that omit evidence metadata', async () => {

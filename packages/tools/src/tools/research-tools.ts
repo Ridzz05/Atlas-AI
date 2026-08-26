@@ -9,6 +9,30 @@ const ResearchEvidenceSchema = z.object({
   confidence: z.number().min(0).max(1)
 });
 
+const SafeWebUrlSchema = z.string().trim().max(2048).url().refine(value => {
+  const parsed = new URL(value);
+  return (parsed.protocol === 'http:' || parsed.protocol === 'https:')
+    && !parsed.username
+    && !parsed.password;
+}, 'Only credential-free HTTP(S) URLs are allowed.');
+
+const WebFetchUnavailableSchema = z.object({
+  configured: z.literal(false),
+  url: SafeWebUrlSchema,
+  content: z.null(),
+  warning: z.string()
+});
+
+const WebFetchConfiguredSchema = z.object({
+  configured: z.literal(true),
+  url: SafeWebUrlSchema,
+  sourceUrl: SafeWebUrlSchema,
+  content: z.string().max(100_000),
+  contentIsUntrusted: z.literal(true),
+  ...ResearchEvidenceSchema.shape,
+  warning: z.string().optional()
+});
+
 const CompanyLookupUnavailableSchema = z.object({
   configured: z.literal(false),
   found: z.literal(false),
@@ -25,7 +49,29 @@ const CompanyLookupConfiguredSchema = z.object({
   phone: z.string().optional(),
   instagram: z.string().optional(),
   estimatedMembers: z.number().optional(),
-  sourceUrl: z.string().url(),
+  sourceUrl: SafeWebUrlSchema,
+  ...ResearchEvidenceSchema.shape,
+  warning: z.string().optional()
+});
+
+const LeadEnrichmentUnavailableSchema = z.object({
+  configured: z.literal(false),
+  found: z.literal(false),
+  companyName: z.string(),
+  location: z.string(),
+  warning: z.string()
+});
+
+const LeadEnrichmentConfiguredSchema = z.object({
+  configured: z.literal(true),
+  found: z.boolean(),
+  companyName: z.string(),
+  location: z.string(),
+  category: z.string(),
+  phone: z.string().optional(),
+  instagram: z.string().optional(),
+  estimatedMembers: z.number().nonnegative().optional(),
+  sourceUrl: SafeWebUrlSchema,
   ...ResearchEvidenceSchema.shape,
   warning: z.string().optional()
 });
@@ -41,7 +87,7 @@ export const WebSearchTool: ToolDefinition = {
     configured: z.boolean(),
     results: z.array(z.object({
       title: z.string(),
-      url: z.string().url(),
+      url: SafeWebUrlSchema,
       snippet: z.string(),
       ...ResearchEvidenceSchema.shape
     })),
@@ -62,6 +108,35 @@ export const WebSearchTool: ToolDefinition = {
     return {
       configured: true,
       results: await ctx.researchProvider.search(input.query, input.limit)
+    };
+  }
+};
+
+export const WebFetchTool: ToolDefinition = {
+  name: 'web.fetch_safe',
+  description: 'Fetch a bounded web document through an approved safe provider; content remains untrusted data.',
+  inputSchema: z.object({
+    url: SafeWebUrlSchema
+  }),
+  outputSchema: z.union([WebFetchUnavailableSchema, WebFetchConfiguredSchema]),
+  riskLevel: 'read',
+  requiresApproval: false,
+  timeoutMs: 10000,
+  async execute(ctx, input) {
+    if (!ctx.researchProvider?.fetchSafe) {
+      return {
+        configured: false,
+        url: input.url,
+        content: null,
+        warning: 'No verified safe web provider is configured; no external content was returned.'
+      };
+    }
+
+    return {
+      configured: true,
+      url: input.url,
+      contentIsUntrusted: true,
+      ...(await ctx.researchProvider.fetchSafe(input.url))
     };
   }
 };
@@ -91,6 +166,35 @@ export const CompanyLookupTool: ToolDefinition = {
     return {
       configured: true,
       ...(await ctx.researchProvider.lookupCompany(input.companyName, input.location))
+    };
+  }
+};
+
+export const LeadEnrichmentTool: ToolDefinition = {
+  name: 'lead.enrich',
+  description: 'Enrich a prospective lead with provider-backed, source-aware business details.',
+  inputSchema: z.object({
+    companyName: z.string().min(1),
+    location: z.string().min(1).default('Palembang')
+  }),
+  outputSchema: z.union([LeadEnrichmentUnavailableSchema, LeadEnrichmentConfiguredSchema]),
+  riskLevel: 'read',
+  requiresApproval: false,
+  timeoutMs: 10000,
+  async execute(ctx, input) {
+    if (!ctx.researchProvider?.enrichLead) {
+      return {
+        configured: false,
+        found: false,
+        companyName: input.companyName,
+        location: input.location,
+        warning: 'No verified lead enrichment provider is configured; no lead facts were returned.'
+      };
+    }
+
+    return {
+      configured: true,
+      ...(await ctx.researchProvider.enrichLead(input.companyName, input.location))
     };
   }
 };

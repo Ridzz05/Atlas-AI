@@ -28,6 +28,12 @@ describe('@atlas/agents Registry & Definitions', () => {
     expect(ned.permissions.tools).toContain('web.fetch_safe');
   });
 
+  it('verifies Layla has deterministic scoring and enrichment tools', () => {
+    const layla = defaultAgentRegistry.getOrThrow('layla');
+    expect(layla.permissions.tools).toContain('lead.enrich');
+    expect(layla.permissions.tools).toContain('lead.score');
+  });
+
   it('verifies Hermes content constraints', () => {
     const hermes = defaultAgentRegistry.getOrThrow('hermes');
     expect(hermes.role).toBe('content_creator');

@@ -27,12 +27,16 @@ import {
   ArtifactService,
   CompanyLookupTool,
   CreateDraftTool,
+  LeadEnrichmentTool,
+  LeadScoringTool,
+  PolicyVerifyTool,
   SendApprovedCommunicationTool,
   ToolRegistry,
   WebSearchTool,
   createArtifactTools,
   createMemoryTools
 } from '@atlas/tools';
+import type { ResearchProvider } from '@atlas/tools';
 import {
   AgentRunner,
   TaskDelegator,
@@ -58,6 +62,7 @@ export interface WorkerRunnerOptions {
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
+  researchProvider?: ResearchProvider;
   workerId?: string;
   leaseSeconds?: number;
 }
@@ -85,6 +90,9 @@ export class AgentWorkerRunner {
     const toolRegistry = new ToolRegistry();
     toolRegistry.register(WebSearchTool);
     toolRegistry.register(CompanyLookupTool);
+    toolRegistry.register(LeadEnrichmentTool);
+    toolRegistry.register(LeadScoringTool);
+    toolRegistry.register(PolicyVerifyTool);
     toolRegistry.register(CreateDraftTool);
     toolRegistry.register(SendApprovedCommunicationTool);
     const memoryAuditSink: MemoryAuditSink | undefined = options.auditRepo
@@ -112,6 +120,7 @@ export class AgentWorkerRunner {
       registry: toolRegistry,
       baseContext: {
         externalWritesEnabled: options.config.EXTERNAL_WRITES_ENABLED,
+        researchProvider: options.researchProvider,
         approvalSecretKey: options.config.ENCRYPTION_KEY,
         approvalExecutionStore: options.approvalRepo,
         approvalRequestStore: options.approvalRepo,

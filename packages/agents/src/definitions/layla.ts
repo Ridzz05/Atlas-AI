@@ -30,6 +30,7 @@ RULES:
     tools: [
       'company.lookup',
       'lead.enrich',
+      'lead.score',
       'artifacts.read',
       'artifacts.write'
     ],

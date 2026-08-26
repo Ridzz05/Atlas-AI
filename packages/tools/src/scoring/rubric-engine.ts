@@ -28,6 +28,19 @@ export const LeadDimensionScoresSchema = z.object({
 });
 export type LeadDimensionScores = z.infer<typeof LeadDimensionScoresSchema>;
 
+export const LeadScoringInputSchema = z.object({
+  leadId: z.string().min(1),
+  name: z.string().min(1),
+  category: z.string().min(1),
+  location: z.string().min(1),
+  scores: LeadDimensionScoresSchema,
+  evidence: z.record(z.string()),
+  decisionMaker: z.string().min(1).optional(),
+  phone: z.string().min(1).optional(),
+  instagram: z.string().min(1).optional()
+});
+export type LeadScoringInput = z.infer<typeof LeadScoringInputSchema>;
+
 export const LeadRubricDefinitionSchema = z.object({
   version: z.string().trim().min(1),
   maxScores: LeadDimensionScoresSchema,
@@ -74,37 +87,26 @@ export const DEFAULT_LEAD_RUBRIC: LeadRubricDefinition = {
   }
 };
 
-export interface LeadScoringInput {
-  leadId: string;
-  name: string;
-  category: string;
-  location: string;
-  scores: LeadDimensionScores;
-  evidence: Record<string, string>;
-  decisionMaker?: string;
-  phone?: string;
-  instagram?: string;
-}
-
 export interface LeadEvidenceValidation {
   complete: boolean;
   missingDimensions: LeadDimension[];
 }
 
-export interface LeadScoringResult {
-  leadId: string;
-  name: string;
-  rubricVersion: string;
-  totalScore: number;
-  maxScore: number;
-  dimensionScores: LeadDimensionScores;
-  evidence: Record<string, string>;
-  evidenceComplete: boolean;
-  missingEvidence: LeadDimension[];
-  status: 'qualified' | 'needs_review' | 'disqualified';
-  rank: number;
-  recommendation: string;
-}
+export const LeadScoringResultSchema = z.object({
+  leadId: z.string().min(1),
+  name: z.string().min(1),
+  rubricVersion: z.string().min(1),
+  totalScore: z.number().finite().min(0).max(100),
+  maxScore: z.literal(100),
+  dimensionScores: LeadDimensionScoresSchema,
+  evidence: z.record(z.string()),
+  evidenceComplete: z.boolean(),
+  missingEvidence: z.array(z.enum(LEAD_DIMENSIONS)),
+  status: z.enum(['qualified', 'needs_review', 'disqualified']),
+  rank: z.number().int().nonnegative(),
+  recommendation: z.string()
+});
+export type LeadScoringResult = z.infer<typeof LeadScoringResultSchema>;
 
 export class RubricEngine {
   private static readonly rubrics = new Map<string, LeadRubricDefinition>([

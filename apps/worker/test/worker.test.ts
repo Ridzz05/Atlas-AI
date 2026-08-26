@@ -214,4 +214,76 @@ describe('worker lifecycle and task execution tests', () => {
 
     expect(provider.run).toHaveBeenCalledTimes(2);
   });
+
+  it('executes deterministic lead scoring through the worker gateway', async () => {
+    const provider = {
+      run: vi.fn()
+        .mockResolvedValueOnce({
+          content: 'Scoring the lead with the registered rubric.',
+          toolCalls: [{
+            id: crypto.randomUUID(),
+            name: 'lead.score',
+            arguments: {
+              leadId: 'gym-worker-1',
+              name: 'Worker Gym',
+              category: 'Fitness Center',
+              location: 'Palembang',
+              scores: {
+                businessTypeFit: 15,
+                channelCount: 10,
+                customerVolume: 10,
+                memberRetentionNeed: 15,
+                digitalPresenceQuality: 8,
+                responsiveness: 8,
+                csAutomationPotential: 10,
+                broadcastPotential: 8,
+                decisionMakerEase: 6,
+                dataFreshness: 10
+              },
+              evidence: {
+                businessTypeFit: 'Fitness center confirmed',
+                channelCount: 'WhatsApp and Instagram confirmed',
+                customerVolume: '600 members reported',
+                memberRetentionNeed: 'Retention program identified',
+                digitalPresenceQuality: 'Active digital profiles',
+                responsiveness: 'Response time observed',
+                csAutomationPotential: 'Manual support workflow identified',
+                broadcastPotential: 'Broadcast audience confirmed',
+                decisionMakerEase: 'Owner contact identified',
+                dataFreshness: 'Observed this week'
+              }
+            }
+          }],
+          inputTokens: 1,
+          outputTokens: 1,
+          costUsd: 0.001,
+          finishReason: 'tool_calls'
+        })
+        .mockResolvedValueOnce({
+          content: 'Lead scoring completed with deterministic validation.',
+          inputTokens: 1,
+          outputTokens: 1,
+          costUsd: 0.001,
+          finishReason: 'stop'
+        })
+    } as any;
+    const agent = {
+      ...mockAgent,
+      id: 'layla',
+      role: 'lead_scoring' as const,
+      permissions: {
+        ...mockAgent.permissions,
+        tools: ['lead.score']
+      }
+    };
+    const runner = new AgentWorkerRunner({ config, provider });
+
+    await runner.start();
+    await runner.getQueue().enqueue({ task: mockTask, agent, prompt: 'Score this lead' });
+    await new Promise(r => setTimeout(r, 50));
+    await runner.stop();
+
+    expect(provider.run).toHaveBeenCalledTimes(2);
+    expect(provider.run.mock.calls[1]?.[0].messages.at(-1)?.content).toContain('qualified');
+  });
 });
