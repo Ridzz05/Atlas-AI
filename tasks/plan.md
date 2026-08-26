@@ -8,10 +8,10 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 
 ## Evidence snapshot
 
-- Git history now includes the implementation slices through `c691872`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
+- Git history now includes the implementation slices through `dfeb6ba`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions).
-- `pnpm lint`: runs a repository source-hygiene gate over 138 source files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
+- `pnpm lint`: runs a repository source-hygiene gate over 141 source files; formatter enforcement is still not configured. CI now runs lint, typecheck, test, production build, and production Compose config validation.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
 - Telegram polling, durable approval decisions, update claims, pause/emergency control state, and durable active-run cancellation are wired; cross-restart recovery still needs an integration drill.
 - Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, realtime refresh, and read-only environment-backed settings use authenticated APIs. Event reconnect replay is implemented; no sample operational data remains in the dashboard.
@@ -150,7 +150,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 Execution is committed through `dfeb6ba`. The full local gates pass: `pnpm.cmd lint` (141 source files), `pnpm.cmd typecheck` (26/26), `pnpm.cmd test` (26/26), and `pnpm.cmd build` (15/15). Docker is unavailable in this environment, so PostgreSQL/Redis Compose boot, budget/lease behavior against real PostgreSQL, and restart recovery remain unverified.
 
-Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, API-backed dashboard observability pages, and the CI lint/build/Compose gates.
+Implemented: shared DB/queue/runtime bootstrap, transactional agent seeding, BullMQ retries and task-id idempotency, idempotent worker shutdown, PostgreSQL event outbox with `LISTEN/NOTIFY` and authenticated SSE/replay, production API auth/CORS/rate limiting, artifact containment and metadata persistence, plan validation, fail-closed approval/QA paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted message/tool-call history, scoped MemoryTools, durable global/per-run budget reservation and settlement for planner/specialist/QA/synthesis stages, complete delegation cost reporting, worker lease/heartbeat and stale-run recovery, audit/memory metadata APIs, aggregate cost/budget metrics, read-only governance settings, API-backed dashboard observability pages, and the CI lint/build/Compose gates.
 
 Remaining release blockers: no approved outbound connector, no verified real research adapters, no Docker boot/recovery/backup drill, formatter enforcement, production recovery/lease observability, and a configured per-agent aggregate budget policy if required by the owner.
 
