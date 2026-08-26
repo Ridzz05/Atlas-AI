@@ -147,6 +147,11 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(smoke).toContain('export ATLAS_CONTAINER_PREFIX');
     expect(smoke).toContain('assert_task_intake_persistence');
     expect(smoke).toContain('/api/v1/messages?taskId=');
+
+    const backup = readFileSync(resolve(process.cwd(), '../../scripts/backup-db.sh'), 'utf8');
+    const restore = readFileSync(resolve(process.cwd(), '../../scripts/restore-db.sh'), 'utf8');
+    expect(backup).toContain('ATLAS_CONTAINER_PREFIX:-atlas');
+    expect(restore).toContain('ATLAS_CONTAINER_PREFIX:-atlas');
   });
 
   it('routes the dashboard proxy path through Next.js before direct API paths in Caddy', () => {

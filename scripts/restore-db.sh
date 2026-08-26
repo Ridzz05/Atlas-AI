@@ -7,7 +7,7 @@ if [ -z "${1:-}" ]; then
 fi
 
 BACKUP_FILE="$1"
-CONTAINER_NAME="${CONTAINER_NAME:-atlas_postgres_prod}"
+CONTAINER_NAME="${CONTAINER_NAME:-${ATLAS_CONTAINER_PREFIX:-atlas}_postgres_prod}"
 DB_NAME="${POSTGRES_DB:-atlas_os}"
 DB_USER="${POSTGRES_USER:-atlas_admin}"
 

@@ -6,7 +6,7 @@ TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 FILENAME="atlas_db_backup_${TIMESTAMP}.sql.gz"
 BACKUP_PATH="${BACKUP_DIR}/${FILENAME}"
 TEMP_BACKUP_PATH=""
-CONTAINER_NAME="${CONTAINER_NAME:-atlas_postgres_prod}"
+CONTAINER_NAME="${CONTAINER_NAME:-${ATLAS_CONTAINER_PREFIX:-atlas}_postgres_prod}"
 DB_NAME="${POSTGRES_DB:-atlas_os}"
 DB_USER="${POSTGRES_USER:-atlas_admin}"
 
