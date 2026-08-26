@@ -74,6 +74,8 @@ Add to crontab (`crontab -e`):
 0 2 * * * /opt/atlas-os/scripts/backup-db.sh >> /var/log/atlas_backup.log 2>&1
 ```
 
+The backup script writes to a temporary file, verifies the gzip archive, and only then moves it into the backup directory. A failed `pg_dump` or invalid archive never replaces the last successful backup. The script retains backups for 14 days.
+
 ### 3.2 Manual Backup
 ```bash
 ./scripts/backup-db.sh
@@ -84,11 +86,31 @@ Add to crontab (`crontab -e`):
 ./scripts/restore-db.sh ./backups/atlas_db_backup_YYYYMMDD_HHMMSS.sql.gz
 ```
 
-### 3.4 Memory Lifecycle Maintenance
+The restore script validates the gzip archive before asking for confirmation and uses `ON_ERROR_STOP` inside a single transaction. Stop application writes before restoring, take a fresh backup first, and run the Compose smoke/recovery checks after the restore.
+
+### 3.4 Application rollback
+
+For a bad application release:
+
+1. Freeze new intake with Dashboard **Pause system** or Telegram `/pause`; use `/emergency_stop` if data integrity or runaway execution is suspected.
+2. Record the deployed image Git SHA and recent audit/task state.
+3. Redeploy the previous known-good revision:
+   ```bash
+   git fetch origin
+   git checkout <known-good-sha>
+   docker compose -f docker-compose.prod.yml up -d --build
+   ./scripts/healthcheck.sh
+   ```
+4. Verify `/health`, `/ready`, agent seeding, queued-task recovery, and the critical user flow.
+5. Resume intake only after the incident owner confirms the audit trail and database state are consistent.
+
+Do not roll back database migrations blindly. Restore a verified backup only after assessing whether the application revision is compatible with the current schema.
+
+### 3.5 Memory Lifecycle Maintenance
 
 The worker runs memory maintenance before accepting queue work and then on the configured interval. Expired records are first marked `deprecated` and audited; deprecated records are deleted after the configured grace period. Agent `memory.search` exposes only `verified` records; proposal records remain hidden until governance verification. Defaults are `MEMORY_MAINTENANCE_INTERVAL_SECONDS=3600` and `MEMORY_DELETION_GRACE_DAYS=7`. Keep these values in the deployment environment when a different retention window is required.
 
-### 3.5 Research provider network boundary
+### 3.6 Research provider network boundary
 
 `web.fetch_safe` accepts only credential-free HTTP(S) URLs with named public hostnames. It rejects literal IPv4/IPv6 targets and `localhost`, `.local`, and `.internal` hostnames before provider access. Any approved provider must additionally validate DNS results, every redirect target, response size, and request timeout; do not inject an arbitrary fetch client as a research provider.
 

@@ -16,6 +16,11 @@ if [ ! -f "$BACKUP_FILE" ]; then
   exit 1
 fi
 
+if ! gzip -t "$BACKUP_FILE"; then
+  echo "Error: Backup file '$BACKUP_FILE' is not a valid gzip archive."
+  exit 1
+fi
+
 echo "⚠️  WARNING: This will overwrite existing database '${DB_NAME}'!"
 read -p "Are you sure you want to proceed? (y/N): " -r CONFIRM
 if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
@@ -24,6 +29,6 @@ if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
 fi
 
 echo "==> Restoring from ${BACKUP_FILE}..."
-gunzip -c "$BACKUP_FILE" | docker exec -i "$CONTAINER_NAME" psql -U "$DB_USER" -d "$DB_NAME"
+gunzip -c "$BACKUP_FILE" | docker exec -i "$CONTAINER_NAME" psql --single-transaction -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME"
 
 echo "==> Database restore completed successfully."
