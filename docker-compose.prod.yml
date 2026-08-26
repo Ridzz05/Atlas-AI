@@ -64,7 +64,7 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost}
       DATABASE_URL: postgresql://${POSTGRES_USER:-atlas_admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-atlas_os}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-mock}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:?MODEL_PROVIDER must be set}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
       ARTIFACT_STORAGE_PATH: /app/data/artifacts
@@ -100,7 +100,7 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-atlas_admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-atlas_os}
       REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379
-      MODEL_PROVIDER: ${MODEL_PROVIDER:-mock}
+      MODEL_PROVIDER: ${MODEL_PROVIDER:?MODEL_PROVIDER must be set}
       MODEL_API_KEY: ${MODEL_API_KEY:-}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
       ARTIFACT_STORAGE_PATH: /app/data/artifacts

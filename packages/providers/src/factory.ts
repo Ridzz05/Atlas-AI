@@ -24,7 +24,8 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
         defaultModel: config.model
       });
     case 'mock':
-    default:
       return new MockModelProvider();
+    default:
+      throw new Error(`Unsupported model provider: ${type}`);
   }
 }

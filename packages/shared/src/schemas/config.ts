@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'groq', 'ollama', 'deepseek']);
+
 export const EnvConfigSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(4000),
@@ -13,9 +16,9 @@ export const EnvConfigSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_ALLOWED_USER_IDS: z.string().optional(),
   TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
-  MODEL_PROVIDER: z.string().default('mock'),
+  MODEL_PROVIDER: ModelProviderSchema.default('mock'),
   MODEL_API_KEY: z.string().optional(),
-  ENCRYPTION_KEY: z.string().min(32).default('0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'),
+  ENCRYPTION_KEY: z.string().min(32).default(DEFAULT_ENCRYPTION_KEY),
   ARTIFACT_STORAGE_PATH: z.string().default('./data/artifacts'),
   GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(5.0),
   MAX_CONCURRENT_AGENT_RUNS: z.coerce.number().int().positive().default(3),
@@ -27,6 +30,20 @@ export const EnvConfigSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ['API_AUTH_TOKEN'],
       message: 'API_AUTH_TOKEN is required in production.'
+    });
+  }
+  if (config.NODE_ENV === 'production' && config.ENCRYPTION_KEY === DEFAULT_ENCRYPTION_KEY) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['ENCRYPTION_KEY'],
+      message: 'ENCRYPTION_KEY must be explicitly configured in production.'
+    });
+  }
+  if (config.NODE_ENV === 'production' && config.MODEL_PROVIDER.toLowerCase() === 'mock') {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['MODEL_PROVIDER'],
+      message: 'MODEL_PROVIDER=mock is not allowed in production.'
     });
   }
 });

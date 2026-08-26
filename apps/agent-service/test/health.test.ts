@@ -105,8 +105,9 @@ describe('agent-service health endpoints', () => {
       config: EnvConfigSchema.parse({
         NODE_ENV: 'production',
         API_AUTH_TOKEN: token,
-        MODEL_PROVIDER: 'approved-provider',
+        MODEL_PROVIDER: 'openai',
         MODEL_API_KEY: secret,
+        ENCRYPTION_KEY: 'b'.repeat(64),
         GLOBAL_DAILY_BUDGET_USD: 7.5,
         EXTERNAL_WRITES_ENABLED: false
       })
@@ -122,7 +123,7 @@ describe('agent-service health endpoints', () => {
     expect(response.statusCode).toBe(200);
     expect(body.data).toMatchObject({
       nodeEnv: 'production',
-      modelProvider: 'approved-provider',
+      modelProvider: 'openai',
       globalDailyBudgetUsd: 7.5,
       externalWritesEnabled: false,
       mutable: false,
@@ -135,7 +136,13 @@ describe('agent-service health endpoints', () => {
   it('protects API routes with the configured bearer token', async () => {
     const token = 'a'.repeat(32);
     const protectedServer = buildServer({
-      config: EnvConfigSchema.parse({ NODE_ENV: 'production', API_AUTH_TOKEN: token })
+      config: EnvConfigSchema.parse({
+        NODE_ENV: 'production',
+        API_AUTH_TOKEN: token,
+        ENCRYPTION_KEY: 'b'.repeat(64),
+        MODEL_PROVIDER: 'openai',
+        MODEL_API_KEY: 'test-model-key'
+      })
     });
 
     const unauthorized = await protectedServer.inject({

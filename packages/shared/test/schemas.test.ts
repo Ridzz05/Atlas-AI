@@ -112,9 +112,36 @@ describe('@atlas/shared schema tests', () => {
 
   it('accepts a production configuration with an explicit auth token', () => {
     const token = 'a'.repeat(32);
-    const env = EnvConfigSchema.parse({ NODE_ENV: 'production', API_AUTH_TOKEN: token });
+    const env = EnvConfigSchema.parse({
+      NODE_ENV: 'production',
+      API_AUTH_TOKEN: token,
+      ENCRYPTION_KEY: 'b'.repeat(64),
+      MODEL_PROVIDER: 'openai',
+      MODEL_API_KEY: 'test-model-key'
+    });
 
     expect(env.API_AUTH_TOKEN).toBe(token);
     expect(env.CORS_ALLOWED_ORIGINS).toBe('http://localhost:3000');
+  });
+
+  it('rejects the development encryption key and mock provider in production', () => {
+    const token = 'a'.repeat(32);
+    expect(() => EnvConfigSchema.parse({
+      NODE_ENV: 'production',
+      API_AUTH_TOKEN: token,
+      MODEL_PROVIDER: 'openai',
+      MODEL_API_KEY: 'test-model-key'
+    })).toThrow('ENCRYPTION_KEY');
+
+    expect(() => EnvConfigSchema.parse({
+      NODE_ENV: 'production',
+      API_AUTH_TOKEN: token,
+      ENCRYPTION_KEY: 'b'.repeat(64),
+      MODEL_PROVIDER: 'mock'
+    })).toThrow('MODEL_PROVIDER');
+  });
+
+  it('rejects an unsupported model provider', () => {
+    expect(() => EnvConfigSchema.parse({ MODEL_PROVIDER: 'typo-provider' })).toThrow('MODEL_PROVIDER');
   });
 });

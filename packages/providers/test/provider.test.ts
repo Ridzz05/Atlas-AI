@@ -7,6 +7,10 @@ describe('@atlas/providers tests', () => {
     expect(provider.id).toBe('mock');
   });
 
+  it('rejects unsupported provider types instead of silently using mock', () => {
+    expect(() => createModelProvider({ providerType: 'typo-provider' })).toThrow('Unsupported model provider');
+  });
+
   it('runs mock completion with canned responses', async () => {
     const mock = new MockModelProvider({
       cannedResponses: [

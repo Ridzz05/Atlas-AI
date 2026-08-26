@@ -47,4 +47,6 @@ jobs:
           ENCRYPTION_KEY: ci-encryption-key-32-characters-long
           TELEGRAM_BOT_TOKEN: ci-telegram-token
           TELEGRAM_ALLOWED_USER_IDS: "1"
+          MODEL_PROVIDER: openai
+          MODEL_API_KEY: ci-model-api-key
         run: docker compose -f docker-compose.prod.yml config --quiet
