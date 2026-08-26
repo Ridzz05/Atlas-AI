@@ -55,7 +55,7 @@
 
 ## Phase 5 — Release engineering
 
-- [ ] Add lint/format scripts and CI gates for lint, typecheck, test, build, migrations, and Compose config.
+- [ ] Add real lint/format scripts; CI now gates typecheck, test, production build, and production Compose config.
 - [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
 - [x] Align production environment variable names and remove insecure production Compose fallbacks.
 - [x] Persist artifact metadata and expose read-only artifact, memory, and audit APIs; backup/restore verification remains open.

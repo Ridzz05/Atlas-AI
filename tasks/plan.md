@@ -11,7 +11,7 @@ Current verdict: **the repository now has a durable, typed, testable multi-servi
 - Git history now includes the implementation slices through `2c83b0e`; the original `a6efa4f` “complete” commit was a scaffold checkpoint, not a production proof.
 - Direct TypeScript verification: PASS for the changed packages/apps; dashboard production build compiled successfully outside the restricted Windows process sandbox.
 - Focused approval/resume verification: PASS (API 4 tests, runner 7 tests, plus queue/worker/Telegram/tool regressions).
-- `pnpm lint`: exits 0 but executes **zero tasks**; no workspace package defines a `lint` script.
+- `pnpm lint`: exits 0 but executes **zero tasks**; no workspace package defines a real lint/format script. CI now runs typecheck, test, production build, and production Compose config validation.
 - Production entrypoints use the shared runtime bootstrap with PostgreSQL, migrations, agent seeding, BullMQ/Redis, and the PostgreSQL event bus; tests may still inject in-memory adapters.
 - Telegram polling, durable approval decisions, update claims, and pause/emergency control state are wired; active-run cancellation and cross-restart recovery still need an integration drill.
 - Dashboard tasks, approvals, agents, command intake, overview metrics, artifacts, memory, audit, and realtime refresh use authenticated APIs. Event reconnect replay and settings APIs remain open; no sample operational data remains in the dashboard.
@@ -54,7 +54,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 4. **Research is deliberately fail-closed rather than live.** Without an injected verified provider, search/company lookup returns no external facts. A real adapter with source, freshness, confidence, and prompt-injection boundaries is still required for the demo workflow.
 5. **Dashboard observability is incomplete.** Authenticated event SSE and read-only artifact/memory/audit APIs are exposed, but reconnect replay, aggregate cost views, and settings APIs are not complete.
 6. **Rate limiting is process-local.** API bearer auth and strict CORS are present, but rate-limit buckets do not coordinate across replicas; Telegram update/control state now uses PostgreSQL.
-7. **Operational gates are incomplete.** There are no configured lint tasks, no Docker Compose/recovery CI gate, and no verified backup restore drill.
+7. **Operational gates are incomplete.** There are no configured lint tasks, and no verified backup restore drill; CI now validates the production Compose shape and build.
 
 ### Required / P1 — make the core system reliable
 
@@ -82,7 +82,7 @@ Foundation must be wired before transport and UI. Approval and emergency-stop co
 
 ### Required / P4 — release and operations gates
 
-1. Add actual lint/format scripts and make CI run lint, typecheck, unit, integration, build, migration, and Docker Compose configuration checks.
+1. Add actual lint/format scripts and extend CI with integration, migration, and Docker Compose recovery checks; CI now runs typecheck, unit tests, production build, and Compose configuration validation.
 2. Add integration/e2e tests for DB+Redis, restart recovery, duplicate Telegram updates, approval execute-once, rejected approval no-side-effect, malicious content, budget exhaustion, and emergency stop.
 3. Production Compose now passes the application’s `MODEL_PROVIDER`/`MODEL_API_KEY` names and requires database, Redis, API, Telegram, and encryption secrets. Verify the clean-environment secret policy in CI and remove any remaining non-production defaults before launch.
 4. Mount/persist artifact storage, add backup verification and restore drills, health checks for DB/Redis/worker/Telegram, alerting, retention policy, and rollback instructions.
