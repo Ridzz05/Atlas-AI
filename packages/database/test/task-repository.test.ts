@@ -6,9 +6,9 @@ describe('TaskRepository status integrity', () => {
     const db = { query: vi.fn() } as any;
     const repository = new TaskRepository(db);
 
-    await expect(
-      repository.updateStatus('123e4567-e89b-12d3-a456-426614174000', 'timed_out' as any)
-    ).rejects.toThrow('Invalid task status');
+    await expect(repository.updateStatus('123e4567-e89b-12d3-a456-426614174000', 'timed_out' as any)).rejects.toThrow(
+      'Invalid task status'
+    );
     expect(db.query).not.toHaveBeenCalled();
   });
 });
