@@ -142,6 +142,10 @@ Dashboard, API, and Telegram use the same PostgreSQL-backed control state. Emerg
    docker compose -f docker-compose.prod.yml restart telegram-bot
    ```
 
+### 5.3 External write flag
+
+`EXTERNAL_WRITES_ENABLED` is parsed strictly: `false` disables writes, `true` is the only enabling value, and empty or ambiguous values are rejected or treated as disabled. Keep it set to `false` until an approved connector, verified provider, and owner approval are in place.
+
 ---
 
 ## 6. Token Budget & Cost Controls
