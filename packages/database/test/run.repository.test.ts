@@ -1,6 +1,30 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RunRepository } from '../src/index.js';
 
+const runId = '123e4567-e89b-12d3-a456-426614174000';
+
+function runRow(overrides: Record<string, unknown> = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: runId,
+    task_id: '123e4567-e89b-12d3-a456-426614174001',
+    agent_id: 'chief',
+    status: 'active',
+    cancel_requested: false,
+    cancel_reason: null,
+    input_tokens: 0,
+    output_tokens: 0,
+    cost_usd: 0,
+    turns_count: 0,
+    started_at: now,
+    ended_at: null,
+    error: null,
+    created_at: now,
+    updated_at: now,
+    ...overrides
+  };
+}
+
 describe('RunRepository cancellation state', () => {
   it('records a cancellation request durably for an active run', async () => {
     const db = {
@@ -83,6 +107,67 @@ describe('RunRepository cancellation state', () => {
     expect(db.query).toHaveBeenCalledWith(
       expect.stringContaining("WHEN $1 = 'completed' AND cancel_requested"),
       ['completed', null, true, '123e4567-e89b-12d3-a456-426614174000']
+    );
+  });
+
+  it('acquires a worker lease atomically for an executable run', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rows: [runRow({ worker_id: 'worker-a' })] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    const run = await repository.acquireLease(runId, 'worker-a', 60);
+
+    expect(run?.id).toBe(runId);
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('lease_expires_at = NOW() + ($3 * INTERVAL'),
+      [runId, 'worker-a', 60]
+    );
+  });
+
+  it('renews only an owned worker lease', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    await expect(repository.heartbeat(runId, 'worker-a', 60)).resolves.toBe(true);
+
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('AND worker_id = $2'),
+      [runId, 'worker-a', 60]
+    );
+  });
+
+  it('releases a worker lease without changing run status', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rowCount: 1, rows: [] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    await expect(repository.releaseLease(runId, 'worker-a')).resolves.toBe(true);
+
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('worker_id = NULL'),
+      [runId, 'worker-a']
+    );
+  });
+
+  it('marks expired executable runs failed during worker recovery', async () => {
+    const db = {
+      query: vi.fn().mockResolvedValue({ rowCount: 2, rows: [] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    await expect(repository.recoverStaleRuns('worker lease expired')).resolves.toBe(2);
+
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining("status = 'failed'"),
+      ['worker lease expired']
+    );
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('lease_expires_at < NOW()'),
+      ['worker lease expired']
     );
   });
 });

@@ -64,6 +64,23 @@ describe('worker lifecycle and task execution tests', () => {
     expect(runner.getStatus().isRunning).toBe(false);
   });
 
+  it('recovers expired run leases before accepting queue work', async () => {
+    const runRepo = {
+      recoverStaleRuns: vi.fn().mockResolvedValue(2)
+    } as any;
+    const taskQueue = {
+      process: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({ config, runRepo, taskQueue });
+
+    await runner.start();
+
+    expect(runRepo.recoverStaleRuns).toHaveBeenCalledWith();
+    expect(taskQueue.process).toHaveBeenCalled();
+    await runner.stop();
+  });
+
   it.each([
     { name: 'paused', paused: true, emergencyStop: false },
     { name: 'emergency stop', paused: true, emergencyStop: true }

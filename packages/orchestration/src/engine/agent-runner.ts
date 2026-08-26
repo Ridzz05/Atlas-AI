@@ -38,6 +38,8 @@ export interface AgentRunnerOptions {
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   cancellationStore?: RunCancellationStore;
+  workerId?: string;
+  leaseSeconds?: number;
 }
 
 export interface RunCancellationStore {
@@ -72,8 +74,11 @@ export interface AgentRunSummary {
 
 export class AgentRunner {
   private activeRuns = new Map<string, { controller: AbortController; taskId: string }>();
+  private readonly workerId: string;
 
-  constructor(private options: AgentRunnerOptions) {}
+  constructor(private options: AgentRunnerOptions) {
+    this.workerId = options.workerId || `${process.env.HOSTNAME || 'atlas'}:${process.pid}`;
+  }
 
   public cancelRun(runId: string, reason = 'Cancelled by user'): boolean {
     const activeRun = this.activeRuns.get(runId);
@@ -139,6 +144,8 @@ export class AgentRunner {
     const timeoutTimer = setTimeout(() => {
       controller.abort(`Timeout after ${timeoutSeconds} seconds`);
     }, timeoutSeconds * 1000);
+    const leaseSeconds = this.options.leaseSeconds || 60;
+    let leaseHeartbeatTimer: NodeJS.Timeout | undefined;
 
     let totalInputTokens = 0;
     let totalOutputTokens = 0;
@@ -187,6 +194,34 @@ export class AgentRunner {
       budgetSettled = true;
     };
 
+    const acquireRunLease = async (): Promise<void> => {
+      const runRepo = this.options.runRepo as (RunRepository & {
+        acquireLease?: RunRepository['acquireLease'];
+        heartbeat?: RunRepository['heartbeat'];
+      }) | undefined;
+      if (!runRepo || typeof runRepo.acquireLease !== 'function') return;
+
+      const lease = await runRepo.acquireLease(runId, this.workerId, leaseSeconds);
+      if (!lease) {
+        throw new Error(`RUN_LEASE_UNAVAILABLE: run ${runId} is owned by another worker.`);
+      }
+
+      if (typeof runRepo.heartbeat !== 'function') return;
+      const heartbeatIntervalMs = Math.max(1000, Math.min(30000, Math.floor(leaseSeconds * 1000 / 2)));
+      leaseHeartbeatTimer = setInterval(() => {
+        void runRepo.heartbeat!(runId, this.workerId, leaseSeconds)
+          .then(renewed => {
+            if (!renewed && !controller.signal.aborted) {
+              controller.abort('Run lease lost');
+            }
+          })
+          .catch(error => {
+            rootLogger.error(`Run ${runId} lease heartbeat failed`, { error: String(error) });
+            if (!controller.signal.aborted) controller.abort('Run lease heartbeat failed');
+          });
+      }, heartbeatIntervalMs);
+    };
+
     try {
       // 1. Create Run in DB if repo provided
       if (this.options.runRepo) {
@@ -196,6 +231,8 @@ export class AgentRunner {
           await this.options.runRepo.create({ taskId, agentId }, runId);
         }
       }
+
+      await acquireRunLease();
 
       if (this.options.budgetRepo && this.options.runRepo && this.options.globalDailyBudgetUsd) {
         let priorRunCost = 0;
@@ -495,6 +532,7 @@ export class AgentRunner {
 
     } finally {
       clearTimeout(timeoutTimer);
+      if (leaseHeartbeatTimer) clearInterval(leaseHeartbeatTimer);
       this.activeRuns.delete(runId);
     }
 

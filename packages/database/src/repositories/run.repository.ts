@@ -33,6 +33,71 @@ export class RunRepository {
     return res.rows.map(r => this.mapRow(r));
   }
 
+  public async acquireLease(runId: string, workerId: string, leaseSeconds = 60): Promise<Run | null> {
+    this.assertLeaseInput(workerId, leaseSeconds);
+    const result = await this.db.query(`
+      UPDATE runs
+      SET worker_id = $2,
+          heartbeat_at = NOW(),
+          lease_expires_at = NOW() + ($3 * INTERVAL '1 second'),
+          updated_at = NOW()
+      WHERE id = $1
+        AND status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+        AND (worker_id IS NULL OR lease_expires_at < NOW() OR worker_id = $2)
+      RETURNING *;
+    `, [runId, workerId, leaseSeconds]);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
+  public async heartbeat(runId: string, workerId: string, leaseSeconds = 60): Promise<boolean> {
+    this.assertLeaseInput(workerId, leaseSeconds);
+    const result = await this.db.query(`
+      UPDATE runs
+      SET heartbeat_at = NOW(),
+          lease_expires_at = NOW() + ($3 * INTERVAL '1 second'),
+          updated_at = NOW()
+      WHERE id = $1
+        AND worker_id = $2
+        AND status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+    `, [runId, workerId, leaseSeconds]);
+
+    return (result.rowCount || 0) > 0;
+  }
+
+  public async releaseLease(runId: string, workerId?: string): Promise<boolean> {
+    const result = await this.db.query(`
+      UPDATE runs
+      SET worker_id = NULL,
+          heartbeat_at = NULL,
+          lease_expires_at = NULL,
+          updated_at = NOW()
+      WHERE id = $1
+        AND ($2::varchar IS NULL OR worker_id = $2)
+    `, [runId, workerId || null]);
+
+    return (result.rowCount || 0) > 0;
+  }
+
+  public async recoverStaleRuns(reason = 'Worker lease expired'): Promise<number> {
+    if (!reason.trim()) throw new RangeError('reason must not be empty.');
+    const result = await this.db.query(`
+      UPDATE runs
+      SET status = 'failed',
+          error = COALESCE($1, error),
+          ended_at = COALESCE(ended_at, NOW()),
+          worker_id = NULL,
+          heartbeat_at = NULL,
+          lease_expires_at = NULL,
+          updated_at = NOW()
+      WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+        AND lease_expires_at IS NOT NULL
+        AND lease_expires_at < NOW()
+    `, [reason]);
+
+    return result.rowCount || 0;
+  }
+
   public async recordTurn(
     runId: string,
     inputTokens: number,
@@ -73,6 +138,18 @@ export class RunRepository {
           ended_at = CASE
             WHEN $3::boolean OR ($1 = 'completed' AND cancel_requested) THEN NOW()
             ELSE ended_at
+          END,
+          worker_id = CASE
+            WHEN $3::boolean OR ($1 = 'completed' AND cancel_requested) THEN NULL
+            ELSE worker_id
+          END,
+          heartbeat_at = CASE
+            WHEN $3::boolean OR ($1 = 'completed' AND cancel_requested) THEN NULL
+            ELSE heartbeat_at
+          END,
+          lease_expires_at = CASE
+            WHEN $3::boolean OR ($1 = 'completed' AND cancel_requested) THEN NULL
+            ELSE lease_expires_at
           END,
           updated_at = NOW()
       WHERE id = $4
@@ -157,5 +234,12 @@ export class RunRepository {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
+  }
+
+  private assertLeaseInput(workerId: string, leaseSeconds: number): void {
+    if (!workerId.trim()) throw new RangeError('workerId must not be empty.');
+    if (!Number.isFinite(leaseSeconds) || leaseSeconds <= 0) {
+      throw new RangeError('leaseSeconds must be a positive finite number.');
+    }
   }
 }

@@ -32,6 +32,8 @@ export interface MultiAgentDelegatorOptions {
   approvalExecutionStore?: ApprovalExecutionStore;
   maxConcurrency?: number;
   cancellationStore?: RunCancellationStore;
+  workerId?: string;
+  leaseSeconds?: number;
 }
 
 export interface DelegationResult {
@@ -62,6 +64,8 @@ export class TaskDelegator {
       toolCallRepo: options.toolCallRepo,
       budgetRepo: options.budgetRepo,
       globalDailyBudgetUsd: options.globalDailyBudgetUsd,
+      workerId: options.workerId,
+      leaseSeconds: options.leaseSeconds,
       toolExecutor: options.toolExecutor,
       approvalExecutionStore: options.approvalExecutionStore,
       cancellationStore: options.cancellationStore

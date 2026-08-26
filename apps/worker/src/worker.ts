@@ -51,6 +51,8 @@ export interface WorkerRunnerOptions {
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
+  workerId?: string;
+  leaseSeconds?: number;
 }
 
 export class AgentWorkerRunner {
@@ -59,8 +61,10 @@ export class AgentWorkerRunner {
   private runner: AgentRunner;
   private delegator: TaskDelegator;
   private taskQueue: TaskQueue;
+  private readonly workerId: string;
 
   constructor(private options: WorkerRunnerOptions) {
+    this.workerId = options.workerId || `${process.env.HOSTNAME || 'atlas-worker'}:${process.pid}`;
     const eventBus = options.eventBus || new InMemoryEventBus();
     const registry = options.registry || defaultAgentRegistry;
     const provider = options.provider || createModelProvider({
@@ -109,6 +113,8 @@ export class AgentWorkerRunner {
       toolCallRepo: options.toolCallRepo,
       budgetRepo: options.budgetRepo,
       globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
+      workerId: this.workerId,
+      leaseSeconds: options.leaseSeconds,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       cancellationStore: options.runRepo
@@ -124,6 +130,8 @@ export class AgentWorkerRunner {
       toolCallRepo: options.toolCallRepo,
       budgetRepo: options.budgetRepo,
       globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
+      workerId: this.workerId,
+      leaseSeconds: options.leaseSeconds,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,
@@ -134,6 +142,13 @@ export class AgentWorkerRunner {
   }
 
   public async start(): Promise<void> {
+    if (this.options.runRepo && typeof (this.options.runRepo as any).recoverStaleRuns === 'function') {
+      const recovered = await this.options.runRepo.recoverStaleRuns();
+      if (recovered > 0) {
+        rootLogger.warn('Recovered stale runs from expired worker leases', { recovered });
+      }
+    }
+
     this.isRunning = true;
     const concurrency = this.options.config.MAX_CONCURRENT_AGENT_RUNS || 3;
 

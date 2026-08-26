@@ -461,4 +461,35 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.error).toContain('BUDGET_EXCEEDED');
     expect(provider.run).not.toHaveBeenCalled();
   });
+
+  it('acquires a durable worker lease before executing a run', async () => {
+    const provider = new MockModelProvider({ cannedResponses: [{ content: 'Leased result' }] });
+    const runRepo = {
+      create: vi.fn(),
+      acquireLease: vi.fn(async () => ({ id: 'run-lease' })),
+      updateStatus: vi.fn(async (_runId: string, status: string) => ({ status })),
+      recordTurn: vi.fn(async () => undefined)
+    } as any;
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      runRepo,
+      workerId: 'worker-a',
+      leaseSeconds: 60
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174011',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Use a durable lease'
+    });
+
+    expect(summary.status).toBe('completed');
+    expect(runRepo.acquireLease).toHaveBeenCalledWith(
+      '123e4567-e89b-12d3-a456-426614174011',
+      'worker-a',
+      60
+    );
+  });
 });
