@@ -107,7 +107,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     provider,
     eventBus,
     taskRepo: options.taskRepo,
-    runRepo: options.runRepo
+    runRepo: options.runRepo,
+    cancellationStore: options.runRepo
   });
 
   const delegator = new TaskDelegator({
@@ -116,7 +117,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     eventBus,
     taskRepo: options.taskRepo,
     runRepo: options.runRepo,
-    maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS
+    maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,
+    cancellationStore: options.runRepo
   });
 
   const taskQueue = options.taskQueue || new InMemoryTaskQueue();

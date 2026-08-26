@@ -10,7 +10,7 @@ import { rootLogger } from '@atlas/observability';
 import { DepthGuard } from '@atlas/policy';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskRepository, RunRepository } from '@atlas/database';
-import { AgentRunner, ToolExecutor } from '../engine/agent-runner.js';
+import { AgentRunner, RunCancellationStore, ToolExecutor } from '../engine/agent-runner.js';
 import { TaskPlanner } from '../planner/task-planner.js';
 import { TaskSynthesizer } from '../synthesizer/task-synthesizer.js';
 import { QAGate, QAResult } from '../qa/qa-gate.js';
@@ -27,6 +27,7 @@ export interface MultiAgentDelegatorOptions {
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   maxConcurrency?: number;
+  cancellationStore?: RunCancellationStore;
 }
 
 export interface DelegationResult {
@@ -54,7 +55,8 @@ export class TaskDelegator {
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
       toolExecutor: options.toolExecutor,
-      approvalExecutionStore: options.approvalExecutionStore
+      approvalExecutionStore: options.approvalExecutionStore,
+      cancellationStore: options.cancellationStore
     });
 
     this.planner = new TaskPlanner({

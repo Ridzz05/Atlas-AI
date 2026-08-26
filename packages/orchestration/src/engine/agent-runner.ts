@@ -25,6 +25,14 @@ export interface AgentRunnerOptions {
   runRepo?: RunRepository;
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
+  cancellationStore?: RunCancellationStore;
+}
+
+export interface RunCancellationStore {
+  isCancellationRequested?(runId: string): Promise<{ requested: boolean; reason?: string }>;
+  requestCancellation?(runId: string, reason: string): Promise<unknown | null>;
+  requestCancellationForTask?(taskId: string, reason: string): Promise<number>;
+  requestCancellationForActive?(reason: string): Promise<number>;
 }
 
 export interface RunAgentInput {
@@ -51,19 +59,54 @@ export interface AgentRunSummary {
 }
 
 export class AgentRunner {
-  private activeRuns = new Map<string, AbortController>();
+  private activeRuns = new Map<string, { controller: AbortController; taskId: string }>();
 
   constructor(private options: AgentRunnerOptions) {}
 
   public cancelRun(runId: string, reason = 'Cancelled by user'): boolean {
-    const controller = this.activeRuns.get(runId);
-    if (controller) {
-      controller.abort(reason);
+    const activeRun = this.activeRuns.get(runId);
+    if (activeRun) {
+      activeRun.controller.abort(reason);
       this.activeRuns.delete(runId);
       rootLogger.info(`Run ${runId} cancelled: ${reason}`);
       return true;
     }
     return false;
+  }
+
+  public async requestCancellation(runId: string, reason = 'Cancelled by user'): Promise<boolean> {
+    const durableRequest = this.options.cancellationStore?.requestCancellation
+      ? await this.options.cancellationStore.requestCancellation(runId, reason)
+      : null;
+    const localRequest = this.cancelRun(runId, reason);
+    return Boolean(durableRequest) || localRequest;
+  }
+
+  public async requestTaskCancellation(taskId: string, reason = 'Cancelled by user'): Promise<number> {
+    const durableCount = this.options.cancellationStore?.requestCancellationForTask
+      ? await this.options.cancellationStore.requestCancellationForTask(taskId, reason)
+      : 0;
+    let localCount = 0;
+    for (const [runId, activeRun] of this.activeRuns.entries()) {
+      if (activeRun.taskId !== taskId) continue;
+      activeRun.controller.abort(reason);
+      this.activeRuns.delete(runId);
+      localCount++;
+    }
+    return durableCount + localCount;
+  }
+
+  public async requestAllCancellations(reason = 'Emergency stop'): Promise<number> {
+    const durableCount = this.options.cancellationStore?.requestCancellationForActive
+      ? await this.options.cancellationStore.requestCancellationForActive(reason)
+      : 0;
+    let localCount = 0;
+    for (const [runId, activeRun] of this.activeRuns.entries()) {
+      activeRun.controller.abort(reason);
+      this.activeRuns.delete(runId);
+      localCount++;
+    }
+    return durableCount + localCount;
   }
 
   public async run(input: RunAgentInput): Promise<AgentRunSummary> {
@@ -72,7 +115,7 @@ export class AgentRunner {
     const agentId = input.agent.id;
 
     const controller = new AbortController();
-    this.activeRuns.set(runId, controller);
+    this.activeRuns.set(runId, { controller, taskId });
 
     // Link external abort signal if provided
     if (input.signal) {
@@ -97,6 +140,15 @@ export class AgentRunner {
     const messages: ChatMessage[] = [
       { role: 'user', content: input.initialPrompt }
     ];
+
+    const refreshDurableCancellation = async (): Promise<void> => {
+      if (!this.options.cancellationStore?.isCancellationRequested) return;
+
+      const cancellation = await this.options.cancellationStore.isCancellationRequested(runId);
+      if (cancellation.requested && !controller.signal.aborted) {
+        controller.abort(cancellation.reason || 'Cancellation requested by another process');
+      }
+    };
 
     try {
       // 1. Create Run in DB if repo provided
@@ -126,6 +178,7 @@ export class AgentRunner {
       const maxCostUsd = input.agent.limits.maxCostUsd || 1.0;
 
       while (turnsCount < maxTurns) {
+        await refreshDurableCancellation();
         if (controller.signal.aborted) {
           throw new Error(String(controller.signal.reason || 'Run aborted'));
         }
@@ -141,6 +194,11 @@ export class AgentRunner {
           systemPrompt: input.agent.systemPrompt,
           signal: controller.signal
         });
+
+        await refreshDurableCancellation();
+        if (controller.signal.aborted) {
+          throw new Error(String(controller.signal.reason || 'Run aborted'));
+        }
 
         totalInputTokens += modelResult.inputTokens;
         totalOutputTokens += modelResult.outputTokens;
@@ -234,6 +292,11 @@ export class AgentRunner {
           (approvalError as Error & { approvalPending?: boolean; approvalId?: string }).approvalId = input.approvalToken.requestId;
           throw approvalError;
         }
+      }
+
+      await refreshDurableCancellation();
+      if (controller.signal.aborted) {
+        throw new Error(String(controller.signal.reason || 'Run aborted'));
       }
 
       // Update terminal status in DB

@@ -15,7 +15,7 @@ export function registerRunRoutes(app: FastifyInstance, options: RunRouteOptions
     const body = (req.body as any) || {};
     const reason = body.reason || 'Cancelled via API';
 
-    const cancelled = options.runner.cancelRun(id, reason);
+    const cancelled = await options.runner.requestCancellation(id, reason);
     if (!cancelled) {
       return reply.status(404).send({
         error: `Active run not found or already completed: ${id}`
@@ -23,7 +23,7 @@ export function registerRunRoutes(app: FastifyInstance, options: RunRouteOptions
     }
 
     return reply.status(200).send({
-      message: `Run ${id} cancelled successfully`,
+      message: `Cancellation requested for run ${id}`,
       reason
     });
   });

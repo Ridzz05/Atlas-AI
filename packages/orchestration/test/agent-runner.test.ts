@@ -127,6 +127,70 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.error).toContain('User stopped');
   });
 
+  it('honors a cancellation request written by another process before calling the provider', async () => {
+    const provider = {
+      run: vi.fn().mockResolvedValue({
+        content: 'must not run',
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 0.001,
+        finishReason: 'stop'
+      })
+    } as any;
+    const cancellationStore = {
+      isCancellationRequested: vi.fn().mockResolvedValue({ requested: true, reason: 'remote stop' })
+    };
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      cancellationStore
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174006',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Remote cancellation test'
+    });
+
+    expect(summary.status).toBe('cancelled');
+    expect(summary.error).toContain('remote stop');
+    expect(provider.run).not.toHaveBeenCalled();
+  });
+
+  it('does not complete when another process requests cancellation during the provider call', async () => {
+    const provider = {
+      run: vi.fn().mockResolvedValue({
+        content: 'provider returned after remote stop',
+        inputTokens: 1,
+        outputTokens: 1,
+        costUsd: 0.001,
+        finishReason: 'stop'
+      })
+    } as any;
+    const cancellationStore = {
+      isCancellationRequested: vi.fn()
+        .mockResolvedValueOnce({ requested: false })
+        .mockResolvedValueOnce({ requested: true, reason: 'remote stop during call' })
+    };
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      cancellationStore
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174007',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Remote cancellation during provider call'
+    });
+
+    expect(summary.status).toBe('cancelled');
+    expect(summary.error).toContain('remote stop during call');
+    expect(provider.run).toHaveBeenCalledTimes(1);
+  });
+
   it('stops when cost ceiling is exceeded', async () => {
     const lowBudgetAgent: AgentDefinition = {
       ...mockAgent,

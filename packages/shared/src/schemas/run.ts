@@ -38,6 +38,8 @@ export const RunSchema = z.object({
   taskId: z.string().uuid(),
   agentId: z.string(),
   status: RunStatusSchema.default('created'),
+  cancelRequested: z.boolean().default(false),
+  cancelReason: z.string().nullable().default(null),
   inputTokens: z.number().int().nonnegative().default(0),
   outputTokens: z.number().int().nonnegative().default(0),
   costUsd: z.number().nonnegative().default(0),

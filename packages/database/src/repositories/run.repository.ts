@@ -61,9 +61,19 @@ export class RunRepository {
     const isTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(status);
     const query = `
       UPDATE runs
-      SET status = $1,
-          error = COALESCE($2, error),
-          ended_at = CASE WHEN $3::boolean THEN NOW() ELSE ended_at END,
+      SET status = CASE
+            WHEN $1 = 'completed' AND cancel_requested THEN 'cancelled'
+            ELSE $1
+          END,
+          error = CASE
+            WHEN $1 = 'completed' AND cancel_requested
+              THEN COALESCE(cancel_reason, $2, 'Execution cancelled')
+            ELSE COALESCE($2, error)
+          END,
+          ended_at = CASE
+            WHEN $3::boolean OR ($1 = 'completed' AND cancel_requested) THEN NOW()
+            ELSE ended_at
+          END,
           updated_at = NOW()
       WHERE id = $4
       RETURNING *;
@@ -76,12 +86,67 @@ export class RunRepository {
     return this.mapRow(res.rows[0]);
   }
 
+  public async requestCancellation(runId: string, reason: string): Promise<Run | null> {
+    const result = await this.db.query(`
+      UPDATE runs
+      SET cancel_requested = TRUE,
+          cancel_reason = $1,
+          updated_at = NOW()
+      WHERE id = $2
+        AND status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+      RETURNING *;
+    `, [reason, runId]);
+
+    return result.rows[0] ? this.mapRow(result.rows[0]) : null;
+  }
+
+  public async isCancellationRequested(runId: string): Promise<{ requested: boolean; reason?: string }> {
+    const result = await this.db.query(
+      'SELECT cancel_requested, cancel_reason FROM runs WHERE id = $1',
+      [runId]
+    );
+    const row = result.rows[0];
+    return {
+      requested: Boolean(row?.cancel_requested),
+      reason: row?.cancel_reason || undefined
+    };
+  }
+
+  public async requestCancellationForTask(taskId: string, reason: string): Promise<number> {
+    const result = await this.db.query(`
+      UPDATE runs
+      SET cancel_requested = TRUE,
+          cancel_reason = $1,
+          updated_at = NOW()
+      WHERE task_id = $2
+        AND status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+        AND cancel_requested = FALSE;
+    `, [reason, taskId]);
+
+    return result.rowCount || 0;
+  }
+
+  public async requestCancellationForActive(reason: string): Promise<number> {
+    const result = await this.db.query(`
+      UPDATE runs
+      SET cancel_requested = TRUE,
+          cancel_reason = $1,
+          updated_at = NOW()
+      WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+        AND cancel_requested = FALSE;
+    `, [reason]);
+
+    return result.rowCount || 0;
+  }
+
   private mapRow(row: any): Run {
     return {
       id: row.id,
       taskId: row.task_id,
       agentId: row.agent_id,
       status: row.status,
+      cancelRequested: Boolean(row.cancel_requested),
+      cancelReason: row.cancel_reason || null,
       inputTokens: Number(row.input_tokens || 0),
       outputTokens: Number(row.output_tokens || 0),
       costUsd: Number(row.cost_usd || 0),

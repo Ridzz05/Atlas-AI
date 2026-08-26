@@ -85,7 +85,8 @@ export class AgentWorkerRunner {
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
       toolExecutor,
-      approvalExecutionStore: options.approvalRepo
+      approvalExecutionStore: options.approvalRepo,
+      cancellationStore: options.runRepo
     });
 
     this.delegator = new TaskDelegator({
@@ -96,7 +97,8 @@ export class AgentWorkerRunner {
       runRepo: options.runRepo,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
-      maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS
+      maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,
+      cancellationStore: options.runRepo
     });
 
     this.taskQueue = options.taskQueue || new InMemoryTaskQueue();

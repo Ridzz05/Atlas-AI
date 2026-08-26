@@ -1,10 +1,11 @@
-import { ApprovalRepository, TaskRepository } from '@atlas/database';
+import { ApprovalRepository, RunRepository, TaskRepository } from '@atlas/database';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 
 export interface CommandContext {
   taskRepo?: TaskRepository;
+  runRepo?: RunRepository;
   approvalRepo?: ApprovalRepository;
   registry: AgentRegistry;
   taskQueue?: TaskQueue;
@@ -198,7 +199,9 @@ Chief is preparing the multi-agent execution plan. You can check status with \`/
     if (!taskId) return '⚠️ Please specify a task ID: `/stop <task_id>`';
 
     if (this.ctx.runner) {
-      this.ctx.runner.cancelRun(taskId, 'Stopped by user via Telegram command');
+      await this.ctx.runner.requestTaskCancellation(taskId, 'Stopped by user via Telegram command');
+    } else if (this.ctx.runRepo) {
+      await this.ctx.runRepo.requestCancellationForTask(taskId, 'Stopped by user via Telegram command');
     }
     if (this.ctx.taskRepo) {
       try {
@@ -215,6 +218,11 @@ Chief is preparing the multi-agent execution plan. You can check status with \`/
 
   private async handleEmergencyStop(actorId: string): Promise<string> {
     rootLogger.warn('EMERGENCY STOP TRIGGERED VIA TELEGRAM COMMAND');
+    if (this.ctx.runner) {
+      await this.ctx.runner.requestAllCancellations('Emergency stop activated by Telegram owner');
+    } else if (this.ctx.runRepo) {
+      await this.ctx.runRepo.requestCancellationForActive('Emergency stop activated by Telegram owner');
+    }
     if (this.ctx.setEmergencyStop) await this.ctx.setEmergencyStop(true, actorId);
     else await this.ctx.setPaused(true, actorId);
 

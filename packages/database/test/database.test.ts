@@ -25,6 +25,10 @@ describe('@atlas/database tests', () => {
         expect(content).toContain('execution_token_signature');
         expect(content).toContain('idx_approvals_active_request_dedup');
       }
+      if (file === '005_durable_run_cancellation.sql') {
+        expect(content).toContain('cancel_requested');
+        expect(content).toContain('cancel_reason');
+      }
     }
   });
 });

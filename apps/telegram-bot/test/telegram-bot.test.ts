@@ -142,6 +142,61 @@ describe('@atlas/telegram-bot tests', () => {
     expect(result.responseText).toContain('EMERGENCY STOP ACTIVATED');
   });
 
+  it('routes Telegram stop and emergency stop to durable run cancellation', async () => {
+    const runRepo = {
+      requestCancellationForTask: vi.fn().mockResolvedValue(1),
+      requestCancellationForActive: vi.fn().mockResolvedValue(3)
+    } as any;
+    const stateRepo = {
+      claimUpdate: vi.fn().mockResolvedValue(true),
+      setEmergencyStop: vi.fn().mockResolvedValue({
+        paused: true,
+        emergencyStop: true,
+        updatedBy: '12345678',
+        updatedAt: new Date()
+      })
+    } as any;
+    const durableControlBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      runRepo,
+      stateRepo
+    });
+
+    await durableControlBot.processUpdate({
+      update_id: 107,
+      message: {
+        message_id: 7,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/stop 123e4567-e89b-12d3-a456-426614174000',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+    await durableControlBot.processUpdate({
+      update_id: 108,
+      message: {
+        message_id: 8,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/emergency_stop',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(runRepo.requestCancellationForTask).toHaveBeenCalledWith(
+      '123e4567-e89b-12d3-a456-426614174000',
+      'Stopped by user via Telegram command'
+    );
+    expect(runRepo.requestCancellationForActive).toHaveBeenCalledWith(
+      'Emergency stop activated by Telegram owner'
+    );
+  });
+
   it('handles inline keyboard callback for approvals', async () => {
     const callbackUpdate = {
       update_id: 106,
