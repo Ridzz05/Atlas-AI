@@ -6,6 +6,8 @@ This document provides operational instructions, deployment guidelines, disaster
 
 ---
 
+> Dashboard realtime checkpoint (26 August 2026): commit `53f771f` adds authenticated SSE refresh to the Tasks page, matching the durable Communications feed. Both pages close the connection and remove all listeners on unmount.
+
 ## 1. System Architecture & Inventory
 
 | Service | Port | Tech Stack | Role |

@@ -73,7 +73,7 @@
 
 ## Current execution checkpoint
 
-Current release state supersedes the historical implementation inventory below: the latest implementation commit is `bac3083`, with task-status integrity, lifecycle events, API/Telegram intake message persistence, and a durable dashboard communications feed covered locally. The focused slice passes dashboard 8/8, agent-service 8/8, Telegram 17/17, orchestration 24/24, and database 3/3 tests. The full local gates are being rerun after this checkpoint; Docker-backed recovery and live provider/connector validation remain release criteria.
+Current release state supersedes the historical implementation inventory below: the latest implementation commit is `53f771f`, with task-status integrity, lifecycle events, API/Telegram intake message persistence, durable dashboard Tasks/Communications feeds, and live SSE refresh covered locally. The focused slice passes dashboard 8/8, agent-service 8/8, Telegram 17/17, orchestration 24/24, and database 3/3 tests. The full local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15; Docker-backed recovery and live provider/connector validation remain release criteria.
 
 Commits `0d25fb7` and `6279440` map watchdog timeout outcomes to valid task `failed` state, publish task lifecycle events, repair legacy invalid rows, and enforce the database status constraint. Commit `bac3083` persists API and Telegram task-intake messages and makes the dashboard Communications page load durable messages/tool-call metadata with authenticated SSE refresh while omitting raw tool payloads. History persistence is intentionally best-effort around task creation; an operational alert is logged if the history write is unavailable.
 
