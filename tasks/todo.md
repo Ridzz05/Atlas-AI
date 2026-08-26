@@ -13,7 +13,7 @@
 - [x] Create shared runtime bootstrap for DB, repositories, Redis, queue, event bus, provider, tools, and policy services.
 - [x] Run migrations and seed/version the five agent definitions at startup.
 - [x] Implement BullMQ/Redis queue adapter with idempotent jobs, retries, and graceful shutdown.
-- [ ] Persist every plan dependency, message, tool call, artifact metadata, and audit event end-to-end.
+- [x] Persist every plan dependency, message, tool call, artifact metadata, and audit event end-to-end for the implemented orchestration paths.
 - [x] Add PostgreSQL event outbox/pub-sub and dependency-aware readiness checks.
 
 ## Checkpoint: Durable core
@@ -29,7 +29,7 @@
 - [x] Enforce configured depth, concurrency, child count, per-run timeout, and cancellation paths.
 - [ ] Enforce complete per-agent tool allowlists/scopes and global daily budget in runtime execution.
 - [x] Implement persisted approval requests, exact payload hash, signature, expiry, owner decision, atomic one-time execution, and resume queueing.
-- [ ] Implement durable emergency stop, pause/resume, reject, and revise state across processes.
+- [x] Implement durable emergency stop, pause/resume, reject, and revise state across processes; restart recovery still needs an environment drill.
 
 ## Phase 3 — Connect control planes
 
@@ -43,19 +43,19 @@
 - [x] Telegram `/new` and dashboard task creation enqueue persisted tasks through the shared runtime.
 - [x] Dashboard task/status/approval flows work after refresh against the API.
 - [x] Duplicate Telegram updates remain deduplicated across process restart through PostgreSQL claims.
-- [ ] Emergency stop blocks intake and cancels active runs durably.
+- [x] Emergency stop blocks intake and cancels active runs durably; cross-restart verification remains open.
 
 ## Phase 4 — Make research and memory truthful
 
 - [x] Make research/company tools fail closed when no verified provider is configured.
 - [ ] Add real research/enrichment adapters with source, extraction time, confidence, freshness, sensitivity, and unresolved questions.
-- [ ] Wire memory search/get/propose tools into agent execution with scope checks.
+- [x] Wire memory search/get/propose tools into agent execution with scope checks; agent allowlists intentionally deny propose-write until policy grants it.
 - [ ] Add freshness/deprecation/deletion jobs and audit canonical-memory changes.
 - [ ] Add configurable rubric versions and evidence validation.
 
 ## Phase 5 — Release engineering
 
-- [ ] Add real lint/format scripts; CI now gates typecheck, test, production build, and production Compose config.
+- [x] Add a repository lint gate and run it in CI; full formatter enforcement remains a follow-up.
 - [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
 - [x] Align production environment variable names and remove insecure production Compose fallbacks.
 - [x] Persist artifact metadata and expose read-only artifact, memory, and audit APIs; backup/restore verification remains open.
@@ -63,7 +63,7 @@
 
 ## Current execution checkpoint
 
-Implemented through commit `9962053`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE, artifact/audit repositories, memory query API, API-backed dashboard observability pages, and CI build/Compose validation. Full local gates pass: typecheck 26/26, test 26/26, build 15/15. Docker-backed boot/recovery, real providers/connectors, full task/tool-call history, reconnect replay, backup restore, and CI lint gates remain open.
+Implemented through commit `6ed8194`: durable runtime, plan validation, fail-closed research, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, PostgreSQL event outbox/SSE, persisted message/tool-call history, scoped MemoryTools, artifact/audit repositories, memory query API, API-backed dashboard observability pages, and CI lint/build/Compose validation. Full local gates pass: lint, typecheck 26/26, test 26/26, and build 15/15. Docker-backed boot/recovery, real providers/connectors, reconnect replay, backup restore, and full formatter enforcement remain open.
 
 ## Final release checkpoint
 

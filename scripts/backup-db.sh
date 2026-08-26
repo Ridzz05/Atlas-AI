@@ -11,7 +11,8 @@ DB_USER="${POSTGRES_USER:-atlas_admin}"
 mkdir -p "$BACKUP_DIR"
 
 echo "==> Starting PostgreSQL backup: ${FILENAME}..."
-docker exec -t "$CONTAINER_NAME" pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "${BACKUP_DIR}/${FILENAME}"
+# Do not allocate a TTY: pg_dump output is a byte stream and must remain intact.
+docker exec "$CONTAINER_NAME" pg_dump -U "$DB_USER" -d "$DB_NAME" | gzip > "${BACKUP_DIR}/${FILENAME}"
 
 echo "==> Backup completed successfully: ${BACKUP_DIR}/${FILENAME} ($(du -h "${BACKUP_DIR}/${FILENAME}" | cut -f1))"
 

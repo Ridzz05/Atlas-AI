@@ -2,7 +2,7 @@
 
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling with durable update/control state, plan validation, durable approval request/decision/token/claim/finalize/resume, PostgreSQL event streaming, metadata APIs, and API-backed dashboard task/approval/agent/artifact/audit/memory views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Full task/tool-call history, backup/recovery drills, and clean Compose boot still require a Docker host and release CI.
+> Release status (26 August 2026): durable runtime, API auth/CORS/rate limiting, Telegram polling with durable update/control state, cross-process cancellation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, scoped MemoryTools, PostgreSQL event streaming, metadata APIs, and API-backed dashboard task/approval/agent/artifact/audit/memory views are implemented and locally tested. Do not enable external writes yet: no approved outbound connector or verified research provider is configured. Backup/recovery drills, clean Compose boot, event replay, and production-provider verification still require a Docker host or external integration environment.
 
 ---
 
@@ -81,11 +81,11 @@ Add to crontab (`crontab -e`):
 ### 4.1 Emergency Stop
 When an unexpected agent behavior or runaway task is detected:
 1. **Via Telegram**: Send `/emergency_stop` to the Telegram bot.
-3. **Via Shell**:
+2. **Via Shell**:
    ```bash
    docker compose -f docker-compose.prod.yml stop worker
    ```
-*Current limitation:* Telegram emergency stop is the supported control and its pause/emergency state is persisted. The dashboard has read-only observability but no emergency-stop mutation yet. Stopping the worker halts new background execution, but does not replace durable active-run cancellation/state management.
+*Current limitation:* Telegram emergency stop is the supported control and its pause/emergency state plus active-run cancellation request are persisted. The dashboard has read-only observability but no emergency-stop mutation yet. Stopping the worker is an additional hard stop for new background execution; use the durable control first so the state is recorded.
 
 ### 4.2 System Recovery / Resume
 1. Inspect available audit records through the authenticated dashboard/API or directly in PostgreSQL:

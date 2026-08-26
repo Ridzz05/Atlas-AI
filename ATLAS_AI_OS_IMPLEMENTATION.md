@@ -11,7 +11,7 @@
 | Deployment utama | Ubuntu VPS menggunakan Docker Compose |
 | Bahasa utama | TypeScript |
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS/rate limiting, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, Telegram polling with durable update/control state, authenticated event streaming, metadata repositories/APIs, and API-backed dashboard observability pages are implemented. External writes remain disabled: an approved outbound connector, real research adapters, full agent memory wiring, durable task/tool-call history, cross-restart recovery drill, backup verification, and CI lint gates remain before production release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, PostgreSQL event outbox, API auth/CORS/rate limiting, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools, authenticated event streaming, metadata repositories/APIs, and API-backed dashboard observability pages are implemented. External writes remain disabled: an approved outbound connector, real research adapters, cross-restart recovery drill, backup verification, event replay, and production formatter enforcement remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -1239,14 +1239,12 @@ Agent baru seperti Iris, Apollo, Calliope, atau dedicated finance agent hanya di
 
 ## 31. Immediate Next Action
 
-Langkah berikutnya adalah menjalankan **Phase 0 — Repository Foundation**:
+Langkah berikutnya adalah menutup release gate pada lingkungan yang memiliki Docker, PostgreSQL, Redis, dan kredensial provider yang disetujui:
 
-1. tentukan nama repository final;
-2. buat monorepo dan package boundaries;
-3. buat Docker Compose untuk PostgreSQL dan Redis;
-4. buat schema dan migration awal;
-5. buat shared event/type contracts;
-6. buat health checks dan CI;
-7. verifikasi clean boot dari dokumentasi.
+1. jalankan lint, typecheck, test, dan production build dari clean checkout;
+2. boot Compose dari database kosong dan verifikasi migration/agent seeding;
+3. uji task execution lintas restart API/worker, duplicate Telegram update, pause/emergency stop, cancellation, dan approval execute-once;
+4. buat backup PostgreSQL, lakukan restore ke database terpisah, lalu verifikasi artifact/message/tool-call history;
+5. tambahkan reconnect replay event dan formatter enforcement sebelum menyebut production-ready.
 
-Jangan menghubungkan model berbayar atau external integrations sebelum foundation dan test harness siap.
+External writes tetap nonaktif sampai connector outbound, research provider, model provider, dan owner approval untuk production dipilih serta diuji.
