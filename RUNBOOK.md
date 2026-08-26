@@ -85,10 +85,10 @@ When an unexpected agent behavior or runaway task is detected:
    ```bash
    docker compose -f docker-compose.prod.yml stop worker
    ```
-*Current limitation:* Telegram emergency stop is the supported control. The dashboard intentionally exposes an informational warning until a durable emergency-stop API exists. Stopping the worker halts new background execution, but does not replace durable cancellation/state management.
+*Current limitation:* Telegram emergency stop is the supported control and its pause/emergency state is persisted. The dashboard has read-only observability but no emergency-stop mutation yet. Stopping the worker halts new background execution, but does not replace durable active-run cancellation/state management.
 
 ### 4.2 System Recovery / Resume
-1. Inspect available database records in PostgreSQL (the dashboard audit query is not exposed yet):
+1. Inspect available audit records through the authenticated dashboard/API or directly in PostgreSQL:
    ```sql
    SELECT * FROM audit_events ORDER BY timestamp DESC LIMIT 20;
    ```
