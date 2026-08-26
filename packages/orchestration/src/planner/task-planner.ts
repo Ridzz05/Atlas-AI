@@ -1,12 +1,14 @@
 import { Task, TaskPlan, TaskPlanSchema } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
 import { AgentRegistry } from '@atlas/agents';
+import { MessageRepository } from '@atlas/database';
 import { rootLogger } from '@atlas/observability';
 import { PlanValidator } from './plan-validator.js';
 
 export interface TaskPlannerOptions {
   provider: ModelProvider;
   registry: AgentRegistry;
+  messageRepo?: MessageRepository;
 }
 
 export class TaskPlanner {
@@ -58,6 +60,23 @@ RULES:
       messages: [{ role: 'user', content: prompt }],
       signal
     });
+
+    if (this.options.messageRepo) {
+      await this.options.messageRepo.create({
+        taskId: task.id,
+        senderType: 'user',
+        senderId: 'user',
+        content: prompt,
+        metadata: { stage: 'planning' }
+      });
+      await this.options.messageRepo.create({
+        taskId: task.id,
+        senderType: 'agent',
+        senderId: 'chief',
+        content: result.content,
+        metadata: { stage: 'planning' }
+      });
+    }
 
     try {
       const cleaned = result.content.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();

@@ -2,10 +2,12 @@ import { Task, AgentDefinition } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
 import { QAResult } from '../qa/qa-gate.js';
 import { rootLogger } from '@atlas/observability';
+import { MessageRepository } from '@atlas/database';
 
 export interface TaskSynthesizerOptions {
   provider: ModelProvider;
   chiefAgent: AgentDefinition;
+  messageRepo?: MessageRepository;
 }
 
 export class TaskSynthesizer {
@@ -53,6 +55,23 @@ INSTRUCTIONS:
       systemPrompt: this.options.chiefAgent.systemPrompt,
       signal
     });
+
+    if (this.options.messageRepo) {
+      await this.options.messageRepo.create({
+        taskId: parentTask.id,
+        senderType: 'user',
+        senderId: 'system.synthesis',
+        content: prompt,
+        metadata: { stage: 'synthesis' }
+      });
+      await this.options.messageRepo.create({
+        taskId: parentTask.id,
+        senderType: 'agent',
+        senderId: 'chief',
+        content: result.content,
+        metadata: { stage: 'synthesis' }
+      });
+    }
 
     return result.content;
   }

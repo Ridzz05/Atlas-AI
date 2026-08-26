@@ -17,6 +17,8 @@ async function main() {
     auditRepo: runtime.auditRepo,
     memoryStore: runtime.memoryStore,
     controlStateRepo: runtime.telegramStateRepo,
+    messageRepo: runtime.messageRepo,
+    toolCallRepo: runtime.toolCallRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

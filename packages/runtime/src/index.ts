@@ -9,6 +9,8 @@ import {
   SystemEventRepository,
   TelegramStateRepository,
   RunRepository,
+  MessageRepository,
+  ToolCallRepository,
   seedAgents,
   TaskRepository
 } from '@atlas/database';
@@ -28,6 +30,8 @@ export interface AtlasRuntime {
   memoryStore: DatabaseMemoryStore;
   eventRepo: SystemEventRepository;
   telegramStateRepo: TelegramStateRepository;
+  messageRepo: MessageRepository;
+  toolCallRepo: ToolCallRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -77,6 +81,8 @@ export async function createAtlasRuntime(
   const memoryStore = new DatabaseMemoryStore(db);
   const eventRepo = new SystemEventRepository(db);
   const telegramStateRepo = new TelegramStateRepository(db);
+  const messageRepo = new MessageRepository(db);
+  const toolCallRepo = new ToolCallRepository(db);
 
   return {
     db,
@@ -88,6 +94,8 @@ export async function createAtlasRuntime(
     memoryStore,
     eventRepo,
     telegramStateRepo,
+    messageRepo,
+    toolCallRepo,
     taskQueue,
     eventBus,
     provider,

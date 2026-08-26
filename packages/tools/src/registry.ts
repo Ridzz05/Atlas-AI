@@ -31,6 +31,15 @@ export class ToolRegistry {
       };
     }
 
+    if (context.allowedTools && !context.allowedTools.includes(name)) {
+      return {
+        success: false,
+        error: `Tool '${name}' is not permitted for agent '${context.agentId}'.`,
+        durationMs: 0,
+        riskLevel: tool.riskLevel
+      };
+    }
+
     // 1. Policy evaluation check
     const policy = ApprovalMatrix.evaluate(name, {
       externalWritesEnabled: context.externalWritesEnabled

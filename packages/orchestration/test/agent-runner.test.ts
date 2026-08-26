@@ -99,6 +99,13 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.status).toBe('completed');
     expect(summary.turnsCount).toBe(2);
     expect(toolExecutor.execute).toHaveBeenCalledTimes(1);
+    expect(toolExecutor.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'memory.search' }),
+      expect.objectContaining({
+        grantedScopes: mockAgent.permissions.dataScopes,
+        allowedTools: mockAgent.permissions.tools
+      })
+    );
     expect(summary.finalContent).toBe('Final synthesis with memory results.');
   });
 
@@ -189,6 +196,64 @@ describe('@atlas/orchestration AgentRunner tests', () => {
     expect(summary.status).toBe('cancelled');
     expect(summary.error).toContain('remote stop during call');
     expect(provider.run).toHaveBeenCalledTimes(1);
+  });
+
+  it('persists user, assistant, tool, and tool-call history when repositories are configured', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: 'Searching memory.',
+          toolCalls: [{ id: crypto.randomUUID(), name: 'memory.search', arguments: { query: 'gyms' } }]
+        },
+        { content: 'Final answer from memory.' }
+      ]
+    });
+    const messageRepo = { create: vi.fn().mockResolvedValue(undefined) } as any;
+    const toolCallRepo = {
+      create: vi.fn().mockResolvedValue({ id: crypto.randomUUID() }),
+      complete: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const toolExecutor = {
+      execute: vi.fn().mockResolvedValue({ success: true, output: { results: [] } })
+    };
+    const runner = new AgentRunner({
+      provider,
+      eventBus: new InMemoryEventBus(),
+      messageRepo,
+      toolCallRepo,
+      toolExecutor
+    });
+
+    const summary = await runner.run({
+      runId: '123e4567-e89b-12d3-a456-426614174008',
+      task: mockTask,
+      agent: mockAgent,
+      initialPrompt: 'Find gym information'
+    });
+
+    expect(summary.status).toBe('completed');
+    expect(messageRepo.create).toHaveBeenCalledTimes(4);
+    expect(messageRepo.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      senderType: 'user',
+      content: 'Find gym information'
+    }));
+    expect(messageRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+      senderType: 'agent',
+      content: 'Searching memory.'
+    }));
+    expect(messageRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+      senderType: 'tool',
+      senderId: 'memory.search'
+    }));
+    expect(toolCallRepo.create).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: 'memory.search',
+      taskId: mockTask.id,
+      runId: '123e4567-e89b-12d3-a456-426614174008'
+    }));
+    expect(toolCallRepo.complete).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ status: 'success', durationMs: expect.any(Number) })
+    );
   });
 
   it('stops when cost ceiling is exceeded', async () => {

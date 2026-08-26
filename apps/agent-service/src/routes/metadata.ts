@@ -1,11 +1,13 @@
 import { FastifyInstance } from 'fastify';
-import { ArtifactRepository, AuditRepository } from '@atlas/database';
+import { ArtifactRepository, AuditRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import type { MemoryStore } from '@atlas/memory';
 import { MemoryStatusSchema, MemoryTypeSchema } from '@atlas/shared';
 
 export interface MetadataRouteOptions {
   artifactRepo?: ArtifactRepository;
   auditRepo?: AuditRepository;
+  messageRepo?: MessageRepository;
+  toolCallRepo?: ToolCallRepository;
   memoryStore?: MemoryStore;
 }
 
@@ -44,6 +46,34 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     const data = await options.auditRepo.list({
       actor: query.actor,
       action: query.action,
+      taskId: query.taskId,
+      runId: query.runId,
+      limit
+    });
+    return reply.status(200).send({ data, count: data.length, durable: true });
+  });
+
+  app.get('/api/v1/messages', async (req, reply) => {
+    const query = req.query as { taskId?: string; runId?: string; limit?: string };
+    const limit = parseLimit(query.limit, 'Message');
+    if (typeof limit !== 'number') return reply.status(400).send(limit);
+    if (!options.messageRepo) return reply.status(200).send({ data: [], count: 0, durable: false });
+
+    const data = await options.messageRepo.list({
+      taskId: query.taskId,
+      runId: query.runId,
+      limit
+    });
+    return reply.status(200).send({ data, count: data.length, durable: true });
+  });
+
+  app.get('/api/v1/tool-calls', async (req, reply) => {
+    const query = req.query as { taskId?: string; runId?: string; limit?: string };
+    const limit = parseLimit(query.limit, 'Tool call');
+    if (typeof limit !== 'number') return reply.status(400).send(limit);
+    if (!options.toolCallRepo) return reply.status(200).send({ data: [], count: 0, durable: false });
+
+    const data = await options.toolCallRepo.list({
       taskId: query.taskId,
       runId: query.runId,
       limit

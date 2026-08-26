@@ -34,8 +34,11 @@ export class MemoryTools {
     };
   }
 
-  public async get(input: { id: string }): Promise<{ item: any | null }> {
+  public async get(input: { id: string; allowedScopes?: string[] }): Promise<{ item: any | null }> {
     const item = await this.store.findById(input.id);
+    if (item && input.allowedScopes && item.scope !== 'global' && !input.allowedScopes.includes(item.scope)) {
+      return { item: null };
+    }
     return { item };
   }
 
@@ -47,7 +50,13 @@ export class MemoryTools {
     source?: string;
     confidence?: number;
     taskId?: string;
+    allowedScopes?: string[];
   }): Promise<{ id: string; status: string; duplicate: boolean }> {
+    const scope = input.scope || 'global';
+    if (input.allowedScopes && scope !== 'global' && !input.allowedScopes.includes(scope)) {
+      throw new Error(`Memory scope '${scope}' is not granted to this agent.`);
+    }
+
     const saved = await this.proposalService.propose(input);
     return {
       id: saved.id,

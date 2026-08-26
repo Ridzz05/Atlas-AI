@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { AgentWorkerRunner } from '../src/worker.js';
 import { EnvConfigSchema, Task, AgentDefinition } from '@atlas/shared';
 import { MockModelProvider } from '@atlas/providers';
+import { InMemoryMemoryStore } from '@atlas/memory';
 
 describe('worker lifecycle and task execution tests', () => {
   const config = EnvConfigSchema.parse({ NODE_ENV: 'test' });
@@ -101,5 +102,62 @@ describe('worker lifecycle and task execution tests', () => {
       expect.any(Number)
     );
     await runner.stop();
+  });
+
+  it('executes an allowed memory tool through the worker gateway', async () => {
+    const provider = {
+      run: vi.fn()
+        .mockResolvedValueOnce({
+          content: 'Searching approved memory.',
+          toolCalls: [{ id: crypto.randomUUID(), name: 'memory.search', arguments: { query: 'approved' } }],
+          inputTokens: 1,
+          outputTokens: 1,
+          costUsd: 0.001,
+          finishReason: 'tool_calls'
+        })
+        .mockResolvedValueOnce({
+          content: 'Memory search completed.',
+          inputTokens: 1,
+          outputTokens: 1,
+          costUsd: 0.001,
+          finishReason: 'stop'
+        })
+    } as any;
+    const memoryStore = new InMemoryMemoryStore();
+    const now = new Date().toISOString();
+    await memoryStore.save({
+      id: crypto.randomUUID(),
+      type: 'semantic',
+      status: 'verified',
+      content: 'Approved research memory',
+      scope: 'approved_research',
+      author: 'ned',
+      source: 'test',
+      confidence: 0.9,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    const agent = {
+      ...mockAgent,
+      id: 'ned',
+      role: 'researcher' as const,
+      permissions: {
+        ...mockAgent.permissions,
+        tools: ['memory.search'],
+        dataScopes: ['approved_research']
+      }
+    };
+    const runner = new AgentWorkerRunner({ config, provider, memoryStore });
+
+    await runner.start();
+    await runner.getQueue().enqueue({ task: mockTask, agent, prompt: 'Search memory' });
+    await new Promise(r => setTimeout(r, 50));
+    await runner.stop();
+
+    expect(provider.run).toHaveBeenCalledTimes(2);
   });
 });

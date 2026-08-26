@@ -9,7 +9,7 @@ import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { DepthGuard } from '@atlas/policy';
 import { AgentRegistry } from '@atlas/agents';
-import { TaskRepository, RunRepository } from '@atlas/database';
+import { TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import { AgentRunner, RunCancellationStore, ToolExecutor } from '../engine/agent-runner.js';
 import { TaskPlanner } from '../planner/task-planner.js';
 import { TaskSynthesizer } from '../synthesizer/task-synthesizer.js';
@@ -24,6 +24,8 @@ export interface MultiAgentDelegatorOptions {
   eventBus: EventBus;
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
+  messageRepo?: MessageRepository;
+  toolCallRepo?: ToolCallRepository;
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   maxConcurrency?: number;
@@ -54,6 +56,8 @@ export class TaskDelegator {
       eventBus: options.eventBus,
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
+      messageRepo: options.messageRepo,
+      toolCallRepo: options.toolCallRepo,
       toolExecutor: options.toolExecutor,
       approvalExecutionStore: options.approvalExecutionStore,
       cancellationStore: options.cancellationStore
@@ -61,7 +65,8 @@ export class TaskDelegator {
 
     this.planner = new TaskPlanner({
       provider: options.provider,
-      registry: options.registry
+      registry: options.registry,
+      messageRepo: options.messageRepo
     });
 
     const chiefAgent = options.registry.getOrThrow('chief');
@@ -69,12 +74,14 @@ export class TaskDelegator {
 
     this.synthesizer = new TaskSynthesizer({
       provider: options.provider,
-      chiefAgent
+      chiefAgent,
+      messageRepo: options.messageRepo
     });
 
     this.qaGate = new QAGate({
       provider: options.provider,
-      argusAgent
+      argusAgent,
+      messageRepo: options.messageRepo
     });
 
     this.maxConcurrency = options.maxConcurrency || 3;

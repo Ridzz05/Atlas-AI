@@ -9,9 +9,11 @@ import {
   createArtifactTools,
   ArtifactService,
   RubricEngine,
-  LeadScoringInput
+  LeadScoringInput,
+  createMemoryTools
 } from '../src/index.js';
 import { TokenVerifier } from '@atlas/policy';
+import { InMemoryMemoryStore, MemoryRetriever, MemoryProposalService, MemoryTools } from '@atlas/memory';
 
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('registers and executes read research tools safely', async () => {
@@ -361,5 +363,85 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
     expect(() => artifactService.save('../outside.txt', 'must not escape')).toThrow('storage root');
     expect(artifactService.read('../outside.txt')).toBeNull();
+  });
+
+  it('registers memory tools with scope and permission enforcement', async () => {
+    const store = new InMemoryMemoryStore();
+    const approvedId = randomUUID();
+    const restrictedId = randomUUID();
+    const now = new Date().toISOString();
+    await store.save({
+      id: approvedId,
+      type: 'entity',
+      status: 'verified',
+      content: 'Approved research about Mega Gym',
+      scope: 'approved_research',
+      author: 'ned',
+      source: 'research',
+      confidence: 0.9,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    await store.save({
+      id: restrictedId,
+      type: 'policy',
+      status: 'verified',
+      content: 'Restricted security instruction',
+      scope: 'restricted_security',
+      author: 'system',
+      source: 'policy',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: now,
+      updatedAt: now
+    });
+
+    const memoryTools = new MemoryTools(
+      new MemoryRetriever(store),
+      new MemoryProposalService(store),
+      store
+    );
+    const registry = new ToolRegistry();
+    for (const tool of createMemoryTools(memoryTools)) registry.register(tool);
+    registry.register(CreateDraftTool);
+    const context = {
+      taskId: 'task-1',
+      runId: 'run-1',
+      agentId: 'ned',
+      grantedScopes: ['approved_research'],
+      allowedTools: ['memory.search', 'memory.get', 'memory.propose_write']
+    };
+
+    const search = await registry.execute('memory.search', { query: 'Mega', limit: 10 }, context);
+    expect(search.success).toBe(true);
+    expect((search.output as any).results).toHaveLength(1);
+    expect((search.output as any).results[0].id).toBe(approvedId);
+
+    const approved = await registry.execute('memory.get', { id: approvedId }, context);
+    expect(approved.success).toBe(true);
+    expect((approved.output as any).item.id).toBe(approvedId);
+
+    const restricted = await registry.execute('memory.get', { id: restrictedId }, context);
+    expect(restricted.success).toBe(true);
+    expect((restricted.output as any).item).toBeNull();
+
+    const proposal = await registry.execute('memory.propose_write', {
+      type: 'semantic',
+      content: 'Must be rejected outside granted scope',
+      scope: 'restricted_security'
+    }, context);
+    expect(proposal.success).toBe(false);
+    expect(proposal.error).toContain('not granted');
+
+    const denied = await registry.execute('communication.create_draft', {}, context);
+    expect(denied.success).toBe(false);
+    expect(denied.error).toContain('not permitted');
   });
 });

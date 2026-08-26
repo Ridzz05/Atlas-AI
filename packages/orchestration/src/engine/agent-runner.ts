@@ -8,13 +8,21 @@ import {
 import { ModelProvider, ChatMessage, ToolCallRequest } from '@atlas/providers';
 import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
-import { TaskRepository, RunRepository } from '@atlas/database';
+import { TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import type { ApprovalExecutionStore } from '@atlas/tools';
 
 export interface ToolExecutor {
   execute(
     toolCall: ToolCallRequest,
-    context: { taskId: string; runId: string; agentId: string; approvalToken?: ApprovalToken; signal?: AbortSignal }
+    context: {
+      taskId: string;
+      runId: string;
+      agentId: string;
+      grantedScopes?: string[];
+      allowedTools?: string[];
+      approvalToken?: ApprovalToken;
+      signal?: AbortSignal;
+    }
   ): Promise<Record<string, unknown>>;
 }
 
@@ -23,6 +31,8 @@ export interface AgentRunnerOptions {
   eventBus: EventBus;
   taskRepo?: TaskRepository;
   runRepo?: RunRepository;
+  messageRepo?: MessageRepository;
+  toolCallRepo?: ToolCallRepository;
   toolExecutor?: ToolExecutor;
   approvalExecutionStore?: ApprovalExecutionStore;
   cancellationStore?: RunCancellationStore;
@@ -141,6 +151,20 @@ export class AgentRunner {
       { role: 'user', content: input.initialPrompt }
     ];
 
+    const persistMessage = async (message: {
+      senderType: 'user' | 'agent' | 'system' | 'tool';
+      senderId: string;
+      content: string;
+      metadata?: Record<string, unknown>;
+    }): Promise<void> => {
+      if (!this.options.messageRepo) return;
+      await this.options.messageRepo.create({
+        taskId,
+        runId,
+        ...message
+      });
+    };
+
     const refreshDurableCancellation = async (): Promise<void> => {
       if (!this.options.cancellationStore?.isCancellationRequested) return;
 
@@ -162,6 +186,12 @@ export class AgentRunner {
       if (this.options.taskRepo) {
         await this.options.taskRepo.updateStatus(taskId, 'running');
       }
+      await persistMessage({
+        senderType: 'user',
+        senderId: 'user',
+        content: input.initialPrompt,
+        metadata: { runId, agentId }
+      });
 
       // 2. Publish run.started event
       await this.publishEvent({
@@ -199,6 +229,17 @@ export class AgentRunner {
         if (controller.signal.aborted) {
           throw new Error(String(controller.signal.reason || 'Run aborted'));
         }
+
+        await persistMessage({
+          senderType: 'agent',
+          senderId: agentId,
+          content: modelResult.content,
+          metadata: {
+            turn: turnsCount,
+            finishReason: modelResult.finishReason,
+            toolCallCount: modelResult.toolCalls?.length || 0
+          }
+        });
 
         totalInputTokens += modelResult.inputTokens;
         totalOutputTokens += modelResult.outputTokens;
@@ -245,15 +286,59 @@ export class AgentRunner {
 
           for (const tc of modelResult.toolCalls) {
             let output: Record<string, unknown> = { success: true };
-            if (this.options.toolExecutor) {
-              output = await this.options.toolExecutor.execute(tc, {
-                taskId,
+            const toolCallRecordId = this.options.toolCallRepo
+              ? (await this.options.toolCallRepo.create({
                 runId,
+                taskId,
                 agentId,
-                approvalToken: input.approvalToken,
-                signal: controller.signal
+                toolName: tc.name,
+                input: tc.arguments
+              })).id
+              : undefined;
+            const toolStartedAt = Date.now();
+
+            if (this.options.toolExecutor) {
+              try {
+                output = await this.options.toolExecutor.execute(tc, {
+                  taskId,
+                  runId,
+                  agentId,
+                  grantedScopes: input.agent.permissions.dataScopes,
+                  allowedTools: input.agent.permissions.tools,
+                  approvalToken: input.approvalToken,
+                  signal: controller.signal
+                });
+              } catch (err: any) {
+                if (toolCallRecordId && this.options.toolCallRepo) {
+                  await this.options.toolCallRepo.complete(toolCallRecordId, {
+                    status: 'failed',
+                    error: String(err?.message || 'Tool execution failed'),
+                    durationMs: Date.now() - toolStartedAt
+                  });
+                }
+                throw err;
+              }
+            }
+
+            if (toolCallRecordId && this.options.toolCallRepo) {
+              const blockedApproval = output.approvalPending === true;
+              await this.options.toolCallRepo.complete(toolCallRecordId, {
+                status: output.success === false
+                  ? blockedApproval ? 'blocked_approval' : 'failed'
+                  : 'success',
+                output,
+                error: typeof output.error === 'string' ? output.error : null,
+                durationMs: Date.now() - toolStartedAt,
+                approvalId: typeof output.approvalId === 'string' ? output.approvalId : null
               });
             }
+
+            await persistMessage({
+              senderType: 'tool',
+              senderId: tc.name,
+              content: JSON.stringify(output),
+              metadata: { turn: turnsCount, providerToolCallId: tc.id }
+            });
 
             if (output.success === false) {
               const toolError = new Error(String(output.error || `Tool '${tc.name}' rejected execution.`));

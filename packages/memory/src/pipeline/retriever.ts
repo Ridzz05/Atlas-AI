@@ -8,8 +8,11 @@ export class MemoryRetriever {
 
   public async retrieve(query: MemoryQuery): Promise<RankedMemoryResult[]> {
     // 1. Fetch items filtered by allowed scopes & types
+    const allowedScopes = query.allowedScopes && query.allowedScopes.length > 0
+      ? query.allowedScopes
+      : ['global'];
     const candidates = await this.store.search({
-      scopes: query.allowedScopes,
+      scopes: allowedScopes,
       types: query.types,
       status: query.status
     });

@@ -27,17 +27,23 @@ describe('agent-service metadata endpoints', () => {
       config: EnvConfigSchema.parse({ NODE_ENV: 'test' }),
       artifactRepo: { list: vi.fn().mockResolvedValue([{ name: 'report.md' }]) } as any,
       auditRepo: { list: vi.fn().mockResolvedValue([{ action: 'tool.artifacts.write' }]) } as any,
+      messageRepo: { list: vi.fn().mockResolvedValue([{ senderId: 'ned' }]) } as any,
+      toolCallRepo: { list: vi.fn().mockResolvedValue([{ toolName: 'memory.search' }]) } as any,
       memoryStore
     });
 
-    const [artifacts, audit, memory] = await Promise.all([
+    const [artifacts, audit, messages, toolCalls, memory] = await Promise.all([
       server.inject({ method: 'GET', url: '/api/v1/artifacts?limit=10' }),
       server.inject({ method: 'GET', url: '/api/v1/audit?limit=10' }),
+      server.inject({ method: 'GET', url: '/api/v1/messages?taskId=task-1' }),
+      server.inject({ method: 'GET', url: '/api/v1/tool-calls?runId=run-1' }),
       server.inject({ method: 'GET', url: '/api/v1/memory?status=verified' })
     ]);
 
     expect(JSON.parse(artifacts.body)).toMatchObject({ count: 1, durable: true });
     expect(JSON.parse(audit.body)).toMatchObject({ count: 1, durable: true });
+    expect(JSON.parse(messages.body)).toMatchObject({ count: 1, durable: true });
+    expect(JSON.parse(toolCalls.body)).toMatchObject({ count: 1, durable: true });
     expect(JSON.parse(memory.body)).toMatchObject({ count: 1, durable: true });
   });
 

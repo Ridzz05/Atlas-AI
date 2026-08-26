@@ -7,8 +7,11 @@ import {
   DatabaseClient,
   TaskRepository,
   RunRepository,
-  TelegramStateRepository
+  TelegramStateRepository,
+  MessageRepository,
+  ToolCallRepository
 } from '@atlas/database';
+import { MemoryProposalService, MemoryRetriever, MemoryStore, MemoryTools } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -19,7 +22,8 @@ import {
   SendApprovedCommunicationTool,
   ToolRegistry,
   WebSearchTool,
-  createArtifactTools
+  createArtifactTools,
+  createMemoryTools
 } from '@atlas/tools';
 import {
   AgentRunner,
@@ -42,6 +46,9 @@ export interface WorkerRunnerOptions {
   artifactRepo?: ArtifactRepository;
   auditRepo?: AuditRepository;
   controlStateRepo?: TelegramStateRepository;
+  memoryStore?: MemoryStore;
+  messageRepo?: MessageRepository;
+  toolCallRepo?: ToolCallRepository;
 }
 
 export class AgentWorkerRunner {
@@ -63,6 +70,16 @@ export class AgentWorkerRunner {
     toolRegistry.register(CompanyLookupTool);
     toolRegistry.register(CreateDraftTool);
     toolRegistry.register(SendApprovedCommunicationTool);
+    if (options.memoryStore) {
+      const memoryTools = new MemoryTools(
+        new MemoryRetriever(options.memoryStore),
+        new MemoryProposalService(options.memoryStore),
+        options.memoryStore
+      );
+      for (const tool of createMemoryTools(memoryTools)) {
+        toolRegistry.register(tool);
+      }
+    }
     const artifactService = new ArtifactService(
       options.config.ARTIFACT_STORAGE_PATH,
       options.artifactRepo ? { record: input => options.artifactRepo!.create(input) } : undefined
@@ -86,6 +103,8 @@ export class AgentWorkerRunner {
       eventBus,
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
+      messageRepo: options.messageRepo,
+      toolCallRepo: options.toolCallRepo,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       cancellationStore: options.runRepo
@@ -97,6 +116,8 @@ export class AgentWorkerRunner {
       eventBus,
       taskRepo: options.taskRepo,
       runRepo: options.runRepo,
+      messageRepo: options.messageRepo,
+      toolCallRepo: options.toolCallRepo,
       toolExecutor,
       approvalExecutionStore: options.approvalRepo,
       maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,

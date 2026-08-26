@@ -5,3 +5,5 @@ export * from './telegram-state.repository.js';
 export * from './event.repository.js';
 export * from './artifact.repository.js';
 export * from './audit.repository.js';
+export * from './message.repository.js';
+export * from './tool-call.repository.js';

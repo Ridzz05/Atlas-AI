@@ -13,13 +13,23 @@ export class ToolGatewayExecutor implements ToolExecutor {
 
   public async execute(
     toolCall: ToolCallRequest,
-    context: { taskId: string; runId: string; agentId: string; approvalToken?: ApprovalToken; signal?: AbortSignal }
+    context: {
+      taskId: string;
+      runId: string;
+      agentId: string;
+      grantedScopes?: string[];
+      allowedTools?: string[];
+      approvalToken?: ApprovalToken;
+      signal?: AbortSignal;
+    }
   ): Promise<Record<string, unknown>> {
     const result = await this.options.registry.execute(toolCall.name, toolCall.arguments, {
       ...this.options.baseContext,
       taskId: context.taskId,
       runId: context.runId,
       agentId: context.agentId,
+      grantedScopes: context.grantedScopes,
+      allowedTools: context.allowedTools,
       approvalToken: context.approvalToken,
       signal: context.signal
     });

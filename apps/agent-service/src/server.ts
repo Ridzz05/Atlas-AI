@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
 import { rootLogger } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
-import { ApprovalRepository, ArtifactRepository, AuditRepository, DatabaseClient, SystemEventRepository, TaskRepository, RunRepository, TelegramStateRepository } from '@atlas/database';
+import { ApprovalRepository, ArtifactRepository, AuditRepository, DatabaseClient, SystemEventRepository, TaskRepository, RunRepository, TelegramStateRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import { MemoryStore } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
@@ -31,6 +31,8 @@ export interface ServerOptions {
   auditRepo?: AuditRepository;
   memoryStore?: MemoryStore;
   controlStateRepo?: TelegramStateRepository;
+  messageRepo?: MessageRepository;
+  toolCallRepo?: ToolCallRepository;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -109,6 +111,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     eventBus,
     taskRepo: options.taskRepo,
     runRepo: options.runRepo,
+    messageRepo: options.messageRepo,
+    toolCallRepo: options.toolCallRepo,
     cancellationStore: options.runRepo
   });
 
@@ -118,6 +122,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     eventBus,
     taskRepo: options.taskRepo,
     runRepo: options.runRepo,
+    messageRepo: options.messageRepo,
+    toolCallRepo: options.toolCallRepo,
     maxConcurrency: options.config.MAX_CONCURRENT_AGENT_RUNS,
     cancellationStore: options.runRepo
   });
@@ -230,6 +236,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   registerMetadataRoutes(app, {
     artifactRepo: options.artifactRepo,
     auditRepo: options.auditRepo,
+    messageRepo: options.messageRepo,
+    toolCallRepo: options.toolCallRepo,
     memoryStore: options.memoryStore
   });
 

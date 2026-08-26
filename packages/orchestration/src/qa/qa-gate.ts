@@ -1,6 +1,7 @@
 import { Task, AgentDefinition } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
 import { rootLogger } from '@atlas/observability';
+import { MessageRepository } from '@atlas/database';
 
 export type QAVerdict = 'PASS' | 'PASS_WITH_WARNINGS' | 'REVISION_REQUIRED' | 'BLOCKED';
 
@@ -14,6 +15,7 @@ export interface QAResult {
 export interface QAGateOptions {
   provider: ModelProvider;
   argusAgent: AgentDefinition;
+  messageRepo?: MessageRepository;
 }
 
 export class QAGate {
@@ -66,6 +68,23 @@ RULES:
       systemPrompt: this.options.argusAgent.systemPrompt,
       signal
     });
+
+    if (this.options.messageRepo) {
+      await this.options.messageRepo.create({
+        taskId: parentTask.id,
+        senderType: 'user',
+        senderId: 'system.qa',
+        content: prompt,
+        metadata: { stage: 'qa' }
+      });
+      await this.options.messageRepo.create({
+        taskId: parentTask.id,
+        senderType: 'agent',
+        senderId: 'argus',
+        content: modelResult.content,
+        metadata: { stage: 'qa' }
+      });
+    }
 
     try {
       const cleaned = modelResult.content.replace(/```json\s*/g, '').replace(/```\s*$/g, '').trim();

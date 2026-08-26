@@ -69,6 +69,7 @@ export interface ToolContext {
   runId: string;
   agentId: string;
   grantedScopes?: string[];
+  allowedTools?: string[];
   externalWritesEnabled?: boolean;
   approvalToken?: ApprovalToken;
   approvalSecretKey?: string;
