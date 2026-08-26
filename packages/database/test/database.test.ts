@@ -15,6 +15,7 @@ describe('@atlas/database tests', () => {
     expect(files).toContain('007_run_leases.sql');
     expect(files).toContain('008_memory_maintenance.sql');
     expect(files).toContain('009_persisted_lead_rubrics.sql');
+    expect(files).toContain('010_task_status_integrity.sql');
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
@@ -50,6 +51,11 @@ describe('@atlas/database tests', () => {
         expect(content).toContain('lead_rubrics');
         expect(content).toContain('is_active');
         expect(content).toContain('idx_lead_rubrics_single_active');
+      }
+      if (file === '010_task_status_integrity.sql') {
+        expect(content).toContain("WHERE status = 'timed_out'");
+        expect(content).toContain('tasks_status_check');
+        expect(content).toContain("'approval_pending'");
       }
     }
   });

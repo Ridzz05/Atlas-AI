@@ -1,5 +1,5 @@
 import { DatabaseClient } from '../client.js';
-import { Task, CreateTaskInput, TaskStatus, TaskPlan } from '@atlas/shared';
+import { Task, CreateTaskInput, TaskStatus, TaskPlan, TaskStatusSchema } from '@atlas/shared';
 
 export interface TaskFilter {
   status?: TaskStatus;
@@ -41,7 +41,8 @@ export class TaskRepository {
   }
 
   public async findByStatus(status: TaskStatus): Promise<Task[]> {
-    const res = await this.db.query('SELECT * FROM tasks WHERE status = $1 ORDER BY created_at ASC', [status]);
+    const normalizedStatus = parseTaskStatus(status);
+    const res = await this.db.query('SELECT * FROM tasks WHERE status = $1 ORDER BY created_at ASC', [normalizedStatus]);
     return res.rows.map(r => this.mapRow(r));
   }
 
@@ -51,7 +52,8 @@ export class TaskRepository {
   }
 
   public async updateStatus(id: string, status: TaskStatus, options?: { error?: string; result?: Record<string, unknown> }): Promise<Task> {
-    const isTerminal = ['completed', 'failed', 'cancelled'].includes(status);
+    const normalizedStatus = parseTaskStatus(status);
+    const isTerminal = ['completed', 'failed', 'cancelled'].includes(normalizedStatus);
     const query = `
       UPDATE tasks
       SET status = $1,
@@ -64,7 +66,7 @@ export class TaskRepository {
     `;
 
     const res = await this.db.query(query, [
-      status,
+      normalizedStatus,
       options?.error || null,
       options?.result ? JSON.stringify(options.result) : null,
       isTerminal,
@@ -101,7 +103,7 @@ export class TaskRepository {
     const params: any[] = [];
 
     if (filter.status) {
-      params.push(filter.status);
+      params.push(parseTaskStatus(filter.status));
       sql += ` AND status = $${params.length}`;
     }
 
@@ -132,6 +134,7 @@ export class TaskRepository {
   }
 
   private mapRow(row: any): Task {
+    const status = parsePersistedTaskStatus(row.status);
     return {
       id: row.id,
       parentId: row.parent_id,
@@ -139,7 +142,7 @@ export class TaskRepository {
       goal: row.goal,
       assignedAgent: row.assigned_agent,
       depth: Number(row.depth || 0),
-      status: row.status,
+      status,
       priority: row.priority,
       context: typeof row.context === 'string' ? JSON.parse(row.context) : row.context || {},
       plan: typeof row.plan === 'string' ? JSON.parse(row.plan) : row.plan,
@@ -150,4 +153,16 @@ export class TaskRepository {
       completedAt: row.completed_at
     };
   }
+}
+
+function parseTaskStatus(status: unknown): TaskStatus {
+  const result = TaskStatusSchema.safeParse(status);
+  if (!result.success) throw new Error(`Invalid task status: ${String(status)}`);
+  return result.data;
+}
+
+function parsePersistedTaskStatus(status: unknown): TaskStatus {
+  const result = TaskStatusSchema.safeParse(status);
+  if (!result.success) throw new Error(`Invalid persisted task status: ${String(status)}`);
+  return result.data;
 }

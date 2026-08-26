@@ -1,6 +1,6 @@
 import { ApprovalToken, Task, TaskStatus, Run, AgentDefinition, SystemEvent } from '@atlas/shared';
 import { ModelProvider, ChatMessage, ToolCallRequest } from '@atlas/providers';
-import { EventBus } from '@atlas/events';
+import { createTaskLifecycleEvent, EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { BudgetRepository, TaskRepository, RunRepository, MessageRepository, ToolCallRepository } from '@atlas/database';
 import type { ApprovalExecutionStore } from '@atlas/tools';
@@ -255,7 +255,7 @@ export class AgentRunner {
 
       if (this.options.taskRepo) {
         await this.options.taskRepo.updateStatus(taskId, 'running');
-        await this.publishTaskStateEvent(taskId, runId, agentId, 'running');
+        await this.publishEvent(createTaskLifecycleEvent({ taskId, runId, agentId, status: 'running' }));
       }
       await persistMessage({
         senderType: 'user',
@@ -456,7 +456,9 @@ export class AgentRunner {
         await this.options.taskRepo.updateStatus(taskId, 'completed', {
           result: { summary: finalContent, turnsCount, totalCostUsd }
         });
-        await this.publishTaskStateEvent(taskId, runId, agentId, 'completed', { turnsCount, totalCostUsd });
+        await this.publishEvent(
+          createTaskLifecycleEvent({ taskId, runId, agentId, status: 'completed', payload: { turnsCount, totalCostUsd } })
+        );
       }
 
       await this.publishEvent({
@@ -519,11 +521,15 @@ export class AgentRunner {
                 ? 'failed'
                 : 'failed';
         await this.options.taskRepo.updateStatus(taskId, taskStatus, { error: errorMessage });
-        await this.publishTaskStateEvent(taskId, runId, agentId, taskStatus, {
-          runStatus: status,
-          error: errorMessage,
-          approvalId
-        });
+        await this.publishEvent(
+          createTaskLifecycleEvent({
+            taskId,
+            runId,
+            agentId,
+            status: taskStatus,
+            payload: { runStatus: status, error: errorMessage, approvalId }
+          })
+        );
       }
 
       await this.publishEvent({
@@ -562,31 +568,5 @@ export class AgentRunner {
     } catch (err) {
       rootLogger.error('Failed to publish system event', { error: String(err) });
     }
-  }
-
-  private async publishTaskStateEvent(
-    taskId: string,
-    runId: string,
-    agentId: string,
-    status: TaskStatus,
-    payload: Record<string, unknown> = {}
-  ): Promise<void> {
-    const type: SystemEvent['type'] =
-      status === 'completed'
-        ? 'task.completed'
-        : status === 'failed'
-          ? 'task.failed'
-          : status === 'cancelled'
-            ? 'task.cancelled'
-            : 'task.updated';
-    await this.publishEvent({
-      id: crypto.randomUUID(),
-      type,
-      taskId,
-      runId,
-      agentId,
-      payload: { status, ...payload },
-      timestamp: new Date().toISOString()
-    });
   }
 }

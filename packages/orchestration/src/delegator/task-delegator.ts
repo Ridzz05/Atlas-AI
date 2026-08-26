@@ -1,6 +1,6 @@
-import { Task, TaskPlan, PlanStep, SystemEvent } from '@atlas/shared';
+import { Task, TaskPlan, PlanStep, TaskStatus } from '@atlas/shared';
 import { ModelProvider } from '@atlas/providers';
-import { EventBus } from '@atlas/events';
+import { createTaskLifecycleEvent, EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { DepthGuard } from '@atlas/policy';
 import { AgentRegistry } from '@atlas/agents';
@@ -121,6 +121,7 @@ export class TaskDelegator {
       plan = await this.planner.plan(parentTask, signal, addCost);
       if (this.options.taskRepo) {
         await this.options.taskRepo.updatePlan(parentTask.id, plan);
+        await this.publishTaskState(parentTask.id, parentTask.assignedAgent, 'running');
       }
     }
     PlanValidator.assertValid(plan, { registry: this.options.registry });
@@ -223,6 +224,13 @@ export class TaskDelegator {
             },
             childTask.id
           );
+          await this.publishTaskState(
+            childTask.id,
+            childTask.assignedAgent,
+            'queued',
+            { title: childTask.title, assignedAgent: childTask.assignedAgent },
+            'task.created'
+          );
         }
 
         // Run agent
@@ -272,6 +280,10 @@ export class TaskDelegator {
               totalCostUsd
             }
           });
+          await this.publishTaskState(parentTask.id, parentTask.assignedAgent, 'approval_pending', {
+            approvalId: waitingResult.approvalId,
+            error: finalSynthesis
+          });
         }
         return {
           parentTaskId: parentTask.id,
@@ -318,7 +330,8 @@ export class TaskDelegator {
 
     // 5. Update Parent Task only after a passing QA gate.
     if (this.options.taskRepo) {
-      await this.options.taskRepo.updateStatus(parentTask.id, qaResult.passed ? 'completed' : 'failed', {
+      const finalStatus: TaskStatus = qaResult.passed ? 'completed' : 'failed';
+      await this.options.taskRepo.updateStatus(parentTask.id, finalStatus, {
         error: qaResult.passed ? undefined : qaResult.findings.join(' '),
         result: {
           synthesis: finalSynthesis,
@@ -326,6 +339,10 @@ export class TaskDelegator {
           subtaskCount: subtaskResults.size,
           totalCostUsd
         }
+      });
+      await this.publishTaskState(parentTask.id, parentTask.assignedAgent, finalStatus, {
+        qaVerdict: qaResult.verdict,
+        totalCostUsd
       });
     }
 
@@ -338,5 +355,19 @@ export class TaskDelegator {
       totalCostUsd,
       status: qaResult.passed ? 'completed' : 'failed'
     };
+  }
+
+  private async publishTaskState(
+    taskId: string,
+    agentId: string,
+    status: TaskStatus,
+    payload?: Record<string, unknown>,
+    type?: 'task.created' | 'task.updated' | 'task.completed' | 'task.failed' | 'task.cancelled'
+  ): Promise<void> {
+    try {
+      await this.options.eventBus.publish(createTaskLifecycleEvent({ taskId, agentId, status, payload, type }));
+    } catch (error) {
+      rootLogger.error('Failed to publish task lifecycle event', { taskId, status, error: String(error) });
+    }
   }
 }

@@ -259,6 +259,74 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
     expect(result.finalSynthesis).toContain('waiting for human approval');
   });
 
+  it('publishes parent and child task lifecycle events for durable DAG state', async () => {
+    const provider = new MockModelProvider({
+      cannedResponses: [
+        {
+          content: JSON.stringify({
+            goal: 'Durable lifecycle task',
+            steps: [{ id: 'step_1', agent: 'ned', objective: 'Collect evidence', depends_on: [] }],
+            approval_points: [],
+            estimated_cost_usd: 0.1
+          })
+        },
+        { content: 'Evidence collected.' },
+        { content: JSON.stringify({ verdict: 'PASS', findings: [], recommendations: [] }) },
+        { content: 'Synthesis completed.' }
+      ]
+    });
+    const childId = '123e4567-e89b-12d3-a456-426614174020';
+    const childTask = {
+      ...parentTask,
+      id: childId,
+      parentId: parentTask.id,
+      title: 'Subtask: step_1 (ned)',
+      goal: 'Collect evidence',
+      assignedAgent: 'ned',
+      depth: 1,
+      context: { stepId: 'step_1', parentGoal: parentTask.goal },
+      status: 'queued' as const
+    };
+    const taskRepo = {
+      findChildren: vi.fn().mockResolvedValue([]),
+      updatePlan: vi.fn().mockResolvedValue({ ...parentTask, status: 'running' }),
+      create: vi.fn().mockResolvedValue(childTask),
+      updateStatus: vi.fn().mockImplementation(async (id: string, status: string) => ({
+        ...(id === childId ? childTask : parentTask),
+        id,
+        status
+      }))
+    } as any;
+    const eventBus = new InMemoryEventBus();
+    const events: Array<{ type: string; taskId?: string; payload: Record<string, unknown> }> = [];
+    eventBus.subscribe('*', event => events.push({ type: event.type, taskId: event.taskId, payload: event.payload }));
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus,
+      taskRepo
+    });
+
+    const result = await delegator.executePlan(parentTask);
+
+    expect(result.status).toBe('completed');
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'task.created',
+        taskId: childId,
+        payload: expect.objectContaining({ status: 'queued', assignedAgent: 'ned' })
+      })
+    );
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'task.completed',
+        taskId: parentTask.id,
+        payload: expect.objectContaining({ status: 'completed' })
+      })
+    );
+  });
+
   it('routes planner, specialist, QA, and synthesis model calls through durable budget accounting', async () => {
     const provider = new MockModelProvider({
       cannedResponses: [

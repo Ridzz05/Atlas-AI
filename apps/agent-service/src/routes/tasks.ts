@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
-import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition, SystemEvent, Task } from '@atlas/shared';
+import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition, Task } from '@atlas/shared';
 import { TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
-import { EventBus } from '@atlas/events';
+import { createTaskLifecycleEvent, EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { z } from 'zod';
 
@@ -138,18 +138,13 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
 }
 
 async function publishTaskCreated(eventBus: EventBus, task: Task): Promise<void> {
-  const event: SystemEvent = {
-    id: crypto.randomUUID(),
-    type: 'task.created',
+  const event = createTaskLifecycleEvent({
     taskId: task.id,
     agentId: task.assignedAgent,
-    payload: {
-      status: task.status,
-      title: task.title,
-      assignedAgent: task.assignedAgent
-    },
-    timestamp: new Date().toISOString()
-  };
+    status: task.status,
+    type: 'task.created',
+    payload: { title: task.title, assignedAgent: task.assignedAgent }
+  });
 
   try {
     await eventBus.publish(event);
