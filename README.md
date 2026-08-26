@@ -2,6 +2,8 @@
 
 > Multi-agent Personal AI Operating System controlled via Telegram, powered by shared memory, controlled task delegation, human approval gates, and real-time observability.
 
+> Release status (26 August 2026): local lint, typecheck, tests, and production build pass. Durable PostgreSQL/Redis boot and restart recovery still require a Docker environment; external writes remain disabled until approved connectors and providers are verified.
+
 ## Architecture Highlights
 - **Single Root Entry**: Human talks to **Chief**, who plans, delegates, reviews, and synthesizes.
 - **Controlled Specialists**: Ned (Research), Layla (Lead Scoring), Hermes (Content), Argus (QA & Risk).
@@ -41,7 +43,7 @@ atlas-ai-os/
 ### Prerequisites
 - Node.js >= 20
 - pnpm >= 9
-- Docker & Docker Compose (optional for local DB/Redis)
+- Docker & Docker Compose (required to run the durable DB/Redis-backed services; optional for isolated unit tests)
 
 ### Setup
 ```bash
@@ -51,10 +53,12 @@ pnpm install
 # 2. Setup environment
 cp .env.example .env
 
-# 3. Start PostgreSQL and Redis (via Docker)
+# 3. Start PostgreSQL and Redis (via Docker, required for the full runtime)
 docker-compose up -d
 
-# 4. Run typecheck & tests
+# 4. Run repository verification
+pnpm lint
 pnpm typecheck
 pnpm test
+pnpm build
 ```
