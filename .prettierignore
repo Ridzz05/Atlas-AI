@@ -3,6 +3,7 @@ node_modules
 .next
 dist
 **/tsconfig.tsbuildinfo
+**/next-env.d.ts
 **/data/**
 pnpm-lock.yaml
 *.md
