@@ -3,6 +3,7 @@ import { buildServer } from '../src/server.js';
 import { EnvConfigSchema } from '@atlas/shared';
 import { MockModelProvider } from '@atlas/providers';
 import { InMemoryTaskQueue } from '@atlas/orchestration';
+import { InMemoryEventBus } from '@atlas/events';
 import { defaultAgentRegistry } from '@atlas/agents';
 
 describe('agent-service Task and Multi-Agent APIs', () => {
@@ -71,6 +72,11 @@ describe('agent-service Task and Multi-Agent APIs', () => {
   });
 
   const taskQueue = new InMemoryTaskQueue();
+  const eventBus = new InMemoryEventBus();
+  const publishedEvents: Array<{ type: string; taskId?: string; payload: Record<string, unknown> }> = [];
+  eventBus.subscribe('*', event => {
+    publishedEvents.push({ type: event.type, taskId: event.taskId, payload: event.payload });
+  });
   const approvalRepo: any = {
     list: vi.fn(async () => []),
     decide: vi.fn(async (id, status, decidedBy, decisionNote) => ({
@@ -98,6 +104,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     taskRepo: fakeTaskRepo,
     provider,
     taskQueue,
+    eventBus,
     registry: defaultAgentRegistry,
     approvalRepo
   });
@@ -133,10 +140,43 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     expect(response.statusCode).toBe(201);
     const body = JSON.parse(response.body);
     expect(body.assignedAgent).toBe('chief');
+    expect(publishedEvents).toContainEqual(
+      expect.objectContaining({
+        type: 'task.created',
+        taskId: body.id,
+        payload: expect.objectContaining({ status: 'queued', assignedAgent: 'chief' })
+      })
+    );
 
     // Wait briefly for queue execution
     await new Promise(r => setTimeout(r, 60));
     expect(fakeTaskRepo.create).toHaveBeenCalled();
+  });
+
+  it('rejects an unknown assigned agent before creating a durable task', async () => {
+    const invalidTaskRepo: any = { create: vi.fn() };
+    const invalidServer = buildServer({
+      config,
+      taskRepo: invalidTaskRepo,
+      taskQueue: new InMemoryTaskQueue(),
+      eventBus: new InMemoryEventBus(),
+      registry: defaultAgentRegistry,
+      processQueue: false
+    });
+
+    const response = await invalidServer.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: {
+        title: 'Invalid agent task',
+        goal: 'This must not be persisted',
+        assignedAgent: 'not-registered'
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error).toContain('Unknown assigned agent');
+    expect(invalidTaskRepo.create).not.toHaveBeenCalled();
   });
 
   it('rejects task intake while durable control state is paused', async () => {

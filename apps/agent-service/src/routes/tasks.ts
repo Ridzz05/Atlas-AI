@@ -1,7 +1,8 @@
 import { FastifyInstance } from 'fastify';
-import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition } from '@atlas/shared';
+import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition, SystemEvent, Task } from '@atlas/shared';
 import { TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
+import { EventBus } from '@atlas/events';
 import { rootLogger } from '@atlas/observability';
 import { z } from 'zod';
 
@@ -19,6 +20,7 @@ function parseQueryInteger(value: unknown, label: string, fallback: number, mini
 export interface TaskRouteOptions {
   taskRepo: TaskRepository;
   taskQueue: TaskQueue;
+  eventBus: EventBus;
   getAgentDefinition: (id: string) => AgentDefinition;
   controlStateRepo?: TelegramStateRepository;
 }
@@ -35,6 +37,13 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
     }
 
     const input = parseResult.data;
+
+    let agent: AgentDefinition;
+    try {
+      agent = options.getAgentDefinition(input.assignedAgent);
+    } catch {
+      return reply.status(400).send({ error: `Unknown assigned agent: ${input.assignedAgent}` });
+    }
 
     if (options.controlStateRepo) {
       try {
@@ -53,7 +62,7 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
 
     try {
       const task = await options.taskRepo.create(input);
-      const agent = options.getAgentDefinition(task.assignedAgent);
+      await publishTaskCreated(options.eventBus, task);
 
       // Enqueue job for background processing
       await options.taskQueue.enqueue({
@@ -126,4 +135,25 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
       return reply.status(500).send({ error: 'Failed to fetch task' });
     }
   });
+}
+
+async function publishTaskCreated(eventBus: EventBus, task: Task): Promise<void> {
+  const event: SystemEvent = {
+    id: crypto.randomUUID(),
+    type: 'task.created',
+    taskId: task.id,
+    agentId: task.assignedAgent,
+    payload: {
+      status: task.status,
+      title: task.title,
+      assignedAgent: task.assignedAgent
+    },
+    timestamp: new Date().toISOString()
+  };
+
+  try {
+    await eventBus.publish(event);
+  } catch (error) {
+    rootLogger.error('Failed to publish task.created event', { taskId: task.id, error: String(error) });
+  }
 }

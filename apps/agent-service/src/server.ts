@@ -257,6 +257,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     registerTaskRoutes(app, {
       taskRepo: options.taskRepo,
       taskQueue,
+      eventBus,
       getAgentDefinition: (id: string) => registry.getOrThrow(id),
       controlStateRepo: options.controlStateRepo
     });

@@ -143,7 +143,11 @@ describe('@atlas/orchestration AgentRunner tests', () => {
       ...mockAgent,
       limits: { ...mockAgent.limits, timeoutSeconds: 0.01 }
     };
-    const runner = new AgentRunner({ provider, eventBus: new InMemoryEventBus() });
+    const taskRepo = { updateStatus: vi.fn().mockResolvedValue(mockTask) } as any;
+    const eventBus = new InMemoryEventBus();
+    const events: Array<{ type: string; payload: Record<string, unknown> }> = [];
+    eventBus.subscribe('*', event => events.push({ type: event.type, payload: event.payload }));
+    const runner = new AgentRunner({ provider, eventBus, taskRepo });
 
     const summary = await runner.run({
       runId: 'run-timeout-test',
@@ -154,6 +158,14 @@ describe('@atlas/orchestration AgentRunner tests', () => {
 
     expect(summary.status).toBe('timed_out');
     expect(summary.error).toBe('Execution timed out');
+    expect(taskRepo.updateStatus).toHaveBeenNthCalledWith(1, mockTask.id, 'running');
+    expect(taskRepo.updateStatus).toHaveBeenNthCalledWith(2, mockTask.id, 'failed', { error: 'Execution timed out' });
+    expect(events.map(event => event.type)).toEqual(expect.arrayContaining(['task.updated', 'task.failed']));
+    expect(events.find(event => event.type === 'task.failed')?.payload).toMatchObject({
+      status: 'failed',
+      runStatus: 'timed_out',
+      error: 'Execution timed out'
+    });
   });
 
   it('honors a cancellation request written by another process before calling the provider', async () => {
