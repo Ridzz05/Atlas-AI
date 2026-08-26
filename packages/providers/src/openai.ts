@@ -62,6 +62,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
       temperature: request.temperature ?? 0.2
     };
 
+    if (request.maxTokens !== undefined) {
+      payload.max_tokens = request.maxTokens;
+    }
+
     if (request.tools && request.tools.length > 0) {
       payload.tools = request.tools.map(t => ({
         type: 'function',
@@ -116,7 +120,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     const inputTokens = data.usage?.prompt_tokens ?? 0;
     const outputTokens = data.usage?.completion_tokens ?? 0;
-    const finishReason = choice?.finish_reason === 'tool_calls' ? 'tool_calls' : 'stop';
+    const finishReason = choice?.finish_reason === 'tool_calls' ? 'tool_calls' : choice?.finish_reason === 'length' ? 'length' : 'stop';
 
     return {
       content: message?.content || '',

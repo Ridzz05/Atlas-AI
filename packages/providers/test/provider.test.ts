@@ -35,6 +35,39 @@ describe('@atlas/providers tests', () => {
     }
   });
 
+  it('forwards maxTokens and preserves a length finish reason', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'truncated response' }, finish_reason: 'length' }],
+        usage: { prompt_tokens: 1, completion_tokens: 2 }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const provider = createModelProvider({
+        providerType: 'openai',
+        apiKey: 'test-key',
+        baseUrl: 'https://api.example.test/v1',
+        model: 'test-model'
+      });
+      const result = await provider.run({
+        runId: '123e4567-e89b-12d3-a456-426614174000',
+        agentId: 'chief',
+        messages: [{ role: 'user', content: 'Hello' }],
+        maxTokens: 256
+      });
+
+      const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+      const payload = JSON.parse(String(request.body));
+      expect(payload.max_tokens).toBe(256);
+      expect(result.finishReason).toBe('length');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('runs mock completion with canned responses', async () => {
     const mock = new MockModelProvider({
       cannedResponses: [{ content: 'Canned step 1 response' }, { content: 'Canned step 2 response' }]
