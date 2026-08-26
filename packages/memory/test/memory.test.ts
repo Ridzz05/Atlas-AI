@@ -3,6 +3,7 @@ import {
   InMemoryMemoryStore,
   DatabaseMemoryStore,
   MemoryRetriever,
+  MemoryMaintenanceService,
   MemoryProposalService,
   MemoryTools
 } from '../src/index.js';
@@ -122,7 +123,8 @@ describe('@atlas/memory tests', () => {
 
   it('manages memory proposal, deduplication, verification, and deprecation lifecycle', async () => {
     const store = new InMemoryMemoryStore();
-    const proposalService = new MemoryProposalService(store);
+    const auditSink = { record: vi.fn().mockResolvedValue(undefined) };
+    const proposalService = new MemoryProposalService(store, auditSink);
 
     // 1. Propose memory
     const proposed = await proposalService.propose({
@@ -152,6 +154,14 @@ describe('@atlas/memory tests', () => {
     // 4. Deprecate
     const deprecated = await proposalService.deprecate(proposed.id);
     expect(deprecated?.status).toBe('deprecated');
+    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'memory.verified',
+      target: proposed.id
+    }));
+    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'memory.deprecated',
+      target: proposed.id
+    }));
   });
 
   it('does not retrieve or expose expired memory items', async () => {
@@ -217,6 +227,23 @@ describe('@atlas/memory tests', () => {
     expect(db.query).toHaveBeenCalledOnce();
   });
 
+  it('lists expired database memory rows for maintenance', async () => {
+    const now = new Date('2026-08-26T00:00:00.000Z');
+    const db = {
+      query: vi.fn().mockResolvedValue({ rows: [{ id: '123e4567-e89b-12d3-a456-426614174000' }] })
+    };
+    const store = new DatabaseMemoryStore(db as any);
+
+    const expired = await store.listExpired({ now, limit: 25 });
+
+    expect(expired).toHaveLength(1);
+    expect(expired[0]?.id).toBe('123e4567-e89b-12d3-a456-426614174000');
+    expect(db.query).toHaveBeenCalledWith(
+      expect.stringContaining('expires_at IS NOT NULL'),
+      [now, 25]
+    );
+  });
+
   it('allows a fresh proposal after an identical memory item expires', async () => {
     const store = new InMemoryMemoryStore();
     const proposalService = new MemoryProposalService(store);
@@ -246,6 +273,64 @@ describe('@atlas/memory tests', () => {
     });
 
     expect(proposal.status).toBe('unverified');
+  });
+
+  it('maintains expired memory and audits canonical lifecycle changes', async () => {
+    const store = new InMemoryMemoryStore();
+    const auditSink = { record: vi.fn().mockResolvedValue(undefined) };
+    const maintenance = new MemoryMaintenanceService(store, auditSink);
+    const now = new Date('2026-08-26T00:00:00.000Z');
+    const expiredVerifiedId = crypto.randomUUID();
+    const expiredDeprecatedId = crypto.randomUUID();
+    const expiredAt = new Date('2026-08-25T00:00:00.000Z').toISOString();
+
+    await store.save({
+      id: expiredVerifiedId,
+      type: 'semantic',
+      status: 'verified',
+      content: 'Expired verified fact',
+      scope: 'global',
+      author: 'system',
+      source: 'policy',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: expiredAt,
+      createdAt: new Date('2026-08-01T00:00:00.000Z').toISOString(),
+      updatedAt: new Date('2026-08-01T00:00:00.000Z').toISOString()
+    });
+    await store.save({
+      id: expiredDeprecatedId,
+      type: 'semantic',
+      status: 'deprecated',
+      content: 'Expired deprecated fact',
+      scope: 'global',
+      author: 'system',
+      source: 'policy',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: expiredAt,
+      createdAt: new Date('2026-07-01T00:00:00.000Z').toISOString(),
+      updatedAt: new Date('2026-07-01T00:00:00.000Z').toISOString()
+    });
+
+    const result = await maintenance.run({ now, deletionGraceDays: 7 });
+
+    expect(result).toEqual({ inspected: 2, deprecated: 1, deleted: 1 });
+    expect((await store.findById(expiredVerifiedId))).toBeNull();
+    expect((await store.findById(expiredDeprecatedId))).toBeNull();
+    expect(auditSink.record).toHaveBeenCalledTimes(2);
+    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'memory.deprecated',
+      target: expiredVerifiedId
+    }));
+    expect(auditSink.record).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'memory.deleted',
+      target: expiredDeprecatedId
+    }));
   });
 
   it('supports privacy deletion by scope', async () => {

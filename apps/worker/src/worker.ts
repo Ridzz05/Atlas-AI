@@ -12,7 +12,14 @@ import {
   ToolCallRepository,
   BudgetRepository
 } from '@atlas/database';
-import { MemoryProposalService, MemoryRetriever, MemoryStore, MemoryTools } from '@atlas/memory';
+import {
+  MemoryAuditSink,
+  MemoryMaintenanceService,
+  MemoryProposalService,
+  MemoryRetriever,
+  MemoryStore,
+  MemoryTools
+} from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -58,6 +65,8 @@ export interface WorkerRunnerOptions {
 export class AgentWorkerRunner {
   private isRunning = false;
   private heartbeatTimer: NodeJS.Timeout | null = null;
+  private memoryMaintenanceTimer: NodeJS.Timeout | null = null;
+  private memoryMaintenance?: MemoryMaintenanceService;
   private runner: AgentRunner;
   private delegator: TaskDelegator;
   private taskQueue: TaskQueue;
@@ -78,10 +87,14 @@ export class AgentWorkerRunner {
     toolRegistry.register(CompanyLookupTool);
     toolRegistry.register(CreateDraftTool);
     toolRegistry.register(SendApprovedCommunicationTool);
+    const memoryAuditSink: MemoryAuditSink | undefined = options.auditRepo
+      ? { record: event => options.auditRepo!.create(event) }
+      : undefined;
     if (options.memoryStore) {
+      this.memoryMaintenance = new MemoryMaintenanceService(options.memoryStore, memoryAuditSink);
       const memoryTools = new MemoryTools(
         new MemoryRetriever(options.memoryStore),
-        new MemoryProposalService(options.memoryStore),
+        new MemoryProposalService(options.memoryStore, memoryAuditSink),
         options.memoryStore
       );
       for (const tool of createMemoryTools(memoryTools)) {
@@ -151,6 +164,17 @@ export class AgentWorkerRunner {
       }
     }
 
+    if (this.memoryMaintenance) {
+      await this.runMemoryMaintenance();
+      const intervalSeconds = this.options.config.MEMORY_MAINTENANCE_INTERVAL_SECONDS || 3600;
+      this.memoryMaintenanceTimer = setInterval(() => {
+        void this.runMemoryMaintenance().catch(error => {
+          rootLogger.error('Memory maintenance job failed', { error: String(error) });
+        });
+      }, intervalSeconds * 1000);
+      this.memoryMaintenanceTimer.unref?.();
+    }
+
     this.isRunning = true;
     const concurrency = this.options.config.MAX_CONCURRENT_AGENT_RUNS || 3;
 
@@ -213,6 +237,10 @@ export class AgentWorkerRunner {
 
   public async stop(): Promise<void> {
     this.isRunning = false;
+    if (this.memoryMaintenanceTimer) {
+      clearInterval(this.memoryMaintenanceTimer);
+      this.memoryMaintenanceTimer = null;
+    }
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
@@ -235,5 +263,16 @@ export class AgentWorkerRunner {
 
   public getQueue(): TaskQueue {
     return this.taskQueue;
+  }
+
+  private async runMemoryMaintenance(): Promise<void> {
+    if (!this.memoryMaintenance) return;
+    const result = await this.memoryMaintenance.run({
+      deletionGraceDays: this.options.config.MEMORY_DELETION_GRACE_DAYS ?? 7,
+      batchSize: 100
+    });
+    if (result.deprecated > 0 || result.deleted > 0) {
+      rootLogger.info('Memory maintenance completed', { ...result });
+    }
   }
 }

@@ -6,6 +6,7 @@ import { ProposeMemoryInput } from '../types.js';
 export interface MemoryStore {
   save(item: MemoryItem): Promise<MemoryItem>;
   findById(id: string): Promise<MemoryItem | null>;
+  listExpired(options?: { now?: Date; limit?: number }): Promise<MemoryItem[]>;
   search(params: {
     scopes?: string[];
     types?: MemoryType[];
@@ -35,6 +36,19 @@ export class InMemoryMemoryStore implements MemoryStore {
   public async findById(id: string): Promise<MemoryItem | null> {
     const item = this.items.get(id);
     return item && !isMemoryExpired(item) ? item : null;
+  }
+
+  public async listExpired(options: { now?: Date; limit?: number } = {}): Promise<MemoryItem[]> {
+    const now = options.now?.getTime() ?? Date.now();
+    const items = Array.from(this.items.values())
+      .filter(item => isMemoryExpired(item, now))
+      .sort((a, b) => {
+        const aExpires = new Date(a.expiresAt as string).getTime();
+        const bExpires = new Date(b.expiresAt as string).getTime();
+        return aExpires - bExpires || a.id.localeCompare(b.id);
+      });
+
+    return options.limit ? items.slice(0, options.limit) : items;
   }
 
   public async search(params: {
@@ -134,6 +148,19 @@ export class DatabaseMemoryStore implements MemoryStore {
     );
     if (!res.rows[0]) return null;
     return this.mapRow(res.rows[0]);
+  }
+
+  public async listExpired(options: { now?: Date; limit?: number } = {}): Promise<MemoryItem[]> {
+    const now = options.now || new Date();
+    const limit = Math.min(1000, Math.max(1, Math.trunc(options.limit || 100)));
+    const res = await this.db.query(
+      `SELECT * FROM memory_items
+       WHERE expires_at IS NOT NULL AND expires_at <= $1
+       ORDER BY expires_at ASC, id ASC
+       LIMIT $2`,
+      [now, limit]
+    );
+    return res.rows.map(row => this.mapRow(row));
   }
 
   public async search(params: {

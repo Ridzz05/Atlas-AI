@@ -1,10 +1,13 @@
 import { MemoryStore } from '../store/memory-store.js';
-import { ProposeMemoryInput } from '../types.js';
+import { MemoryAuditSink, ProposeMemoryInput } from '../types.js';
 import { MemoryItem, MemoryStatus } from '@atlas/shared';
-import { rootLogger } from '@atlas/observability';
+import { AuditService, rootLogger } from '@atlas/observability';
 
 export class MemoryProposalService {
-  constructor(private store: MemoryStore) {}
+  constructor(
+    private store: MemoryStore,
+    private auditSink?: MemoryAuditSink
+  ) {}
 
   public async propose(input: ProposeMemoryInput): Promise<MemoryItem> {
     const memoryItem: MemoryItem = {
@@ -42,6 +45,7 @@ export class MemoryProposalService {
   public async verify(id: string): Promise<MemoryItem | null> {
     const updated = await this.store.updateStatus(id, 'verified');
     if (updated) {
+      await this.audit('memory.verified', updated);
       rootLogger.info(`Memory item ${id} promoted to verified canonical fact.`);
     }
     return updated;
@@ -50,8 +54,24 @@ export class MemoryProposalService {
   public async deprecate(id: string): Promise<MemoryItem | null> {
     const updated = await this.store.updateStatus(id, 'deprecated');
     if (updated) {
+      await this.audit('memory.deprecated', updated);
       rootLogger.info(`Memory item ${id} marked as deprecated.`);
     }
     return updated;
+  }
+
+  private async audit(action: string, item: MemoryItem): Promise<void> {
+    if (!this.auditSink) return;
+    await this.auditSink.record(AuditService.format({
+      actor: 'memory-governance',
+      action,
+      target: item.id,
+      taskId: item.taskId || undefined,
+      details: {
+        memoryType: item.type,
+        scope: item.scope,
+        status: item.status
+      }
+    }));
   }
 }

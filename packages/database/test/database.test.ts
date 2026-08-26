@@ -13,6 +13,7 @@ describe('@atlas/database tests', () => {
     expect(files).toContain('001_initial_schema.sql');
     expect(files).toContain('006_durable_budget_reservations.sql');
     expect(files).toContain('007_run_leases.sql');
+    expect(files).toContain('008_memory_maintenance.sql');
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
@@ -39,6 +40,10 @@ describe('@atlas/database tests', () => {
       if (file === '007_run_leases.sql') {
         expect(content).toContain('worker_id');
         expect(content).toContain('lease_expires_at');
+      }
+      if (file === '008_memory_maintenance.sql') {
+        expect(content).toContain('idx_memory_items_expiry_lifecycle');
+        expect(content).toContain('expires_at');
       }
     }
   });

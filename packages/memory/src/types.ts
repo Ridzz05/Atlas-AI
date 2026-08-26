@@ -1,4 +1,5 @@
 import { MemoryItem, MemoryType, MemoryStatus } from '@atlas/shared';
+import type { AuditRecord } from '@atlas/observability';
 
 export interface MemoryQuery {
   query: string;
@@ -30,4 +31,20 @@ export interface ProposeMemoryInput {
   artifactId?: string;
   metadata?: Record<string, unknown>;
   expiresAt?: string;
+}
+
+export interface MemoryAuditSink {
+  record(event: AuditRecord): Promise<unknown>;
+}
+
+export interface MemoryMaintenanceOptions {
+  now?: Date;
+  deletionGraceDays?: number;
+  batchSize?: number;
+}
+
+export interface MemoryMaintenanceResult {
+  inspected: number;
+  deprecated: number;
+  deleted: number;
 }

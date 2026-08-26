@@ -81,6 +81,43 @@ describe('worker lifecycle and task execution tests', () => {
     await runner.stop();
   });
 
+  it('runs memory maintenance when the worker starts', async () => {
+    const memoryStore = new InMemoryMemoryStore();
+    const expiredId = crypto.randomUUID();
+    const now = Date.now();
+    await memoryStore.save({
+      id: expiredId,
+      type: 'semantic',
+      status: 'deprecated',
+      content: 'Expired memory ready for deletion',
+      scope: 'global',
+      author: 'system',
+      source: 'test',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: new Date(now - 2 * 86_400_000).toISOString(),
+      createdAt: new Date(now - 10 * 86_400_000).toISOString(),
+      updatedAt: new Date(now - 9 * 86_400_000).toISOString()
+    });
+
+    const runner = new AgentWorkerRunner({
+      config: {
+        ...config,
+        MEMORY_MAINTENANCE_INTERVAL_SECONDS: 3600,
+        MEMORY_DELETION_GRACE_DAYS: 7
+      } as any,
+      memoryStore
+    });
+
+    await runner.start();
+
+    expect(await memoryStore.findById(expiredId)).toBeNull();
+    expect(await memoryStore.listExpired({ now: new Date(now) })).toEqual([]);
+    await runner.stop();
+  });
+
   it.each([
     { name: 'paused', paused: true, emergencyStop: false },
     { name: 'emergency stop', paused: true, emergencyStop: true }

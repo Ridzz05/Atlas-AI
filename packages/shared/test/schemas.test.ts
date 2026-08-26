@@ -104,6 +104,8 @@ describe('@atlas/shared schema tests', () => {
     expect(env.NODE_ENV).toBe('development');
     expect(env.MAX_DELEGATION_DEPTH).toBe(2);
     expect(env.EXTERNAL_WRITES_ENABLED).toBe(false);
+    expect(env.MEMORY_MAINTENANCE_INTERVAL_SECONDS).toBe(3600);
+    expect(env.MEMORY_DELETION_GRACE_DAYS).toBe(7);
   });
 
   it('requires an API auth token in production', () => {

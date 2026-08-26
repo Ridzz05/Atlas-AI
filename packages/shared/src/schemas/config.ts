@@ -22,6 +22,8 @@ export const EnvConfigSchema = z.object({
   MODEL_NAME: z.preprocess(value => value === '' ? undefined : value, z.string().trim().min(1).max(128).optional()),
   ENCRYPTION_KEY: z.string().min(32).default(DEFAULT_ENCRYPTION_KEY),
   ARTIFACT_STORAGE_PATH: z.string().default('./data/artifacts'),
+  MEMORY_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(3600),
+  MEMORY_DELETION_GRACE_DAYS: z.coerce.number().int().nonnegative().default(7),
   GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(5.0),
   MAX_CONCURRENT_AGENT_RUNS: z.coerce.number().int().positive().default(3),
   MAX_DELEGATION_DEPTH: z.coerce.number().int().positive().default(2),
