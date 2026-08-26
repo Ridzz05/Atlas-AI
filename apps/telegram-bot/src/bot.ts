@@ -1,7 +1,7 @@
 import { TelegramBotConfig } from './config.js';
 import { TelegramSecurityGuard } from './security/guard.js';
 import { CommandRouter } from './handlers/commands.js';
-import { ApprovalRepository, TaskRepository } from '@atlas/database';
+import { ApprovalRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { AgentRegistry, defaultAgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
@@ -98,6 +98,7 @@ export interface AtlasTelegramBotOptions {
   config: TelegramBotConfig;
   taskRepo?: TaskRepository;
   approvalRepo?: ApprovalRepository;
+  stateRepo?: TelegramStateRepository;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
   runner?: AgentRunner;
@@ -116,7 +117,7 @@ export class AtlasTelegramBot {
   private readonly apiClient: TelegramApiClient;
 
   constructor(private options: AtlasTelegramBotOptions) {
-    this.guard = new TelegramSecurityGuard(options.config.allowedUserIds);
+    this.guard = new TelegramSecurityGuard(options.config.allowedUserIds, options.stateRepo);
     this.apiClient = options.apiClient || new FetchTelegramApiClient(options.config.botToken);
 
     this.router = new CommandRouter({
@@ -127,14 +128,16 @@ export class AtlasTelegramBot {
       runner: options.runner,
       isPaused: this.isPaused,
       setPaused: (paused) => {
-        this.isPaused = paused;
-      }
+        return this.updatePausedState(paused);
+      },
+      setEmergencyStop: (active, actorId) => this.updateEmergencyStop(active, actorId),
+      resume: (actorId) => this.resumeControlState(actorId)
     });
   }
 
   public async processUpdate(update: TelegramUpdate): Promise<{ responseText?: string; ignored?: boolean }> {
     // 1. Deduplication check
-    if (this.guard.isDuplicateUpdate(update.update_id)) {
+    if (await this.guard.isDuplicateUpdate(update.update_id)) {
       rootLogger.debug(`Duplicate update ignored: ${update.update_id}`);
       return { ignored: true };
     }
@@ -191,6 +194,13 @@ export class AtlasTelegramBot {
     }
     if (this.pollingPromise) return;
 
+    if (this.options.stateRepo) {
+      const state = await this.options.stateRepo.getControlState();
+      this.isPaused = state.paused || state.emergencyStop;
+      this.router.setPausedState(this.isPaused);
+      await this.options.stateRepo.pruneUpdates();
+    }
+
     this.pollingAbortController = new AbortController();
     this.pollingPromise = this.poll(this.pollingAbortController.signal);
     this.pollingPromise.catch(error => {
@@ -211,6 +221,36 @@ export class AtlasTelegramBot {
 
   public getRouter(): CommandRouter {
     return this.router;
+  }
+
+  private async updatePausedState(paused: boolean, actorId = 'telegram-owner'): Promise<void> {
+    if (this.options.stateRepo) {
+      const state = await this.options.stateRepo.setPaused(paused, actorId);
+      this.isPaused = state.paused || state.emergencyStop;
+    } else {
+      this.isPaused = paused;
+    }
+    this.router.setPausedState(this.isPaused);
+  }
+
+  private async updateEmergencyStop(active: boolean, actorId = 'telegram-owner'): Promise<void> {
+    if (this.options.stateRepo) {
+      const state = await this.options.stateRepo.setEmergencyStop(active, actorId);
+      this.isPaused = state.paused || state.emergencyStop;
+    } else {
+      this.isPaused = active;
+    }
+    this.router.setPausedState(this.isPaused);
+  }
+
+  private async resumeControlState(actorId = 'telegram-owner'): Promise<void> {
+    if (this.options.stateRepo) {
+      const state = await this.options.stateRepo.resume(actorId);
+      this.isPaused = state.paused || state.emergencyStop;
+    } else {
+      this.isPaused = false;
+    }
+    this.router.setPausedState(this.isPaused);
   }
 
   private async poll(signal: AbortSignal): Promise<void> {

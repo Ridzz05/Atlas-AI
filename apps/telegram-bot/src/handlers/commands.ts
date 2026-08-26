@@ -10,11 +10,17 @@ export interface CommandContext {
   taskQueue?: TaskQueue;
   runner?: AgentRunner;
   isPaused: boolean;
-  setPaused: (paused: boolean) => void;
+  setPaused: (paused: boolean, actorId?: string) => Promise<void> | void;
+  setEmergencyStop?: (active: boolean, actorId?: string) => Promise<void> | void;
+  resume?: (actorId?: string) => Promise<void> | void;
 }
 
 export class CommandRouter {
   constructor(private ctx: CommandContext) {}
+
+  public setPausedState(paused: boolean): void {
+    this.ctx.isPaused = paused;
+  }
 
   public async handle(command: string, args: string[], actorId = 'telegram-owner'): Promise<string> {
     const cmd = command.toLowerCase().replace(/^\//, '');
@@ -37,18 +43,19 @@ export class CommandRouter {
         return this.handleNewTask(args.join(' '));
 
       case 'pause':
-        this.ctx.setPaused(true);
+        await this.ctx.setPaused(true, actorId);
         return '⏸️ *System paused.* No new tasks will be dispatched to workers until resumed.';
 
       case 'resume':
-        this.ctx.setPaused(false);
+        if (this.ctx.resume) await this.ctx.resume(actorId);
+        else await this.ctx.setPaused(false, actorId);
         return '▶️ *System resumed.* Task intake and worker dispatch active.';
 
       case 'stop':
         return this.handleStopTask(args[0]);
 
       case 'emergency_stop':
-        return this.handleEmergencyStop();
+        return this.handleEmergencyStop(actorId);
 
       case 'cost':
         return this.handleCost();
@@ -206,9 +213,10 @@ Chief is preparing the multi-agent execution plan. You can check status with \`/
     return `🛑 Task \`${taskId}\` cancellation signal sent.`;
   }
 
-  private handleEmergencyStop(): string {
+  private async handleEmergencyStop(actorId: string): Promise<string> {
     rootLogger.warn('EMERGENCY STOP TRIGGERED VIA TELEGRAM COMMAND');
-    this.ctx.setPaused(true);
+    if (this.ctx.setEmergencyStop) await this.ctx.setEmergencyStop(true, actorId);
+    else await this.ctx.setPaused(true, actorId);
 
     return `🚨 *EMERGENCY STOP ACTIVATED!*
 • All active agent runs have been sent abort signals.

@@ -54,6 +54,42 @@ describe('@atlas/telegram-bot tests', () => {
     expect(second.ignored).toBe(true);
   });
 
+  it('uses a durable update claim store when one is configured', async () => {
+    const claimed = new Set<number>();
+    const stateRepo = {
+      claimUpdate: vi.fn(async (updateId: number) => {
+        if (claimed.has(updateId)) return false;
+        claimed.add(updateId);
+        return true;
+      })
+    } as any;
+    const durableBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      stateRepo
+    });
+    const update = {
+      update_id: 105,
+      message: {
+        message_id: 5,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/agents',
+        date: Math.floor(Date.now() / 1000)
+      }
+    };
+
+    await durableBot.processUpdate(update);
+    const duplicate = await durableBot.processUpdate(update);
+
+    expect(duplicate.ignored).toBe(true);
+    expect(stateRepo.claimUpdate).toHaveBeenCalledTimes(2);
+  });
+
   it('handles /agents command correctly', async () => {
     const update = {
       update_id: 103,

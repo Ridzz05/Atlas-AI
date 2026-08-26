@@ -13,6 +13,7 @@ async function main() {
     config,
     taskRepo: runtime.taskRepo,
     approvalRepo: runtime.approvalRepo,
+    stateRepo: runtime.telegramStateRepo,
     registry: runtime.registry,
     taskQueue: runtime.taskQueue
   });

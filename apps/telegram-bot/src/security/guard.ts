@@ -1,10 +1,17 @@
 import { rootLogger } from '@atlas/observability';
 
+export interface TelegramUpdateClaimStore {
+  claimUpdate(updateId: number): Promise<boolean>;
+}
+
 export class TelegramSecurityGuard {
   private seenUpdateIds = new Set<number>();
   private maxCacheSize = 10000;
 
-  constructor(private allowedUserIds: Set<string>) {}
+  constructor(
+    private allowedUserIds: Set<string>,
+    private updateStore?: TelegramUpdateClaimStore
+  ) {}
 
   public isUserAllowed(userId: number | string): boolean {
     const idStr = String(userId);
@@ -21,7 +28,11 @@ export class TelegramSecurityGuard {
     return isAllowed;
   }
 
-  public isDuplicateUpdate(updateId: number): boolean {
+  public async isDuplicateUpdate(updateId: number): Promise<boolean> {
+    if (this.updateStore) {
+      return !(await this.updateStore.claimUpdate(updateId));
+    }
+
     if (this.seenUpdateIds.has(updateId)) {
       return true;
     }

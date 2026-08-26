@@ -4,6 +4,7 @@ import {
   DatabaseClient,
   Migrator,
   ApprovalRepository,
+  TelegramStateRepository,
   RunRepository,
   seedAgents,
   TaskRepository
@@ -18,6 +19,7 @@ export interface AtlasRuntime {
   taskRepo: TaskRepository;
   runRepo: RunRepository;
   approvalRepo: ApprovalRepository;
+  telegramStateRepo: TelegramStateRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -62,12 +64,14 @@ export async function createAtlasRuntime(
   const taskRepo = new TaskRepository(db);
   const runRepo = new RunRepository(db);
   const approvalRepo = new ApprovalRepository(db, config.ENCRYPTION_KEY);
+  const telegramStateRepo = new TelegramStateRepository(db);
 
   return {
     db,
     taskRepo,
     runRepo,
     approvalRepo,
+    telegramStateRepo,
     taskQueue,
     eventBus,
     provider,
