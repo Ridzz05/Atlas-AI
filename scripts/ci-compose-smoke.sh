@@ -75,6 +75,13 @@ wait_for_health worker
 assert_ready agent-service http://127.0.0.1:4000/ready
 assert_ready worker http://127.0.0.1:8081/ready
 
+echo "==> Verifying service restart readiness..."
+"${COMPOSE[@]}" restart agent-service worker
+wait_for_health agent-service
+wait_for_health worker
+assert_ready agent-service http://127.0.0.1:4000/ready
+assert_ready worker http://127.0.0.1:8081/ready
+
 agent_count="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-atlas_admin}" -d "${POSTGRES_DB:-atlas_os}" -Atqc "SELECT count(*) FROM agents;" | tr -d '[:space:]')"
 if [[ "$agent_count" != "5" ]]; then
   echo "Expected 5 seeded agents, found: $agent_count" >&2
