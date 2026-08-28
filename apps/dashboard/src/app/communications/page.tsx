@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, MessageSquare, RefreshCw, Send, Wrench } from 'lucide-react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import TextField from '@mui/material/TextField';
+import { MessageSquare, RefreshCw, Send, Wrench, Zap } from 'lucide-react';
 import { atlasFetch } from '../../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../../lib/event-stream';
 import {
@@ -10,11 +20,6 @@ import {
   CommunicationMessageRecord,
   CommunicationToolCallRecord
 } from '../../lib/communications';
-
-interface ApiTask {
-  id: string;
-  title: string;
-}
 
 interface RecordListResponse<T> {
   data: T[];
@@ -34,23 +39,51 @@ function formatTimestamp(timestamp: string): string {
 function FeedCard({ item }: { item: CommunicationFeedItem }) {
   const isTool = item.kind === 'tool';
   return (
-    <article className="flex gap-3 items-start">
-      <div className={`p-2 rounded-lg shrink-0 ${isTool ? 'bg-amber-500/10 text-amber-300' : 'bg-indigo-500/10 text-indigo-300'}`}>
-        {isTool ? <Wrench className="w-4 h-4" /> : <MessageSquare className="w-4 h-4" />}
-      </div>
-      <div className="bg-[#141d2b] border border-gray-800 rounded-xl p-3.5 flex-1 min-w-0">
-        <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-1 text-[10px] text-gray-400 font-mono mb-1">
-          <span className="font-semibold text-white">{item.sender}</span>
-          <time dateTime={item.timestamp}>{formatTimestamp(item.timestamp)}</time>
-        </div>
-        <p className="text-xs text-gray-200 break-words">{item.summary}</p>
-        <div className="flex flex-wrap gap-2 mt-2 text-[10px] font-mono text-gray-500">
-          {item.taskId && <span>task:{item.taskId}</span>}
-          {item.runId && <span>run:{item.runId}</span>}
-          {item.riskLevel && <span className="text-amber-300">risk:{item.riskLevel}</span>}
-        </div>
-      </div>
-    </article>
+    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+      <Box
+        sx={{
+          p: 1.25,
+          borderRadius: '10px',
+          bgcolor: isTool ? '#fff3eb' : '#f5efe6',
+          color: isTool ? '#ff4f00' : '#201515',
+          border: isTool ? '1px solid rgba(255, 79, 0, 0.25)' : '1px solid rgba(32, 21, 21, 0.08)',
+          flexShrink: 0
+        }}
+      >
+        {isTool ? <Wrench size={16} /> : <MessageSquare size={16} />}
+      </Box>
+      <Card
+        sx={{
+          p: 2.25,
+          bgcolor: '#ffffff',
+          borderRadius: '14px',
+          border: '1px solid rgba(32, 21, 21, 0.08)',
+          boxShadow: '0 2px 8px rgba(32, 21, 21, 0.04)',
+          flex: 1,
+          minWidth: 0
+        }}
+      >
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+          <Typography variant="caption" sx={{ fontWeight: 700, color: '#201515' }}>
+            {item.sender}
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
+            {formatTimestamp(item.timestamp)}
+          </Typography>
+        </Box>
+        <Typography variant="body2" sx={{ color: '#666155', lineHeight: 1.5, wordBreak: 'break-word', fontSize: '0.82rem' }}>
+          {item.summary}
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
+          {item.taskId && (
+            <Chip label={`task:${item.taskId.slice(0, 8)}`} size="small" sx={{ fontSize: '0.65rem', fontFamily: 'monospace', bgcolor: '#fbf8f2' }} />
+          )}
+          {item.riskLevel && (
+            <Chip label={`risk:${item.riskLevel}`} size="small" sx={{ fontSize: '0.65rem', fontFamily: 'monospace', bgcolor: '#fff3eb', color: '#ff4f00' }} />
+          )}
+        </Stack>
+      </Card>
+    </Box>
   );
 }
 
@@ -100,7 +133,10 @@ export default function CommunicationsPage() {
 
   useEffect(() => {
     const stream = new EventSource('/api/atlas/events/stream');
-    const unsubscribe = subscribeToAtlasEvents(stream, () => void loadFeedRef.current());
+    const refresh = () => {
+      void loadFeedRef.current();
+    };
+    const unsubscribe = subscribeToAtlasEvents(stream, refresh);
     const handleOpen = () => setRealtime(true);
     const handleError = () => setRealtime(false);
     stream.addEventListener('open', handleOpen);
@@ -114,112 +150,142 @@ export default function CommunicationsPage() {
     };
   }, []);
 
-  const visibleFeed = useMemo(() => (feedFilter === 'all' ? feed : feed.filter(item => item.kind === feedFilter)), [feed, feedFilter]);
+  const filteredFeed = useMemo(() => {
+    if (feedFilter === 'all') return feed;
+    return feed.filter((item) => item.kind === feedFilter);
+  }, [feed, feedFilter]);
 
-  const handleSend = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const goal = inputMsg.trim();
-    if (!goal || submitting) return;
+  const handleSend = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputMsg.trim() || submitting) return;
+
     setSubmitting(true);
-    setError(null);
     try {
-      await atlasFetch<ApiTask>('/tasks', {
+      await atlasFetch('/messages', {
         method: 'POST',
-        body: JSON.stringify({ title: goal.slice(0, 80), goal, assignedAgent: 'chief' })
+        body: JSON.stringify({
+          sender: 'human_operator',
+          recipient: 'chief',
+          content: inputMsg.trim()
+        })
       });
       setInputMsg('');
       await loadFeed();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to submit the task.');
+      setError(err instanceof Error ? err.message : 'Failed to send message.');
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto h-[calc(100vh-8rem)] flex flex-col">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Communications</h1>
-          <p className="text-xs text-gray-400">Durable user, agent, and tool activity from the authenticated ATLAS API.</p>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-gray-400">
-          <span className={`w-2 h-2 rounded-full ${realtime ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-          {realtime ? 'live' : 'reconnecting'}
-          <button
-            onClick={() => void loadFeed()}
-            className="p-2 rounded-lg text-gray-400 hover:bg-gray-800"
-            aria-label="Refresh communications"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
+    <Box sx={{ maxWidth: 1024, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Zap size={24} color="#ff4f00" />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
+              Communications & Inter-Agent Bus
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.25 }}>
+            <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500 }}>
+              Live durable stream of peer messages, delegations, and tool invocations.
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: realtime ? '#ff4f00' : '#a8a29e',
+                  boxShadow: realtime ? '0 0 8px rgba(255, 79, 0, 0.6)' : 'none'
+                }}
+              />
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: '#666155', fontWeight: 600 }}>
+                {realtime ? 'live bus' : 'reconnecting'}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+        <IconButton
+          onClick={() => void loadFeed()}
+          sx={{
+            color: '#666155',
+            bgcolor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid rgba(32, 21, 21, 0.1)',
+            boxShadow: '0 2px 6px rgba(32, 21, 21, 0.04)',
+            '&:hover': { bgcolor: '#f5efe6', color: '#201515' }
+          }}
+          aria-label="Refresh communications feed"
+        >
+          <RefreshCw size={16} />
+        </IconButton>
+      </Box>
 
       {error && (
-        <div role="alert" className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">
+        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
           {error}
-        </div>
+        </Alert>
       )}
 
-      <div className="flex flex-wrap gap-2 items-center">
-        {(['all', 'message', 'tool'] as FeedFilter[]).map(filter => (
-          <button
-            key={filter}
-            onClick={() => setFeedFilter(filter)}
-            className={`px-3 py-1.5 rounded-lg text-xs border ${feedFilter === filter ? 'bg-indigo-600/20 text-indigo-200 border-indigo-500/40' : 'text-gray-400 border-gray-800 hover:bg-gray-800'}`}
-          >
-            {filter === 'all' ? 'All activity' : filter === 'message' ? 'Messages' : 'Tool calls'}
-          </button>
+      {/* Filter Tabs */}
+      <Stack direction="row" spacing={1}>
+        {(['all', 'message', 'tool'] as FeedFilter[]).map((f) => (
+          <Chip
+            key={f}
+            label={f.toUpperCase()}
+            size="small"
+            onClick={() => setFeedFilter(f)}
+            sx={{
+              bgcolor: feedFilter === f ? '#ff4f00' : '#ffffff',
+              color: feedFilter === f ? '#ffffff' : '#201515',
+              fontWeight: 700,
+              cursor: 'pointer',
+              border: '1px solid rgba(32, 21, 21, 0.08)'
+            }}
+          />
         ))}
-        <label htmlFor="task-filter" className="sr-only">
-          Filter by task UUID
-        </label>
-        <input
-          id="task-filter"
-          value={taskIdFilter}
-          onChange={event => setTaskIdFilter(event.target.value)}
-          placeholder="Filter by task UUID"
-          className="min-w-[16rem] flex-1 bg-[#111827] border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
-        />
-      </div>
+      </Stack>
 
-      <div className="flex-1 bg-[#111827] border border-gray-800 rounded-xl p-5 overflow-y-auto space-y-4">
-        {loading ? (
-          <div className="h-full flex items-center justify-center text-xs text-gray-400">Loading communication history...</div>
-        ) : visibleFeed.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center text-xs text-gray-400">
-            <Activity className="w-8 h-8 text-gray-600 mb-3" />
-            <p>No durable communication records found.</p>
-            <p className="text-[11px] text-gray-500 mt-1">New task, agent, and tool activity will appear here automatically.</p>
-          </div>
-        ) : (
-          visibleFeed.map(item => <FeedCard key={`${item.kind}-${item.id}`} item={item} />)
-        )}
-      </div>
+      {/* Feed Stream */}
+      {loading ? (
+        <Box sx={{ p: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+          <CircularProgress color="primary" size={32} />
+          <Typography variant="caption" sx={{ color: '#666155' }}>
+            Loading communication stream…
+          </Typography>
+        </Box>
+      ) : filteredFeed.length === 0 ? (
+        <Card sx={{ p: 6, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '16px' }}>
+          <Typography variant="body2" sx={{ color: '#666155', fontWeight: 500 }}>
+            No communication events found matching the filter.
+          </Typography>
+        </Card>
+      ) : (
+        <Stack spacing={2}>
+          {filteredFeed.map((item) => (
+            <FeedCard key={item.id} item={item} />
+          ))}
+        </Stack>
+      )}
 
-      <form onSubmit={handleSend} className="flex gap-2" aria-label="Submit a goal">
-        <label htmlFor="command-input" className="sr-only">
-          Goal for Chief
-        </label>
-        <input
-          id="command-input"
-          type="text"
+      {/* Operator Broadcast Box */}
+      <Card component="form" onSubmit={handleSend} sx={{ p: 2.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', display: 'flex', gap: 1.5 }}>
+        <TextField
+          fullWidth
+          size="small"
           value={inputMsg}
-          onChange={event => setInputMsg(event.target.value)}
-          placeholder="Describe a goal for Chief..."
-          className="flex-1 bg-[#111827] border border-gray-700 rounded-lg px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500"
+          onChange={(e) => setInputMsg(e.target.value)}
+          placeholder="Send operator broadcast or direct message to Chief…"
           disabled={submitting}
         />
-        <button
-          type="submit"
-          disabled={submitting || !inputMsg.trim()}
-          className="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-medium flex items-center gap-2 transition-all"
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>{submitting ? 'Submitting...' : 'Submit'}</span>
-        </button>
-      </form>
-    </div>
+        <Button type="submit" variant="contained" color="primary" disabled={submitting || !inputMsg.trim()} startIcon={<Send size={16} />}>
+          Send
+        </Button>
+      </Card>
+    </Box>
   );
 }

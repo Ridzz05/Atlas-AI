@@ -3,6 +3,7 @@ import { AgentRegistry, defaultAgentRegistry } from '@atlas/agents';
 import {
   DatabaseClient,
   Migrator,
+  getDefaultMigrationsDir,
   ApprovalRepository,
   ArtifactRepository,
   AuditRepository,
@@ -66,7 +67,7 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
   const registry = options.registry || defaultAgentRegistry;
 
   if (options.migrate !== false) {
-    const migrationsDir = options.migrationsDir || path.resolve(process.cwd(), 'packages/database/src/migrations');
+    const migrationsDir = options.migrationsDir || getDefaultMigrationsDir();
     await new Migrator(db).runMigrations(migrationsDir);
   }
 

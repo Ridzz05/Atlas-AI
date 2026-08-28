@@ -1,7 +1,16 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { FileText, RefreshCw } from 'lucide-react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import { FileText, RefreshCw, Zap } from 'lucide-react';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface ArtifactRecord {
@@ -43,50 +52,85 @@ export default function ArtifactsPage() {
   }, []);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Artifacts & Deliverables</h1>
-          <p className="text-xs text-gray-400">Durable metadata from the worker artifact store. File paths stay server-side.</p>
-        </div>
-        <button onClick={() => void load()} className="p-2 rounded-lg text-gray-400 hover:bg-gray-800" aria-label="Refresh artifacts">
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </div>
+    <Box sx={{ maxWidth: 1024, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Zap size={24} color="#ff4f00" />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
+              Artifacts & Deliverables
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500, mt: 0.5, display: 'block' }}>
+            Durable metadata from the worker artifact store. File paths stay server-side.
+          </Typography>
+        </Box>
+        <IconButton
+          onClick={() => void load()}
+          sx={{
+            color: '#666155',
+            bgcolor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid rgba(32, 21, 21, 0.1)',
+            boxShadow: '0 2px 6px rgba(32, 21, 21, 0.04)',
+            '&:hover': { bgcolor: '#f5efe6', color: '#201515' }
+          }}
+          aria-label="Refresh artifacts"
+        >
+          <RefreshCw size={16} />
+        </IconButton>
+      </Box>
+
       {error && (
-        <div role="alert" className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">
+        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
           {error}
-        </div>
+        </Alert>
       )}
-      <div className="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden">
+
+      <Card sx={{ bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', overflow: 'hidden' }}>
         {loading ? (
-          <div className="p-10 text-center text-xs text-gray-400" role="status">
-            Loading artifact metadata…
-          </div>
+          <Box sx={{ p: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            <CircularProgress color="primary" size={32} />
+            <Typography variant="caption" sx={{ color: '#666155' }}>
+              Loading artifact metadata…
+            </Typography>
+          </Box>
         ) : records.length === 0 ? (
-          <div className="p-10 text-center text-xs text-gray-400">
-            <FileText className="w-8 h-8 text-gray-500 mx-auto mb-3" />
-            No artifacts have been recorded yet.
-          </div>
+          <Box sx={{ p: 8, textAlign: 'center' }}>
+            <FileText size={40} color="#ff4f00" style={{ margin: '0 auto 12px' }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
+              No Artifacts Recorded
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#8c827a', display: 'block', mt: 0.5 }}>
+              Deliverables created by worker runs will automatically appear here.
+            </Typography>
+          </Box>
         ) : (
-          <div className="divide-y divide-gray-800">
-            {records.map(record => (
-              <div key={record.id} className="p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{record.name}</p>
-                  <p className="text-[10px] text-gray-400 font-mono">
+          <Stack divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />}>
+            {records.map((record) => (
+              <Box key={record.id} sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {record.name}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
                     {record.mimeType} · task {record.taskId}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className="text-xs text-gray-300">{record.sizeBytes.toLocaleString()} bytes</p>
-                  <p className="text-[10px] text-gray-500">{new Date(record.createdAt).toLocaleString()}</p>
-                </div>
-              </div>
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: 'right', flexShrink: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515', fontSize: '0.78rem' }}>
+                    {record.sizeBytes.toLocaleString()} bytes
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', display: 'block' }}>
+                    {new Date(record.createdAt).toLocaleString()}
+                  </Typography>
+                </Box>
+              </Box>
             ))}
-          </div>
+          </Stack>
         )}
-      </div>
-    </div>
+      </Card>
+    </Box>
   );
 }

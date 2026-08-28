@@ -1,7 +1,21 @@
 'use client';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { Plus, ArrowRight, RefreshCw } from 'lucide-react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Dialog from '@mui/material/Dialog';
+import DialogTitle from '@mui/material/DialogTitle';
+import DialogContent from '@mui/material/DialogContent';
+import DialogActions from '@mui/material/DialogActions';
+import TextField from '@mui/material/TextField';
+import { Plus, ArrowRight, RefreshCw, Zap } from 'lucide-react';
 import { atlasFetch } from '../../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../../lib/event-stream';
 
@@ -24,6 +38,7 @@ export default function TasksPage() {
   const [showModal, setShowModal] = useState(false);
   const [newGoal, setNewGoal] = useState('');
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [realtime, setRealtime] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,111 +74,261 @@ export default function TasksPage() {
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!newGoal.trim()) return;
+    if (!newGoal.trim() || submitting) return;
+    setSubmitting(true);
     try {
       await atlasFetch<ApiTask>('/tasks', {
         method: 'POST',
-        body: JSON.stringify({ title: newGoal.trim().slice(0, 80), goal: newGoal.trim(), assignedAgent: 'chief' })
+        body: JSON.stringify({
+          title: newGoal.trim().slice(0, 80),
+          goal: newGoal.trim(),
+          assignedAgent: 'chief'
+        })
       });
       setNewGoal('');
       setShowModal(false);
       await loadTasks();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create task.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return { color: '#ffffff', bg: '#ff4f00', border: 'transparent' };
+      case 'running':
+      case 'planning':
+        return { color: '#d64200', bg: '#fff3eb', border: 'rgba(255, 79, 0, 0.3)' };
+      case 'failed':
+      case 'cancelled':
+        return { color: '#dc2626', bg: '#fee2e2', border: 'rgba(220, 38, 38, 0.3)' };
+      default:
+        return { color: '#201515', bg: '#f5efe6', border: 'rgba(32, 21, 21, 0.08)' };
     }
   };
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Task Orchestration</h1>
-          <div className="flex items-center gap-2">
-            <p className="text-xs text-gray-400">Live tasks from the authenticated ATLAS API.</p>
-            <span className="flex items-center gap-1 text-[10px] font-mono text-gray-500">
-              <span className={`w-1.5 h-1.5 rounded-full ${realtime ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-              {realtime ? 'live' : 'reconnecting'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => void loadTasks()} className="p-2 rounded-lg text-gray-400 hover:bg-gray-800" aria-label="Refresh tasks">
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium flex items-center gap-1.5"
+    <Box sx={{ maxWidth: 1280, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Zap size={24} color="#ff4f00" />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
+              Automated Workflows
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mt: 0.25 }}>
+            <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500 }}>
+              Live task execution queue derived from ATLAS AI Engine.
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+              <Box
+                sx={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  bgcolor: realtime ? '#ff4f00' : '#a8a29e'
+                }}
+              />
+              <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: '#666155', fontWeight: 600 }}>
+                {realtime ? 'live stream' : 'reconnecting'}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+        <Stack direction="row" spacing={1.5}>
+          <IconButton
+            onClick={() => void loadTasks()}
+            sx={{
+              color: '#666155',
+              bgcolor: '#ffffff',
+              borderRadius: '10px',
+              border: '1px solid rgba(32, 21, 21, 0.1)',
+              '&:hover': { bgcolor: '#f5efe6', color: '#201515' }
+            }}
+            aria-label="Refresh tasks"
           >
-            <Plus className="w-3.5 h-3.5" />
-            Create Task
-          </button>
-        </div>
-      </div>
+            <RefreshCw size={16} />
+          </IconButton>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Plus size={16} />}
+            onClick={() => setShowModal(true)}
+            sx={{ px: 2.5 }}
+          >
+            New Workflow
+          </Button>
+        </Stack>
+      </Box>
 
-      {error && <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">{error}</div>}
+      {error && (
+        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+          {error}
+        </Alert>
+      )}
+
       {loading ? (
-        <div className="p-12 text-center text-xs text-gray-400">Loading live tasks…</div>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 8, gap: 2 }}>
+          <CircularProgress color="primary" size={32} />
+          <Typography variant="caption" sx={{ color: '#666155' }}>
+            Loading automated workflows…
+          </Typography>
+        </Box>
       ) : tasks.length === 0 ? (
-        <div className="p-12 text-center bg-[#111827] rounded-xl border border-gray-800 text-xs text-gray-400">No tasks found.</div>
+        <Card sx={{ p: 6, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '16px' }}>
+          <Typography variant="body2" sx={{ color: '#666155', fontWeight: 500 }}>
+            No workflows found. Click "New Workflow" to trigger a new multi-agent loop.
+          </Typography>
+        </Card>
       ) : (
-        <div className="space-y-4">
-          {tasks.map(task => {
+        <Stack spacing={2}>
+          {tasks.map((task) => {
             const cost = typeof task.result?.totalCostUsd === 'number' ? task.result.totalCostUsd : 0;
+            const statusStyle = getStatusColor(task.status);
             return (
-              <div key={task.id} className="p-5 bg-[#111827] rounded-xl border border-gray-800 space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-300 border border-gray-700">
-                      {task.id}
-                    </span>
-                    <h3 className="text-sm font-semibold text-white truncate">{task.title}</h3>
-                  </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    <span className="text-xs font-mono text-gray-400">Cost: ${cost.toFixed(2)}</span>
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase border bg-gray-500/10 text-gray-300 border-gray-500/20">
-                      {task.status}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-gray-400">
-                  <ArrowRight className="w-3 h-3 text-gray-600" />
-                  <span className="font-mono text-indigo-400 font-medium">{task.assignedAgent.toUpperCase()}</span>
-                  {task.error && <span className="text-rose-300">{task.error}</span>}
-                </div>
-              </div>
+              <Card
+                key={task.id}
+                sx={{
+                  p: 2.75,
+                  bgcolor: '#ffffff',
+                  borderRadius: '14px',
+                  border: '1px solid rgba(32, 21, 21, 0.08)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 1.5,
+                  '&:hover': {
+                    borderColor: 'rgba(255, 79, 0, 0.35)'
+                  }
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
+                    <Chip
+                      label={task.id.slice(0, 8)}
+                      size="small"
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.7rem',
+                        fontWeight: 700,
+                        bgcolor: '#f5efe6',
+                        color: '#201515',
+                        border: '1px solid rgba(32, 21, 21, 0.08)'
+                      }}
+                    />
+                    <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515', wordBreak: 'break-word' }}>
+                      {task.title}
+                    </Typography>
+                  </Box>
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#666155', fontSize: '0.75rem', fontWeight: 600 }}>
+                      Cost: ${cost.toFixed(2)}
+                    </Typography>
+                    <Chip
+                      label={task.status.toUpperCase()}
+                      size="small"
+                      sx={{
+                        fontFamily: 'monospace',
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        bgcolor: statusStyle.bg,
+                        color: statusStyle.color,
+                        border: `1px solid ${statusStyle.border}`
+                      }}
+                    />
+                  </Stack>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.75rem', color: '#666155' }}>
+                  <ArrowRight size={14} color="#ff4f00" />
+                  <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#d64200', fontWeight: 700 }}>
+                    {task.assignedAgent.toUpperCase()}
+                  </Typography>
+                  {task.error && (
+                    <Typography variant="caption" sx={{ color: '#dc2626', ml: 1, wordBreak: 'break-word', fontWeight: 500 }}>
+                      {task.error}
+                    </Typography>
+                  )}
+                </Box>
+              </Card>
             );
           })}
-        </div>
+        </Stack>
       )}
 
-      {showModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-[#111827] border border-gray-800 rounded-xl max-w-lg w-full p-6 space-y-4">
-            <h2 className="text-base font-semibold text-white">Create New Task for Chief</h2>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <textarea
-                value={newGoal}
-                onChange={event => setNewGoal(event.target.value)}
-                placeholder="Describe the goal…"
-                className="w-full h-28 bg-[#090d16] border border-gray-700 rounded-lg p-3 text-xs text-white placeholder-gray-500"
-                required
-              />
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:bg-gray-800"
-                >
-                  Cancel
-                </button>
-                <button type="submit" className="px-4 py-1.5 rounded-lg text-xs bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
-                  Submit Goal
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
+      {/* Zapier Create Task Modal */}
+      <Dialog
+        open={showModal}
+        onClose={() => !submitting && setShowModal(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              bgcolor: '#ffffff',
+              border: '1px solid rgba(255, 79, 0, 0.25)',
+              borderRadius: '16px',
+              boxShadow: '0 10px 25px rgba(32, 21, 21, 0.08)'
+            }
+          }
+        }}
+      >
+        <form onSubmit={handleCreate}>
+          <DialogTitle sx={{ color: '#201515', fontWeight: 700, pb: 1, display: 'flex', alignItems: 'center', gap: 1.25 }}>
+            <Zap size={20} color="#ff4f00" />
+            Create Workflow for Chief Trigger
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1.5 }}>
+            <Typography variant="caption" sx={{ color: '#666155', display: 'block', mb: 2, fontWeight: 500 }}>
+              Chief will trigger the loop, decompose tasks, and dispatch specialist workers.
+            </Typography>
+            <TextField
+              autoFocus
+              fullWidth
+              multiline
+              rows={4}
+              value={newGoal}
+              onChange={(e) => setNewGoal(e.target.value)}
+              placeholder="e.g. Susun agenda rapat marketing untuk besok pukul 10:00 WIB"
+              variant="outlined"
+              required
+              sx={{
+                '& .MuiOutlinedInput-root': {
+                  bgcolor: '#fbf8f2',
+                  color: '#201515',
+                  borderRadius: '12px',
+                  fontSize: '0.85rem',
+                  '& fieldset': { borderColor: 'rgba(32, 21, 21, 0.15)' },
+                  '&:hover fieldset': { borderColor: 'rgba(255, 79, 0, 0.4)' },
+                  '&.Mui-focused fieldset': { borderColor: '#ff4f00' }
+                }
+              }}
+            />
+          </DialogContent>
+          <DialogActions sx={{ p: 2.5, pt: 1, borderTop: '1px solid rgba(32, 21, 21, 0.06)' }}>
+            <Button
+              onClick={() => setShowModal(false)}
+              disabled={submitting}
+              sx={{ color: '#666155' }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              disabled={submitting || !newGoal.trim()}
+              startIcon={<Plus size={16} />}
+            >
+              {submitting ? 'Submitting…' : 'Trigger Workflow'}
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+    </Box>
   );
 }

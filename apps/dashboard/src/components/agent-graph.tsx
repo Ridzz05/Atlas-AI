@@ -1,7 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Shield, Search, TrendingUp, Edit3, CheckCircle2 } from 'lucide-react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import Chip from '@mui/material/Chip';
+import Avatar from '@mui/material/Avatar';
+import Stack from '@mui/material/Stack';
+import Divider from '@mui/material/Divider';
+import { Shield, Search, TrendingUp, Edit3, CheckCircle2, Zap } from 'lucide-react';
 
 export type AgentNodeStatus = 'IDLE' | 'QUEUED' | 'WORKING' | 'ERROR';
 
@@ -26,32 +33,71 @@ const DEFAULT_AGENTS: AgentNodeData[] = [
 ];
 
 export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
-  const getStatusBadge = (status: AgentNodeStatus) => {
+  const getStatusChip = (status: AgentNodeStatus) => {
     switch (status) {
       case 'WORKING':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 animate-pulse">
-            ● WORKING
-          </span>
+          <Chip
+            label="● RUNNING"
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              fontFamily: 'monospace',
+              bgcolor: '#ff4f00',
+              color: '#ffffff'
+            }}
+          />
         );
       case 'QUEUED':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/20 text-amber-400 border border-amber-500/40">
-            ⏳ QUEUED
-          </span>
+          <Chip
+            label="⏳ QUEUED"
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              fontFamily: 'monospace',
+              bgcolor: '#fff3eb',
+              color: '#d64200',
+              border: '1px solid rgba(255, 79, 0, 0.25)'
+            }}
+          />
         );
       case 'ERROR':
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-rose-500/20 text-rose-400 border border-rose-500/40">
-            ✖ ERROR
-          </span>
+          <Chip
+            label="✖ ERROR"
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: '0.68rem',
+              fontWeight: 700,
+              fontFamily: 'monospace',
+              bgcolor: '#fee2e2',
+              color: '#dc2626',
+              border: '1px solid rgba(220, 38, 38, 0.25)'
+            }}
+          />
         );
       case 'IDLE':
       default:
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono bg-gray-800 text-gray-400 border border-gray-700">
-            ○ IDLE
-          </span>
+          <Chip
+            label="○ IDLE"
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: '0.68rem',
+              fontWeight: 600,
+              fontFamily: 'monospace',
+              bgcolor: '#f5efe6',
+              color: '#666155',
+              border: '1px solid rgba(32, 21, 21, 0.08)'
+            }}
+          />
         );
     }
   };
@@ -59,100 +105,203 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
   const getAgentIcon = (id: string) => {
     switch (id) {
       case 'chief':
-        return <Shield className="w-5 h-5 text-indigo-400" />;
+        return <Shield size={18} color="#ff4f00" />;
       case 'ned':
-        return <Search className="w-5 h-5 text-cyan-400" />;
+        return <Search size={18} color="#ff4f00" />;
       case 'layla':
-        return <TrendingUp className="w-5 h-5 text-emerald-400" />;
+        return <TrendingUp size={18} color="#ff4f00" />;
       case 'hermes':
-        return <Edit3 className="w-5 h-5 text-amber-400" />;
+        return <Edit3 size={18} color="#ff4f00" />;
       case 'argus':
-        return <CheckCircle2 className="w-5 h-5 text-rose-400" />;
+        return <CheckCircle2 size={18} color="#ff4f00" />;
       default:
-        return <Shield className="w-5 h-5 text-gray-400" />;
+        return <Zap size={18} color="#ff4f00" />;
     }
   };
 
-  const chief = agents.find(a => a.id === 'chief') || DEFAULT_AGENTS[0]!;
-  const specialists = agents.filter(a => a.id !== 'chief' && a.id !== 'argus');
-  const argus = agents.find(a => a.id === 'argus') || DEFAULT_AGENTS[4]!;
+  const chief = agents.find((a) => a.id === 'chief') || DEFAULT_AGENTS[0]!;
+  const specialists = agents.filter((a) => a.id !== 'chief' && a.id !== 'argus');
+  const argus = agents.find((a) => a.id === 'argus') || DEFAULT_AGENTS[4]!;
 
   return (
-    <div className="p-6 bg-[#111827] rounded-xl border border-gray-800 shadow-xl relative overflow-hidden">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
-        <div>
-          <h2 className="text-sm font-semibold text-white tracking-wide">MULTI-AGENT TOPOLOGY</h2>
-          <p className="text-xs text-gray-400">Deterministic event-derived state graph (Depth 0 → Depth 2)</p>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-gray-400">
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Live
-          </span>
-          <span>• Max Concurrency: 3</span>
-          <span>• Max Depth: 2</span>
-        </div>
-      </div>
+    <Card
+      sx={{
+        p: 3.5,
+        bgcolor: '#ffffff',
+        borderRadius: '18px',
+        border: '1px solid rgba(32, 21, 21, 0.08)'
+      }}
+    >
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, pb: 2, borderBottom: '1px solid rgba(32, 21, 21, 0.06)' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+          <Zap size={20} color="#ff4f00" />
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '0.02em', color: '#201515' }}>
+              MULTI-AGENT FLEET TOPOLOGY
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500 }}>
+              Deterministic trigger, specialist execution, and QA gating (Depth 0 → Depth 2)
+            </Typography>
+          </Box>
+        </Box>
+        <Stack direction="row" spacing={2} sx={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#666155' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#ff4f00' }} />
+            <Typography variant="caption" sx={{ color: '#201515', fontWeight: 700 }}>Active Fleet</Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: '#8c827a' }}>Max Concurrency: 3</Typography>
+          <Typography variant="caption" sx={{ color: '#8c827a' }}>Max Depth: 2</Typography>
+        </Stack>
+      </Box>
 
-      <div className="flex flex-col items-center gap-8 py-2">
+      {/* Hierarchy Visualizer */}
+      <Stack spacing={2.5} sx={{ alignItems: 'center', py: 1 }}>
         {/* Depth 0: Chief */}
-        <div className="w-72 p-4 rounded-xl bg-[#1a2333] border border-indigo-500/40 shadow-lg flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20">{getAgentIcon('chief')}</div>
-            <div>
-              <h3 className="text-xs font-bold text-white uppercase">{chief.name}</h3>
-              <p className="text-[10px] text-indigo-400 font-mono">Depth 0 • Root Orchestrator</p>
-            </div>
-          </div>
-          {getStatusBadge(chief.status)}
-        </div>
-
-        {/* Delegation Connectors */}
-        <div className="w-full flex justify-center items-center">
-          <div className="h-4 w-px bg-gray-700"></div>
-        </div>
-
-        {/* Depth 1: Specialists (Ned, Layla, Hermes) */}
-        <div className="grid grid-cols-3 gap-4 w-full max-w-4xl">
-          {specialists.map(agent => (
-            <div
-              key={agent.id}
-              className="p-4 rounded-xl bg-[#141d2b] border border-gray-800 hover:border-gray-700 transition-all flex flex-col justify-between gap-3"
+        <Card
+          sx={{
+            width: 330,
+            p: 2.25,
+            bgcolor: '#ffffff',
+            borderRadius: '14px',
+            border: '1px solid rgba(255, 79, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar
+              variant="rounded"
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: '10px',
+                bgcolor: '#fff3eb',
+                border: '1px solid rgba(255, 79, 0, 0.25)'
+              }}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-1.5 rounded-lg bg-gray-800 border border-gray-700">{getAgentIcon(agent.id)}</div>
-                  <div>
-                    <h4 className="text-xs font-semibold text-white">{agent.name}</h4>
-                    <p className="text-[10px] text-gray-400 font-mono">{agent.role}</p>
-                  </div>
-                </div>
-                {getStatusBadge(agent.status)}
-              </div>
-              <div className="text-[10px] text-gray-500 font-mono border-t border-gray-800/80 pt-2 flex justify-between">
+              {getAgentIcon('chief')}
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
+                {chief.name}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#d64200', fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }}>
+                Depth 0 · Trigger & Orchestrator
+              </Typography>
+            </Box>
+          </Box>
+          {getStatusChip(chief.status)}
+        </Card>
+
+        {/* Vertical Connector */}
+        <Box sx={{ width: 2, height: 20, bgcolor: 'rgba(255, 79, 0, 0.35)' }} />
+
+        {/* Depth 1: Specialists */}
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+            gap: 2.25,
+            width: '100%',
+            maxWidth: 860
+          }}
+        >
+          {specialists.map((agent) => (
+            <Card
+              key={agent.id}
+              sx={{
+                p: 2.25,
+                bgcolor: '#ffffff',
+                borderRadius: '14px',
+                border: '1px solid rgba(32, 21, 21, 0.08)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: 1.5,
+                '&:hover': {
+                  borderColor: 'rgba(255, 79, 0, 0.35)'
+                }
+              }}
+            >
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+                  <Avatar
+                    variant="rounded"
+                    sx={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: '8px',
+                      bgcolor: '#fff3eb',
+                      border: '1px solid rgba(255, 79, 0, 0.2)'
+                    }}
+                  >
+                    {getAgentIcon(agent.id)}
+                  </Avatar>
+                  <Box>
+                    <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515' }}>
+                      {agent.name}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: '#666155', fontSize: '0.72rem', fontWeight: 500 }}>
+                      {agent.role}
+                    </Typography>
+                  </Box>
+                </Box>
+                {getStatusChip(agent.status)}
+              </Box>
+
+              <Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#8c827a', fontFamily: 'monospace', fontWeight: 600 }}>
                 <span>Depth: 1</span>
                 <span>Max Turns: 10</span>
-              </div>
-            </div>
+              </Box>
+            </Card>
           ))}
-        </div>
+        </Box>
 
-        {/* Connector to Argus */}
-        <div className="w-full flex justify-center items-center">
-          <div className="h-4 w-px bg-gray-700"></div>
-        </div>
+        {/* Vertical Connector */}
+        <Box sx={{ width: 2, height: 20, bgcolor: 'rgba(255, 79, 0, 0.35)' }} />
 
-        {/* Depth 2: QA Gate (Argus) */}
-        <div className="w-72 p-4 rounded-xl bg-[#1a2333] border border-rose-500/30 shadow-lg flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">{getAgentIcon('argus')}</div>
-            <div>
-              <h3 className="text-xs font-bold text-white uppercase">{argus.name}</h3>
-              <p className="text-[10px] text-rose-400 font-mono">Depth 2 • QA & Risk Gate</p>
-            </div>
-          </div>
-          {getStatusBadge(argus.status)}
-        </div>
-      </div>
-    </div>
+        {/* Depth 2: Argus QA Gate */}
+        <Card
+          sx={{
+            width: 330,
+            p: 2.25,
+            bgcolor: '#ffffff',
+            borderRadius: '14px',
+            border: '1px solid rgba(255, 79, 0, 0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Avatar
+              variant="rounded"
+              sx={{
+                width: 38,
+                height: 38,
+                borderRadius: '10px',
+                bgcolor: '#fff3eb',
+                border: '1px solid rgba(255, 79, 0, 0.25)'
+              }}
+            >
+              {getAgentIcon('argus')}
+            </Avatar>
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
+                {argus.name}
+              </Typography>
+              <Typography variant="caption" sx={{ color: '#d64200', fontFamily: 'monospace', fontSize: '0.7rem', fontWeight: 700 }}>
+                Depth 2 · QA & Risk Gate
+              </Typography>
+            </Box>
+          </Box>
+          {getStatusChip(argus.status)}
+        </Card>
+      </Stack>
+    </Card>
   );
 }

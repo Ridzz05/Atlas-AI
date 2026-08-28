@@ -3,6 +3,14 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import Box from '@mui/material/Box';
+import Typography from '@mui/material/Typography';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Chip from '@mui/material/Chip';
+import Avatar from '@mui/material/Avatar';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -13,15 +21,15 @@ import {
   FileText,
   Activity,
   Settings,
-  AlertTriangle
+  Zap
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { name: 'Command Center', href: '/', icon: LayoutDashboard },
   { name: 'Tasks', href: '/tasks', icon: CheckSquare },
   { name: 'Communications', href: '/communications', icon: MessageSquare },
-  { name: 'Agent Team', href: '/agents', icon: Users },
-  { name: 'Shared Brain', href: '/brain', icon: Brain },
+  { name: 'Agent Fleet', href: '/agents', icon: Users },
+  { name: 'Second Brain', href: '/brain', icon: Brain, badge: 'RAG' },
   { name: 'Approvals', href: '/approvals', icon: ShieldCheck },
   { name: 'Artifacts', href: '/artifacts', icon: FileText },
   { name: 'Audit & Telemetry', href: '/audit', icon: Activity },
@@ -32,40 +40,140 @@ export function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="w-64 border-r border-gray-800 bg-[#0d1321] flex flex-col justify-between shrink-0 h-screen sticky top-0">
-      <div>
-        <div className="p-5 border-b border-gray-800 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-bold text-white shadow-lg shadow-indigo-500/30">
-            A
-          </div>
-          <div>
-            <h1 className="font-semibold tracking-wider text-sm text-white">ATLAS AI OS</h1>
-            <p className="text-[10px] text-gray-400 font-mono tracking-wider">v0.1.0 · CONTROL PLANE</p>
-          </div>
-        </div>
-        <nav className="p-3 space-y-1" aria-label="Primary navigation">
-          {NAV_ITEMS.map(item => {
+    <Box
+      component="aside"
+      sx={{
+        width: 268,
+        height: '100vh',
+        position: 'sticky',
+        top: 0,
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        bgcolor: '#f5efe6', // Soft Warm Vanilla Sidebar
+        borderRight: '1px solid rgba(32, 21, 21, 0.08)',
+        boxShadow: 'none',
+        zIndex: 20
+      }}
+    >
+      <Box>
+        {/* Brand Header */}
+        <Box
+          sx={{
+            p: 2.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            borderBottom: '1px solid rgba(32, 21, 21, 0.06)'
+          }}
+        >
+          <Avatar
+            variant="rounded"
+            sx={{
+              bgcolor: '#ff4f00',
+              color: '#ffffff',
+              fontWeight: 800,
+              width: 36,
+              height: 36,
+              borderRadius: '10px'
+            }}
+          >
+            _
+          </Avatar>
+          <Box>
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '0.02em', color: '#201515' }}>
+              ATLAS AI OS
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace', fontSize: '0.68rem', fontWeight: 600 }}>
+              VANILLA WORKFLOWS
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Navigation List */}
+        <List sx={{ px: 1.5, py: 2 }} component="nav" aria-label="Primary navigation">
+          {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (
-              <Link
+              <ListItemButton
                 key={item.href}
+                component={Link}
                 href={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium transition-colors ${isActive ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800/50'}`}
+                selected={isActive}
+                sx={{
+                  borderRadius: '10px',
+                  mb: 0.75,
+                  py: 1,
+                  px: 1.5,
+                  color: isActive ? '#201515' : '#666155',
+                  bgcolor: isActive ? '#ffffff' : 'transparent',
+                  border: isActive ? '1px solid rgba(32, 21, 21, 0.1)' : '1px solid transparent',
+                  '&:hover': {
+                    bgcolor: isActive ? '#ffffff' : '#ece5dc',
+                    color: '#201515'
+                  }
+                }}
               >
-                <Icon className="w-4 h-4 shrink-0" />
-                <span>{item.name}</span>
-              </Link>
+                <ListItemIcon
+                  sx={{
+                    minWidth: 30,
+                    color: isActive ? '#ff4f00' : '#8c827a'
+                  }}
+                >
+                  <Icon size={18} />
+                </ListItemIcon>
+                <ListItemText
+                  primary={item.name}
+                  slotProps={{
+                    primary: {
+                      sx: {
+                        fontSize: '0.84rem',
+                        fontWeight: isActive ? 700 : 500
+                      }
+                    }
+                  }}
+                />
+                {item.badge && (
+                  <Chip
+                    label={item.badge}
+                    size="small"
+                    sx={{
+                      height: 20,
+                      fontSize: '0.65rem',
+                      fontWeight: 700,
+                      bgcolor: '#ff4f00',
+                      color: '#ffffff'
+                    }}
+                  />
+                )}
+              </ListItemButton>
             );
           })}
-        </nav>
-      </div>
-      <div className="p-4 border-t border-gray-800">
-        <div className="w-full flex items-start gap-2 px-3 py-2 rounded-lg bg-rose-600/10 text-rose-300 border border-rose-500/20 text-[11px]">
-          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-          <span>Emergency stop is available here and through Telegram. Both use the same durable control state.</span>
-        </div>
-      </div>
-    </aside>
+        </List>
+      </Box>
+
+      {/* Safety Notice Card */}
+      <Box sx={{ p: 2, borderTop: '1px solid rgba(32, 21, 21, 0.06)' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 1.25,
+            p: 1.75,
+            borderRadius: '12px',
+            bgcolor: '#ffffff',
+            border: '1px solid rgba(32, 21, 21, 0.08)',
+            color: '#201515'
+          }}
+        >
+          <Zap size={16} style={{ flexShrink: 0, marginTop: 2, color: '#ff4f00' }} />
+          <Typography variant="caption" sx={{ fontSize: '0.72rem', lineHeight: 1.4, color: '#666155', fontWeight: 500 }}>
+            Automated loop execution synced via durable workflow orchestrator.
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
   );
 }

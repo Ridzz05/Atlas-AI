@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -153,6 +153,11 @@ function runProcess(command, args, environment) {
 }
 
 async function runDevelopment(environment) {
+  try {
+    rmSync(path.join(rootDir, 'apps/dashboard/.next'), { recursive: true, force: true });
+    rmSync(path.join(rootDir, 'apps/dashboard/.next-dev'), { recursive: true, force: true });
+  } catch {}
+
   const packageManager = packageManagerCommand();
   const initialBuild = await runProcess(packageManager, ['exec', 'tsc', '--build', 'tsconfig.dev.json'], environment);
   if (initialBuild !== 0) process.exitCode = initialBuild;

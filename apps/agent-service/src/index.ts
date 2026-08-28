@@ -3,6 +3,7 @@ import { rootLogger } from '@atlas/observability';
 import { createAtlasRuntime } from '@atlas/runtime';
 import { buildServer } from './server.js';
 
+// ATLAS agent-service entrypoint
 async function main() {
   const config = EnvConfigSchema.parse(process.env);
   const runtime = await createAtlasRuntime(config);

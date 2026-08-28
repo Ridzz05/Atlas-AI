@@ -2,7 +2,14 @@
 -- Migration: 001_initial_schema.sql
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "vector";
+
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "vector";
+EXCEPTION WHEN OTHERS THEN
+    -- Fall back gracefully if pgvector C-extension is not installed on host PostgreSQL
+    NULL;
+END $$;
 
 -- 1. Users
 CREATE TABLE IF NOT EXISTS users (
@@ -186,7 +193,7 @@ CREATE INDEX IF NOT EXISTS idx_memory_items_scope ON memory_items(scope);
 CREATE TABLE IF NOT EXISTS memory_embeddings (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     memory_id UUID NOT NULL UNIQUE REFERENCES memory_items(id) ON DELETE CASCADE,
-    embedding vector(1536),
+    embedding JSONB,
     model VARCHAR(64) NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

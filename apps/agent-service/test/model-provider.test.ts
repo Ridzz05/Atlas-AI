@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { EnvConfigSchema } from '@atlas/shared';
+import { EnvConfigSchema, OPENROUTER_DEFAULT_MODEL } from '@atlas/shared';
 import { buildServer } from '../src/server.js';
 
 describe('OpenRouter model settings API', () => {
@@ -9,7 +9,7 @@ describe('OpenRouter model settings API', () => {
     const settingsRepo = {
       getPublic: vi.fn().mockResolvedValue({
         provider: 'openrouter',
-        modelName: 'z-ai/glm-5.2:free',
+        modelName: OPENROUTER_DEFAULT_MODEL,
         hasApiKey: true,
         apiKeyFingerprint: 'abc123def456',
         updatedBy: 'owner-api',
@@ -17,7 +17,7 @@ describe('OpenRouter model settings API', () => {
       }),
       save: vi.fn().mockResolvedValue({
         provider: 'openrouter',
-        modelName: 'z-ai/glm-5.2:free',
+        modelName: OPENROUTER_DEFAULT_MODEL,
         hasApiKey: true,
         apiKeyFingerprint: 'abc123def456',
         updatedBy: 'owner-api',
@@ -25,6 +25,7 @@ describe('OpenRouter model settings API', () => {
       }),
       clear: vi.fn().mockResolvedValue(true)
     };
+
     const auditRepo = { create: vi.fn().mockResolvedValue(undefined) };
     return {
       server: buildServer({ config, modelProviderSettingsRepo: settingsRepo as any, auditRepo: auditRepo as any }),
@@ -46,7 +47,7 @@ describe('OpenRouter model settings API', () => {
     expect(response.statusCode).toBe(200);
     expect(settingsRepo.save).toHaveBeenCalledWith({
       provider: 'openrouter',
-      modelName: 'z-ai/glm-5.2:free',
+      modelName: OPENROUTER_DEFAULT_MODEL,
       apiKey,
       clearApiKey: false,
       updatedBy: 'owner-api'
@@ -77,7 +78,7 @@ describe('OpenRouter model settings API', () => {
     expect(response.statusCode).toBe(200);
     expect(body.data).toMatchObject({
       modelProvider: 'openrouter',
-      modelName: 'z-ai/glm-5.2:free',
+      modelName: OPENROUTER_DEFAULT_MODEL,
       modelConfigured: true,
       modelKeyFingerprint: 'abc123def456',
       modelConfigSource: 'database',

@@ -11,10 +11,18 @@ pnpm-debug.log*
 .pnpm-store/
 **/*.tsbuildinfo
 
+# Secret keys
 key.txt
+KEY.txt
+*.key
+
+# Redis dumps
+dump.rdb
+*.rdb
 
 # Next.js
 .next/
+.next-dev/
 out/
 
 # Environment variables

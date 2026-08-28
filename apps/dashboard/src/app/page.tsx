@@ -1,8 +1,29 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Clock, AlertCircle, DollarSign, ArrowUpRight, RefreshCw, Pause, Play, OctagonAlert } from 'lucide-react';
 import Link from 'next/link';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import {
+  CheckCircle2,
+  Clock,
+  AlertCircle,
+  DollarSign,
+  ArrowUpRight,
+  RefreshCw,
+  Pause,
+  Play,
+  OctagonAlert,
+  Zap
+} from 'lucide-react';
 import { AgentGraph, AgentNodeData } from '../components/agent-graph';
 import { atlasFetch } from '../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../lib/event-stream';
@@ -67,10 +88,25 @@ interface ControlResponse {
 type ControlAction = 'pause' | 'resume' | 'emergency-stop';
 
 const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status'] => {
-  const assigned = tasks.filter(task => task.assignedAgent === agentId);
-  if (assigned.some(task => ['failed', 'cancelled'].includes(task.status))) return 'ERROR';
-  if (assigned.some(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status))) return 'WORKING';
-  if (assigned.some(task => task.status === 'queued')) return 'QUEUED';
+  const assigned = tasks.filter((task) => task.assignedAgent === agentId);
+  if (assigned.length === 0) return 'IDLE';
+
+  // 1. Is the agent actively executing, planning, or waiting for review right now?
+  const activeTask = assigned.find((task) =>
+    ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)
+  );
+  if (activeTask) return 'WORKING';
+
+  // 2. Is there a queued task waiting for this agent?
+  const queuedTask = assigned.find((task) => task.status === 'queued');
+  if (queuedTask) return 'QUEUED';
+
+  // 3. Otherwise, check the most recent task: if the most recent task failed, report ERROR, else IDLE
+  const latestTask = assigned[0];
+  if (latestTask && ['failed', 'cancelled'].includes(latestTask.status)) {
+    return 'ERROR';
+  }
+
   return 'IDLE';
 };
 
@@ -108,7 +144,7 @@ export default function CommandCenterPage() {
 
   const loadControl = async () => {
     try {
-      const response = await atlasFetch<ControlResponse>('/control');
+      const response = await atlasFetch<ControlResponse>(`/control`);
       setControlState(response.data);
       setControlError(null);
     } catch (err) {
@@ -159,12 +195,14 @@ export default function CommandCenterPage() {
     };
   }, []);
 
-  const activeCount = tasks.filter(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)).length;
-  const completedCount = tasks.filter(task => task.status === 'completed').length;
+  const activeCount = tasks.filter((task) =>
+    ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)
+  ).length;
+  const completedCount = tasks.filter((task) => task.status === 'completed').length;
   const costToday = costMetrics?.costs?.periodCostUsd;
   const budget = costMetrics?.budget;
   const agentIds = ['chief', 'ned', 'layla', 'hermes', 'argus'];
-  const graphAgents: AgentNodeData[] = agentIds.map(id => ({
+  const graphAgents: AgentNodeData[] = agentIds.map((id) => ({
     id,
     name: id[0]!.toUpperCase() + id.slice(1),
     role: id === 'chief' ? 'Orchestrator' : id === 'argus' ? 'QA & Risk Gate' : id,
@@ -172,216 +210,306 @@ export default function CommandCenterPage() {
   }));
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Command Center</h1>
-          <p className="text-xs text-gray-400">Live overview derived from the authenticated ATLAS API.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
+    <Box sx={{ maxWidth: 1280, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Zap size={24} color="#ff4f00" />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
+              Command Center
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500, mt: 0.5, display: 'block' }}>
+            Live fleet automation and workflow triggers derived from ATLAS AI Engine.
+          </Typography>
+        </Box>
+        <Stack direction="row" spacing={1.5}>
+          <IconButton
             onClick={() => void loadOverview()}
-            className="p-2 rounded-lg text-gray-400 hover:bg-gray-800"
+            sx={{
+              color: '#666155',
+              bgcolor: '#ffffff',
+              borderRadius: '10px',
+              border: '1px solid rgba(32, 21, 21, 0.1)',
+              '&:hover': { bgcolor: '#f5efe6', color: '#201515' }
+            }}
             aria-label="Refresh command center"
           >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <Link
+            <RefreshCw size={16} />
+          </IconButton>
+          <Button
+            component={Link}
             href="/tasks"
-            className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all flex items-center gap-1.5"
+            variant="contained"
+            color="primary"
+            endIcon={<ArrowUpRight size={16} />}
+            sx={{ px: 2.5 }}
           >
-            <span>New Goal</span>
-            <ArrowUpRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-      </div>
+            Create Zap Goal
+          </Button>
+        </Stack>
+      </Box>
 
       {error && (
-        <div role="alert" className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">
+        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
           {error}
-        </div>
+        </Alert>
       )}
-      <section className="p-5 bg-[#111827] rounded-xl border border-gray-800" aria-label="System control">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <p className="text-[11px] font-mono text-gray-400">SYSTEM CONTROL</p>
-            <div className="flex items-center gap-2 mt-1">
-              <span
-                className={`w-2 h-2 rounded-full ${controlState?.emergencyStop ? 'bg-rose-400' : controlState?.paused ? 'bg-amber-400' : controlState ? 'bg-emerald-400' : 'bg-gray-500'}`}
-                aria-hidden="true"
-              />
-              <h2 className="text-sm font-semibold text-white">
-                {controlState?.emergencyStop
-                  ? 'Emergency stop active'
-                  : controlState?.paused
-                    ? 'Intake paused'
+
+      {/* Zapier Fleet Control Bar */}
+      <Card sx={{ p: 3, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)' }}>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+          <Box>
+            <Typography variant="caption" sx={{ color: '#d64200', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.06em' }}>
+              DURABLE WORKFLOW DISPATCH
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: 0.5 }}>
+              <Box
+                sx={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  bgcolor: controlState?.emergencyStop
+                    ? '#dc2626'
+                    : controlState?.paused
+                    ? '#ff4f00'
                     : controlState
-                      ? 'System active'
-                      : 'State unavailable'}
-              </h2>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              {controlState ? 'Durable state shared with Telegram and worker dispatch.' : controlError || 'Loading durable control state…'}
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+                    ? '#16a34a'
+                    : '#a8a29e'
+                }}
+              />
+              <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515' }}>
+                {controlState?.emergencyStop
+                  ? 'Emergency Stop Active'
+                  : controlState?.paused
+                  ? 'Workflow Intake Paused'
+                  : controlState
+                  ? 'Workflow Engine Live & Active'
+                  : 'State Unavailable'}
+              </Typography>
+            </Box>
+            <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500 }}>
+              {controlState ? 'Shared state synchronized with Telegram bot & distributed worker fleet.' : controlError || 'Loading state…'}
+            </Typography>
+          </Box>
+
+          <Stack direction="row" spacing={1.5} sx={{ flexWrap: 'wrap' }}>
             {controlState &&
               !controlState.emergencyStop &&
               (controlState.paused ? (
-                <button
+                <Button
+                  variant="contained"
+                  color="primary"
                   disabled={controlBusy}
+                  startIcon={<Play size={16} />}
                   onClick={() => void invokeControl('resume')}
-                  className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"
                 >
-                  <Play className="w-3.5 h-3.5" />
-                  Resume intake
-                </button>
+                  Resume Workflows
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="outlined"
+                  color="inherit"
                   disabled={controlBusy}
+                  startIcon={<Pause size={16} />}
                   onClick={() => void invokeControl('pause')}
-                  className="px-3 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"
                 >
-                  <Pause className="w-3.5 h-3.5" />
-                  Pause intake
-                </button>
+                  Pause Workflows
+                </Button>
               ))}
             {controlState && !controlState.emergencyStop && (
-              <button
+              <Button
+                variant="contained"
+                color="error"
                 disabled={controlBusy}
+                startIcon={<OctagonAlert size={16} />}
                 onClick={() => void invokeControl('emergency-stop')}
-                className="px-3 py-2 rounded-lg bg-rose-700 hover:bg-rose-600 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"
               >
-                <OctagonAlert className="w-3.5 h-3.5" />
-                Emergency stop
-              </button>
+                Emergency Stop
+              </Button>
             )}
             {controlState?.emergencyStop && (
-              <button
+              <Button
+                variant="contained"
+                color="primary"
                 disabled={controlBusy}
+                startIcon={<Play size={16} />}
                 onClick={() => void invokeControl('resume')}
-                className="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-medium flex items-center gap-1.5"
               >
-                <Play className="w-3.5 h-3.5" />
-                Resume system
-              </button>
+                Resume System
+              </Button>
             )}
-          </div>
-        </div>
+          </Stack>
+        </Box>
         {controlError && (
-          <p role="alert" className="mt-3 text-xs text-rose-300">
+          <Typography variant="caption" sx={{ color: '#dc2626', display: 'block', mt: 1.5 }}>
             {controlError}
-          </p>
+          </Typography>
         )}
-      </section>
+      </Card>
+
       {loading ? (
-        <div className="p-12 text-center text-xs text-gray-400" role="status" aria-busy="true">
-          Loading live control-plane metrics…
-        </div>
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 8, gap: 2 }}>
+          <CircularProgress color="primary" size={32} />
+          <Typography variant="caption" sx={{ color: '#666155' }}>
+            Loading live fleet telemetry…
+          </Typography>
+        </Box>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-            <Metric label="ACTIVE TASKS" value={String(activeCount)} icon={<Clock className="w-5 h-5" />} tone="indigo" />
-            <Metric label="TASKS COMPLETED" value={String(completedCount)} icon={<CheckCircle2 className="w-5 h-5" />} tone="emerald" />
-            <Metric label="PENDING APPROVALS" value={String(pendingApprovals)} icon={<AlertCircle className="w-5 h-5" />} tone="amber" />
-            <Metric
+          {/* Top Zapier Metrics Grid */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(5, 1fr)' },
+              gap: 2.25
+            }}
+          >
+            <VanillaMetricCard label="ACTIVE TASKS" value={String(activeCount)} icon={<Clock size={18} />} accent={activeCount > 0} />
+            <VanillaMetricCard label="COMPLETED" value={String(completedCount)} icon={<CheckCircle2 size={18} />} />
+            <VanillaMetricCard label="APPROVALS PENDING" value={String(pendingApprovals)} icon={<AlertCircle size={18} />} accent={pendingApprovals > 0} />
+            <VanillaMetricCard
               label="COST TODAY"
-              value={costToday == null ? 'N/A' : `$${costToday.toFixed(2)}`}
-              icon={<DollarSign className="w-5 h-5" />}
-              tone="cyan"
+              value={costToday == null ? '$0.00' : `$${costToday.toFixed(2)}`}
+              icon={<DollarSign size={18} />}
             />
-            <Metric
-              label="DAILY BUDGET USED"
-              value={budget ? `$${budget.usedUsd.toFixed(2)} / $${budget.limitUsd.toFixed(2)}` : 'N/A'}
-              icon={<DollarSign className="w-5 h-5" />}
-              tone="cyan"
+            <VanillaMetricCard
+              label="DAILY BUDGET"
+              value={budget ? `$${budget.usedUsd.toFixed(2)} / $${budget.limitUsd.toFixed(2)}` : '$0 / $10'}
+              icon={<DollarSign size={18} />}
             />
-          </div>
+          </Box>
 
+          {/* Multi-Agent Topology Graph */}
           <AgentGraph agents={graphAgents} />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4" aria-label="Worker lease recovery telemetry">
-            <Metric
+          {/* Recovery Telemetry Grid */}
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' },
+              gap: 2.25
+            }}
+          >
+            <VanillaMetricCard
               label="ACTIVE LEASES"
-              value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.activeLeaseCount)}
-              icon={<Clock className="w-5 h-5" />}
-              tone="indigo"
+              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.activeLeaseCount)}
+              icon={<Clock size={16} />}
             />
-            <Metric
+            <VanillaMetricCard
               label="EXPIRED LEASES"
-              value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.expiredLeaseCount)}
-              icon={<AlertCircle className="w-5 h-5" />}
-              tone="amber"
+              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.expiredLeaseCount)}
+              icon={<AlertCircle size={16} />}
             />
-            <Metric
+            <VanillaMetricCard
               label="UNLEASED RUNS"
-              value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.unleasedExecutableRunCount)}
-              icon={<Clock className="w-5 h-5" />}
-              tone="cyan"
+              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.unleasedExecutableRunCount)}
+              icon={<Clock size={16} />}
             />
-            <Metric
+            <VanillaMetricCard
               label="CANCEL REQUESTS"
-              value={recoveryMetrics == null ? 'N/A' : String(recoveryMetrics.cancellationRequestedCount)}
-              icon={<RefreshCw className="w-5 h-5" />}
-              tone="emerald"
+              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.cancellationRequestedCount)}
+              icon={<RefreshCw size={16} />}
             />
-          </div>
+          </Box>
 
-          <div className="p-6 bg-[#111827] rounded-xl border border-gray-800">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-white">Recent Execution Pipeline</h2>
-              <Link href="/tasks" className="text-xs text-indigo-400 hover:text-indigo-300">
-                View All Tasks →
-              </Link>
-            </div>
+          {/* Recent Pipelines Card */}
+          <Card sx={{ p: 3.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
+                Recent Automated Executions
+              </Typography>
+              <Button component={Link} href="/tasks" size="small" sx={{ color: '#ff4f00', fontSize: '0.75rem', fontWeight: 600 }}>
+                View All Workflows →
+              </Button>
+            </Box>
             {tasks.length === 0 ? (
-              <div className="py-8 text-center text-xs text-gray-400">No tasks have been submitted yet.</div>
+              <Typography variant="caption" sx={{ color: '#8c827a', display: 'block', py: 4, textAlign: 'center', fontWeight: 500 }}>
+                No automated tasks have been triggered yet.
+              </Typography>
             ) : (
-              <div className="divide-y divide-gray-800 text-xs">
-                {tasks.slice(0, 5).map(task => (
-                  <div key={task.id} className="py-3 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <p className="font-medium text-white truncate">{task.title}</p>
-                      <p className="text-[10px] text-gray-400 font-mono">Assigned to: {task.assignedAgent}</p>
-                    </div>
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-gray-500/10 text-gray-300 border border-gray-500/20 shrink-0">
-                      {task.status.toUpperCase()}
-                    </span>
-                  </div>
+              <Stack divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.05)' }} />} spacing={1}>
+                {tasks.slice(0, 5).map((task) => (
+                  <Box key={task.id} sx={{ py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {task.title}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 600 }}>
+                        Trigger Agent: {task.assignedAgent}
+                      </Typography>
+                    </Box>
+                    <Chip
+                      label={task.status.toUpperCase()}
+                      size="small"
+                      sx={{
+                        fontSize: '0.65rem',
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        bgcolor: task.status === 'completed' ? '#ff4f00' : '#f5efe6',
+                        color: task.status === 'completed' ? '#ffffff' : '#201515'
+                      }}
+                    />
+                  </Box>
                 ))}
-              </div>
+              </Stack>
             )}
-          </div>
+          </Card>
         </>
       )}
-    </div>
+    </Box>
   );
 }
 
-function Metric({
+function VanillaMetricCard({
   label,
   value,
   icon,
-  tone
+  accent = false
 }: {
   label: string;
   value: string;
   icon: React.ReactNode;
-  tone: 'indigo' | 'emerald' | 'amber' | 'cyan';
+  accent?: boolean;
 }) {
-  const colors = {
-    indigo: 'text-indigo-400 bg-indigo-500/10',
-    emerald: 'text-emerald-400 bg-emerald-500/10',
-    amber: 'text-amber-400 bg-amber-500/10',
-    cyan: 'text-cyan-400 bg-cyan-500/10'
-  };
   return (
-    <div className="p-4 rounded-xl bg-[#111827] border border-gray-800 flex items-center justify-between">
-      <div>
-        <p className="text-[11px] font-mono text-gray-400">{label}</p>
-        <p className="text-2xl font-bold text-white mt-1">{value}</p>
-      </div>
-      <div className={`p-2.5 rounded-lg ${colors[tone]}`}>{icon}</div>
-    </div>
+    <Card
+      sx={{
+        p: 2.5,
+        bgcolor: '#ffffff',
+        borderRadius: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        border: accent ? '1px solid rgba(255, 79, 0, 0.35)' : '1px solid rgba(32, 21, 21, 0.08)',
+        boxShadow: 'none',
+        '&:hover': {
+          borderColor: '#ff4f00'
+        }
+      }}
+    >
+      <Box>
+        <Typography variant="caption" sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+          {label}
+        </Typography>
+        <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>
+          {value}
+        </Typography>
+      </Box>
+      <Box
+        sx={{
+          p: 1.25,
+          borderRadius: '10px',
+          bgcolor: accent ? '#ff4f00' : '#f5efe6',
+          color: accent ? '#ffffff' : '#201515',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {icon}
+      </Box>
+    </Card>
   );
 }

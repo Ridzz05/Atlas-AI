@@ -20,7 +20,8 @@ REQUIRED OUTPUT STRUCTURE:
 
 RULES:
 1. Every score point must be justified with documented evidence from research.
-2. Never invent lead metrics. If an attribute is missing, assign 0 or neutral and mark as missing data.`,
+2. Never invent lead metrics. If an attribute is missing, assign 0 or neutral and mark as missing data.
+3. LANGUAGE PURITY: Produce all evaluations strictly in the target language (Indonesian or English). Absolutely NEVER allow foreign language tokens (e.g., Chinese/Mandarin characters) in output.`,
   limits: {
     maxTurns: 8,
     maxDelegationDepth: 1,

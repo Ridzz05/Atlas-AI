@@ -1,7 +1,15 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Activity, RefreshCw } from 'lucide-react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import { Activity, RefreshCw, Zap } from 'lucide-react';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface AuditRecord {
@@ -13,6 +21,7 @@ interface AuditRecord {
   runId?: string;
   details: Record<string, unknown>;
 }
+
 interface AuditResponse {
   data: AuditRecord[];
   count: number;
@@ -42,48 +51,80 @@ export default function AuditPage() {
   }, []);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Audit Trail & Cost Accounting</h1>
-          <p className="text-xs text-gray-400">Durable tool execution audit records. Cost aggregation remains tied to run records.</p>
-        </div>
-        <button onClick={() => void load()} className="p-2 rounded-lg text-gray-400 hover:bg-gray-800" aria-label="Refresh audit trail">
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </div>
+    <Box sx={{ maxWidth: 1024, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Zap size={24} color="#ff4f00" />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
+              Audit Trail & Cost Accounting
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500, mt: 0.5, display: 'block' }}>
+            Durable tool execution audit records. Cost aggregation remains tied to run records.
+          </Typography>
+        </Box>
+        <IconButton
+          onClick={() => void load()}
+          sx={{
+            color: '#666155',
+            bgcolor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid rgba(32, 21, 21, 0.1)',
+            boxShadow: '0 2px 6px rgba(32, 21, 21, 0.04)',
+            '&:hover': { bgcolor: '#f5efe6', color: '#201515' }
+          }}
+          aria-label="Refresh audit trail"
+        >
+          <RefreshCw size={16} />
+        </IconButton>
+      </Box>
+
       {error && (
-        <div role="alert" className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">
+        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
           {error}
-        </div>
+        </Alert>
       )}
-      <div className="bg-[#111827] border border-gray-800 rounded-xl overflow-hidden">
+
+      <Card sx={{ bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', overflow: 'hidden' }}>
         {loading ? (
-          <div className="p-10 text-center text-xs text-gray-400" role="status">
-            Loading audit trail…
-          </div>
+          <Box sx={{ p: 8, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+            <CircularProgress color="primary" size={32} />
+            <Typography variant="caption" sx={{ color: '#666155' }}>
+              Loading audit trail…
+            </Typography>
+          </Box>
         ) : records.length === 0 ? (
-          <div className="p-10 text-center text-xs text-gray-400">
-            <Activity className="w-8 h-8 text-gray-500 mx-auto mb-3" />
-            No audit events have been recorded yet.
-          </div>
+          <Box sx={{ p: 8, textAlign: 'center' }}>
+            <Activity size={40} color="#ff4f00" style={{ margin: '0 auto 12px' }} />
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
+              No Audit Events Recorded
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#8c827a', display: 'block', mt: 0.5 }}>
+              Security and tool invocation events will be recorded here durably.
+            </Typography>
+          </Box>
         ) : (
-          <div className="divide-y divide-gray-800">
-            {records.map(record => (
-              <div key={record.id} className="p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">{record.action}</p>
-                  <p className="text-[10px] text-gray-400 font-mono">
-                    {record.actor}
-                    {record.taskId ? ` · task ${record.taskId}` : ''}
-                  </p>
-                </div>
-                <p className="text-[10px] text-gray-500 shrink-0">{new Date(record.timestamp).toLocaleString()}</p>
-              </div>
+          <Stack divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />}>
+            {records.map((record) => (
+              <Box key={record.id} sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+                <Box sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {record.action}
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
+                    {record.actor} {record.taskId ? `· task ${record.taskId}` : ''}
+                  </Typography>
+                </Box>
+                <Typography variant="caption" sx={{ color: '#8c827a', flexShrink: 0 }}>
+                  {new Date(record.timestamp).toLocaleString()}
+                </Typography>
+              </Box>
             ))}
-          </div>
+          </Stack>
         )}
-      </div>
-    </div>
+      </Card>
+    </Box>
   );
 }

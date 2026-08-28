@@ -56,8 +56,9 @@ describe('@atlas/providers tests', () => {
       expect(fetchMock).toHaveBeenCalledWith('https://openrouter.ai/api/v1/chat/completions', expect.any(Object));
       const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
       const payload = JSON.parse(String(request.body));
-      expect(payload.model).toBe('z-ai/glm-5.2:free');
+      expect(payload.model).toBe('minimax/minimax-m3:free');
       expect((request.headers as Record<string, string>).Authorization).toBe('Bearer sk-or-v1-test-key');
+
       expect(result.costUsd).toBe(0);
     } finally {
       vi.unstubAllGlobals();

@@ -5,6 +5,27 @@ import { rootLogger } from '@atlas/observability';
 
 const MIGRATION_LOCK_KEY = 2147483646;
 
+export function getDefaultMigrationsDir(): string {
+  const currentFileDir = typeof __dirname !== 'undefined' ? __dirname : '';
+  const candidates = [
+    path.resolve(currentFileDir, '../src/migrations'),
+    path.resolve(currentFileDir, '../../src/migrations'),
+    path.resolve(currentFileDir, '../migrations'),
+    path.resolve(process.cwd(), 'packages/database/src/migrations'),
+    path.resolve(process.cwd(), '../../packages/database/src/migrations'),
+    path.resolve(process.cwd(), '../packages/database/src/migrations'),
+    path.resolve(process.cwd(), 'data/migrations')
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return path.resolve(process.cwd(), 'packages/database/src/migrations');
+}
+
 export class Migrator {
   constructor(private db: DatabaseClient) {}
 

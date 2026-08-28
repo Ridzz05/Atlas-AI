@@ -18,7 +18,7 @@ import {
   ToolCallRepository,
   ModelProviderSettingsRepository
 } from '@atlas/database';
-import { MemoryStore } from '@atlas/memory';
+import { MemoryStore, SecondBrainService } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -31,7 +31,9 @@ import { registerMetadataRoutes } from './routes/metadata.js';
 import { registerControlRoutes } from './routes/control.js';
 import { registerRubricRoutes } from './routes/rubrics.js';
 import { registerModelProviderRoutes } from './routes/model-provider.js';
+import { registerSecondBrainRoutes } from './routes/second-brain.js';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
+
 
 export interface ServerOptions {
   config: EnvConfig;
@@ -43,8 +45,10 @@ export interface ServerOptions {
   artifactRepo?: ArtifactRepository;
   auditRepo?: AuditRepository;
   memoryStore?: MemoryStore;
+  secondBrainService?: SecondBrainService;
   controlStateRepo?: TelegramStateRepository;
   messageRepo?: MessageRepository;
+
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
   rubricRepo?: LeadRubricRepository;
@@ -312,7 +316,28 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     auditRepo: options.auditRepo
   });
 
+  const secondBrainService =
+    options.secondBrainService ||
+    new SecondBrainService(
+      undefined,
+      options.provider
+        ? async ({ systemPrompt, userPrompt }) => {
+            const res = await options.provider!.run({
+              runId: crypto.randomUUID(),
+              agentId: 'chief',
+              systemPrompt,
+              messages: [{ role: 'user', content: userPrompt }]
+            });
+            return res.content;
+          }
+        : undefined
+    );
+  registerSecondBrainRoutes(app, {
+    secondBrainService
+  });
+
   app.get('/api/v1/settings', async (_req, reply) => {
+
     let persistedModelSettings = null;
     if (options.modelProviderSettingsRepo) {
       try {

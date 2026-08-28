@@ -1,7 +1,18 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ShieldCheck, Check, X, Edit2, AlertTriangle, RefreshCw } from 'lucide-react';
+import Box from '@mui/material/Box';
+import Card from '@mui/material/Card';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import IconButton from '@mui/material/IconButton';
+import Stack from '@mui/material/Stack';
+import Chip from '@mui/material/Chip';
+import Alert from '@mui/material/Alert';
+import CircularProgress from '@mui/material/CircularProgress';
+import Divider from '@mui/material/Divider';
+import Paper from '@mui/material/Paper';
+import { ShieldCheck, Check, X, Edit2, Zap, RefreshCw } from 'lucide-react';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface Approval {
@@ -22,6 +33,7 @@ interface ApprovalListResponse {
 export default function ApprovalsPage() {
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actingId, setActingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadApprovals = async () => {
@@ -42,93 +54,196 @@ export default function ApprovalsPage() {
   }, []);
 
   const handleDecision = async (id: string, status: 'approved' | 'rejected' | 'revision_requested') => {
+    setActingId(id);
     try {
-      await atlasFetch(`/approvals/${encodeURIComponent(id)}/decision`, { method: 'POST', body: JSON.stringify({ status }) });
-      setApprovals(current => current.filter(approval => approval.id !== id));
+      await atlasFetch(`/approvals/${encodeURIComponent(id)}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ status })
+      });
+      setApprovals((current) => current.filter((approval) => approval.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to record approval decision.');
+    } finally {
+      setActingId(null);
     }
   };
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-white tracking-tight">Human Approval Control Room</h1>
-          <p className="text-xs text-gray-400">Live pending decisions from the authenticated approval API.</p>
-        </div>
-        <button
+    <Box sx={{ maxWidth: 1024, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+      {/* Header */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Zap size={24} color="#ff4f00" />
+            <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
+              Human Approval Control Room
+            </Typography>
+          </Box>
+          <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500, mt: 0.5, display: 'block' }}>
+            One-time token validation and high-risk action gating (Andreas Tobing Approve-Gate Protocol).
+          </Typography>
+        </Box>
+        <IconButton
           onClick={() => void loadApprovals()}
-          className="p-2 rounded-lg text-gray-400 hover:bg-gray-800"
+          sx={{
+            color: '#666155',
+            bgcolor: '#ffffff',
+            borderRadius: '10px',
+            border: '1px solid rgba(32, 21, 21, 0.1)',
+            boxShadow: '0 2px 6px rgba(32, 21, 21, 0.04)',
+            '&:hover': { bgcolor: '#f5efe6', color: '#201515' }
+          }}
           aria-label="Refresh approvals"
         >
-          <RefreshCw className="w-4 h-4" />
-        </button>
-      </div>
-      {error && <div className="p-3 rounded-lg border border-rose-500/30 bg-rose-500/10 text-xs text-rose-300">{error}</div>}
-      {loading ? (
-        <div className="p-12 text-center text-xs text-gray-400">Loading pending approvals…</div>
-      ) : approvals.length === 0 ? (
-        <div className="p-12 text-center bg-[#111827] border border-gray-800 rounded-xl">
-          <ShieldCheck className="w-10 h-10 text-emerald-400 mx-auto mb-3" />
-          <h3 className="text-sm font-semibold text-white">No Pending Approvals</h3>
-          <p className="text-xs text-gray-400 mt-1">The API currently has no pending external actions.</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {approvals.map(req => (
-            <div key={req.id} className="p-6 bg-[#111827] border border-gray-800 rounded-xl space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-gray-800">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                    <AlertTriangle className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">{req.action}</h3>
-                    <p className="text-[10px] font-mono text-gray-400">
-                      Target: {req.target} · Agent: {req.agentId}
-                    </p>
-                  </div>
-                </div>
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono uppercase bg-rose-500/10 text-rose-400 border border-rose-500/20">
-                  {req.riskLevel} RISK
-                </span>
-              </div>
-              <div className="text-xs space-y-2">
-                <p className="text-gray-300">
-                  <strong className="text-white">Reason:</strong> {req.reason}
-                </p>
-                <pre className="bg-[#090d16] p-3 rounded-lg border border-gray-800 font-mono text-[11px] text-gray-300 overflow-x-auto">
-                  {JSON.stringify(req.payload, null, 2)}
-                </pre>
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <button
-                  onClick={() => void handleDecision(req.id, 'revision_requested')}
-                  className="px-3.5 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium flex items-center gap-1.5 border border-gray-700"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  Request Revision
-                </button>
-                <button
-                  onClick={() => void handleDecision(req.id, 'rejected')}
-                  className="px-3.5 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 text-xs font-medium flex items-center gap-1.5 border border-rose-500/30"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Reject
-                </button>
-                <button
-                  onClick={() => void handleDecision(req.id, 'approved')}
-                  className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium flex items-center gap-1.5"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Approve
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+          <RefreshCw size={16} />
+        </IconButton>
+      </Box>
+
+      {error && (
+        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+          {error}
+        </Alert>
       )}
-    </div>
+
+      {loading ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', p: 8, gap: 2 }}>
+          <CircularProgress color="primary" size={32} />
+          <Typography variant="caption" sx={{ color: '#666155' }}>
+            Loading pending approvals…
+          </Typography>
+        </Box>
+      ) : approvals.length === 0 ? (
+        <Card sx={{ p: 8, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '16px' }}>
+          <ShieldCheck size={48} color="#16a34a" style={{ margin: '0 auto 16px' }} />
+          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515' }}>
+            No Pending Approvals
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#666155', display: 'block', mt: 0.5, fontWeight: 500 }}>
+            The workflow engine has no pending external actions waiting for token confirmation.
+          </Typography>
+        </Card>
+      ) : (
+        <Stack spacing={2.5}>
+          {approvals.map((req) => {
+            const isActing = actingId === req.id;
+            return (
+              <Card
+                key={req.id}
+                sx={{
+                  p: 3.5,
+                  bgcolor: '#ffffff',
+                  borderRadius: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 2,
+                  border: '1px solid rgba(32, 21, 21, 0.1)',
+                  boxShadow: '0 4px 16px rgba(32, 21, 21, 0.05)'
+                }}
+              >
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, pb: 2, borderBottom: '1px solid rgba(32, 21, 21, 0.06)' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                    <Box
+                      sx={{
+                        p: 1.25,
+                        borderRadius: '8px',
+                        bgcolor: '#fff3eb',
+                        color: '#ff4f00',
+                        border: '1px solid rgba(255, 79, 0, 0.25)',
+                        display: 'flex'
+                      }}
+                    >
+                      <Zap size={18} />
+                    </Box>
+                    <Box>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
+                        {req.action}
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 600 }}>
+                        Target: {req.target} · Trigger Agent: {req.agentId}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <Chip
+                    label={`${req.riskLevel.toUpperCase()} RISK`}
+                    size="small"
+                    sx={{
+                      fontFamily: 'monospace',
+                      fontSize: '0.68rem',
+                      fontWeight: 700,
+                      bgcolor: req.riskLevel === 'high' ? '#fee2e2' : '#fff3eb',
+                      color: req.riskLevel === 'high' ? '#dc2626' : '#d64200',
+                      border: `1px solid ${req.riskLevel === 'high' ? 'rgba(220, 38, 38, 0.3)' : 'rgba(255, 79, 0, 0.25)'}`
+                    }}
+                  />
+                </Box>
+
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
+                  <Typography variant="body2" sx={{ color: '#201515', fontWeight: 500 }}>
+                    <strong style={{ color: '#201515', fontWeight: 700 }}>Reason:</strong> {req.reason}
+                  </Typography>
+                  <Paper
+                    sx={{
+                      p: 2.25,
+                      bgcolor: '#fbf8f2',
+                      borderRadius: '12px',
+                      overflowX: 'auto',
+                      fontFamily: 'monospace',
+                      fontSize: '0.75rem',
+                      color: '#201515',
+                      border: '1px solid rgba(32, 21, 21, 0.08)'
+                    }}
+                  >
+                    <pre style={{ margin: 0 }}>{JSON.stringify(req.payload, null, 2)}</pre>
+                  </Paper>
+                </Box>
+
+                <Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />
+
+                <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5 }}>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    disabled={isActing}
+                    startIcon={<Edit2 size={14} />}
+                    onClick={() => void handleDecision(req.id, 'revision_requested')}
+                  >
+                    Request Revision
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    size="small"
+                    disabled={isActing}
+                    startIcon={<X size={14} />}
+                    onClick={() => void handleDecision(req.id, 'rejected')}
+                    sx={{
+                      borderColor: 'rgba(220, 38, 38, 0.3)',
+                      color: '#dc2626',
+                      '&:hover': {
+                        borderColor: '#dc2626',
+                        backgroundColor: '#fee2e2'
+                      }
+                    }}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="primary"
+                    size="small"
+                    disabled={isActing}
+                    startIcon={<Check size={14} />}
+                    onClick={() => void handleDecision(req.id, 'approved')}
+                  >
+                    Approve Workflow
+                  </Button>
+                </Box>
+              </Card>
+            );
+          })}
+        </Stack>
+      )}
+    </Box>
   );
 }
