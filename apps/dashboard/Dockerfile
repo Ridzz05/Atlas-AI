@@ -7,9 +7,9 @@ FROM base AS builder
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @atlas/dashboard... build
+RUN pnpm exec turbo run build --filter=@atlas/dashboard...
 
-FROM node:22-alpine AS runner
+FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && adduser --system --uid 1001 atlas
@@ -23,4 +23,4 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps/dashboard ./apps/dashboard
 
 EXPOSE 3000
-CMD ["pnpm", "--filter", "@atlas/dashboard", "start"]
+CMD ["node", "apps/dashboard/node_modules/next/dist/bin/next", "start", "apps/dashboard", "-p", "3000"]

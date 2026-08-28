@@ -13,13 +13,14 @@ import {
   ToolCallRepository,
   BudgetRepository,
   LeadRubricRepository,
+  ModelProviderSettingsRepository,
   seedAgents,
   TaskRepository
 } from '@atlas/database';
 import { DatabaseMemoryStore } from '@atlas/memory';
 import { EventBus, PostgresEventBus } from '@atlas/events';
 import { BullMqTaskQueue, TaskQueue } from '@atlas/orchestration';
-import { createModelProvider, ModelProvider } from '@atlas/providers';
+import { createModelProvider, ModelProvider, ReloadableModelProvider } from '@atlas/providers';
 import { AgentDefinition, EnvConfig } from '@atlas/shared';
 import { createResearchProvider, DEFAULT_LEAD_RUBRIC, LeadRubricDefinitionSchema, ResearchProvider, RubricEngine } from '@atlas/tools';
 
@@ -39,6 +40,7 @@ export interface AtlasRuntime {
   toolCallRepo: ToolCallRepository;
   budgetRepo: BudgetRepository;
   rubricRepo: LeadRubricRepository;
+  modelProviderSettingsRepo: ModelProviderSettingsRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -74,14 +76,18 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
 
   const taskQueue = options.taskQueue || new BullMqTaskQueue({ redisUrl: config.REDIS_URL });
   const eventBus = options.eventBus || new PostgresEventBus(db);
+  const modelProviderSettingsRepo = new ModelProviderSettingsRepository(db, config.ENCRYPTION_KEY);
+  const fallbackProvider = createModelProvider({
+    providerType: config.MODEL_PROVIDER,
+    apiKey: config.MODEL_API_KEY,
+    baseUrl: config.MODEL_BASE_URL,
+    model: config.MODEL_NAME
+  });
   const provider =
     options.provider ||
-    createModelProvider({
-      providerType: config.MODEL_PROVIDER,
-      apiKey: config.MODEL_API_KEY,
-      baseUrl: config.MODEL_BASE_URL,
-      model: config.MODEL_NAME
-    });
+    (typeof (db as any).query === 'function'
+      ? new ReloadableModelProvider(fallbackProvider, () => modelProviderSettingsRepo.getRuntimeConfig())
+      : fallbackProvider);
   const researchProvider =
     options.researchProvider ||
     createResearchProvider({
@@ -136,6 +142,7 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
     toolCallRepo,
     budgetRepo,
     rubricRepo,
+    modelProviderSettingsRepo,
     taskQueue,
     eventBus,
     provider,

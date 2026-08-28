@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { MockModelProvider, createModelProvider } from '../src/index.js';
+import { MockModelProvider, ReloadableModelProvider, createModelProvider } from '../src/index.js';
 
 describe('@atlas/providers tests', () => {
   it('creates default mock provider correctly', () => {
@@ -30,6 +30,92 @@ describe('@atlas/providers tests', () => {
       });
 
       expect(fetchMock).toHaveBeenCalledWith('https://api.groq.com/openai/v1/chat/completions', expect.any(Object));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('uses OpenRouter defaults and the requested free model', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'openrouter response' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 2, completion_tokens: 3 }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const provider = createModelProvider({ providerType: 'openrouter', apiKey: 'sk-or-v1-test-key' });
+      const result = await provider.run({
+        runId: '123e4567-e89b-12d3-a456-426614174000',
+        agentId: 'chief',
+        messages: [{ role: 'user', content: 'Hello' }]
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith('https://openrouter.ai/api/v1/chat/completions', expect.any(Object));
+      const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+      const payload = JSON.parse(String(request.body));
+      expect(payload.model).toBe('z-ai/glm-5.2:free');
+      expect((request.headers as Record<string, string>).Authorization).toBe('Bearer sk-or-v1-test-key');
+      expect(result.costUsd).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('fails closed when a network provider has no API key', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      const provider = createModelProvider({ providerType: 'openrouter' });
+      await expect(
+        provider.run({
+          runId: '123e4567-e89b-12d3-a456-426614174000',
+          agentId: 'chief',
+          messages: [{ role: 'user', content: 'Hello' }]
+        })
+      ).rejects.toThrow('MODEL_API_KEY_MISSING');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('reloads persisted provider configuration for each model call', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: 'reloaded response' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 1, completion_tokens: 1 }
+      })
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      let apiKey = 'sk-or-v1-first-test-key';
+      const provider = new ReloadableModelProvider(new MockModelProvider(), async () => ({
+        providerType: 'openrouter',
+        model: 'z-ai/glm-5.2:free',
+        apiKey
+      }));
+      const request = {
+        runId: '123e4567-e89b-12d3-a456-426614174000',
+        agentId: 'chief',
+        messages: [{ role: 'user' as const, content: 'Hello' }]
+      };
+
+      await provider.run(request);
+      apiKey = 'sk-or-v1-second-test-key';
+      await provider.run(request);
+
+      expect((fetchMock.mock.calls[0]?.[1] as RequestInit).headers).toMatchObject({
+        Authorization: 'Bearer sk-or-v1-first-test-key'
+      });
+      expect((fetchMock.mock.calls[1]?.[1] as RequestInit).headers).toMatchObject({
+        Authorization: 'Bearer sk-or-v1-second-test-key'
+      });
     } finally {
       vi.unstubAllGlobals();
     }

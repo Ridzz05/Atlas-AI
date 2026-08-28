@@ -15,7 +15,8 @@ import {
   RunRepository,
   TelegramStateRepository,
   MessageRepository,
-  ToolCallRepository
+  ToolCallRepository,
+  ModelProviderSettingsRepository
 } from '@atlas/database';
 import { MemoryStore } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
@@ -29,6 +30,7 @@ import { registerEventRoutes } from './routes/events.js';
 import { registerMetadataRoutes } from './routes/metadata.js';
 import { registerControlRoutes } from './routes/control.js';
 import { registerRubricRoutes } from './routes/rubrics.js';
+import { registerModelProviderRoutes } from './routes/model-provider.js';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
 export interface ServerOptions {
@@ -46,6 +48,7 @@ export interface ServerOptions {
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
   rubricRepo?: LeadRubricRepository;
+  modelProviderSettingsRepo?: ModelProviderSettingsRepository;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -304,11 +307,30 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     auditRepo: options.auditRepo
   });
 
+  registerModelProviderRoutes(app, {
+    modelProviderSettingsRepo: options.modelProviderSettingsRepo,
+    auditRepo: options.auditRepo
+  });
+
   app.get('/api/v1/settings', async (_req, reply) => {
+    let persistedModelSettings = null;
+    if (options.modelProviderSettingsRepo) {
+      try {
+        persistedModelSettings = await options.modelProviderSettingsRepo.getPublic();
+      } catch {
+        return reply.status(503).send({ error: 'Model provider settings are unavailable.' });
+      }
+    }
+
+    const effectiveModelProvider = persistedModelSettings?.provider || options.config.MODEL_PROVIDER;
     return reply.status(200).send({
       data: {
         nodeEnv: options.config.NODE_ENV,
-        modelProvider: options.config.MODEL_PROVIDER,
+        modelProvider: effectiveModelProvider,
+        modelName: persistedModelSettings?.modelName || options.config.MODEL_NAME || null,
+        modelConfigured: persistedModelSettings?.hasApiKey ?? Boolean(options.config.MODEL_API_KEY),
+        modelKeyFingerprint: persistedModelSettings?.apiKeyFingerprint || null,
+        modelConfigSource: persistedModelSettings ? 'database' : 'environment',
         globalDailyBudgetUsd: options.config.GLOBAL_DAILY_BUDGET_USD,
         maxConcurrentAgentRuns: options.config.MAX_CONCURRENT_AGENT_RUNS,
         maxDelegationDepth: options.config.MAX_DELEGATION_DEPTH,
@@ -317,8 +339,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
         corsAllowedOrigins: options.config.CORS_ALLOWED_ORIGINS.split(',')
           .map(origin => origin.trim())
           .filter(Boolean),
-        source: 'environment',
-        mutable: false
+        source: persistedModelSettings ? 'database' : 'environment',
+        mutable: Boolean(options.modelProviderSettingsRepo)
       }
     });
   });

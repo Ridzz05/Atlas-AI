@@ -102,10 +102,22 @@ describe('@atlas/shared schema tests', () => {
   it('validates environment config defaults', () => {
     const env = EnvConfigSchema.parse({});
     expect(env.NODE_ENV).toBe('development');
+    expect(env.MODEL_PROVIDER).toBe('openrouter');
+    expect(env.WORKER_HEALTH_PORT).toBe(8081);
+    expect(env.TELEGRAM_HEALTH_PORT).toBe(8082);
     expect(env.MAX_DELEGATION_DEPTH).toBe(2);
     expect(env.EXTERNAL_WRITES_ENABLED).toBe(false);
     expect(env.MEMORY_MAINTENANCE_INTERVAL_SECONDS).toBe(3600);
     expect(env.MEMORY_DELETION_GRACE_DAYS).toBe(7);
+  });
+
+  it('parses separate native health ports for worker and Telegram', () => {
+    expect(
+      EnvConfigSchema.parse({
+        WORKER_HEALTH_PORT: '18081',
+        TELEGRAM_HEALTH_PORT: '18082'
+      })
+    ).toMatchObject({ WORKER_HEALTH_PORT: 18081, TELEGRAM_HEALTH_PORT: 18082 });
   });
 
   it('parses the external writes environment flag strictly and fail-closed', () => {
@@ -131,6 +143,18 @@ describe('@atlas/shared schema tests', () => {
 
     expect(env.API_AUTH_TOKEN).toBe(token);
     expect(env.CORS_ALLOWED_ORIGINS).toBe('http://localhost:3000');
+  });
+
+  it('allows production OpenRouter to receive its key through the authenticated Settings flow', () => {
+    expect(() =>
+      EnvConfigSchema.parse({
+        NODE_ENV: 'production',
+        API_AUTH_TOKEN: 'a'.repeat(32),
+        ENCRYPTION_KEY: 'b'.repeat(64),
+        MODEL_PROVIDER: 'openrouter',
+        MODEL_NAME: 'z-ai/glm-5.2:free'
+      })
+    ).not.toThrow();
   });
 
   it('rejects the development encryption key and mock provider in production', () => {

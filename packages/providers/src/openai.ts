@@ -6,24 +6,34 @@ export interface OpenAICompatibleOptions {
   defaultModel?: string;
   inputCostPerMillion?: number;
   outputCostPerMillion?: number;
+  providerId?: string;
+  providerName?: string;
+  defaultHeaders?: Record<string, string>;
+  requireApiKey?: boolean;
 }
 
 export class OpenAICompatibleProvider implements ModelProvider {
-  public readonly id = 'openai-compatible';
-  public readonly name = 'OpenAI Compatible Provider';
+  public readonly id: string;
+  public readonly name: string;
 
   private apiKey: string;
   private baseUrl: string;
   private defaultModel: string;
   private inputCostPerMillion: number;
   private outputCostPerMillion: number;
+  private providerHeaders: Record<string, string>;
+  private requireApiKey: boolean;
 
   constructor(options: OpenAICompatibleOptions = {}) {
-    this.apiKey = options.apiKey || process.env.MODEL_API_KEY || '';
+    this.id = options.providerId || 'openai-compatible';
+    this.name = options.providerName || 'OpenAI Compatible Provider';
+    this.apiKey = options.apiKey !== undefined ? options.apiKey : process.env.MODEL_API_KEY || '';
     this.baseUrl = (options.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
     this.defaultModel = options.defaultModel || 'gpt-4o-mini';
     this.inputCostPerMillion = options.inputCostPerMillion ?? 0.15;
     this.outputCostPerMillion = options.outputCostPerMillion ?? 0.6;
+    this.providerHeaders = { ...(options.defaultHeaders || {}) };
+    this.requireApiKey = options.requireApiKey ?? true;
   }
 
   public estimateCost(inputTokens: number, outputTokens: number): number {
@@ -33,6 +43,10 @@ export class OpenAICompatibleProvider implements ModelProvider {
   }
 
   public async run(request: ModelRunRequest): Promise<ModelRunResult> {
+    if (this.requireApiKey && !this.apiKey) {
+      throw new Error('MODEL_API_KEY_MISSING: configure the model API key before starting an agent run.');
+    }
+
     const messages = [];
 
     if (request.systemPrompt) {
@@ -78,7 +92,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
     }
 
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
+      ...this.providerHeaders
     };
 
     if (this.apiKey) {
@@ -94,7 +109,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`OpenAI Provider HTTP ${response.status}: ${errorText}`);
+      const safeErrorText = this.apiKey ? errorText.replaceAll(this.apiKey, '[REDACTED]') : errorText;
+      throw new Error(`${this.name} HTTP ${response.status}: ${safeErrorText}`);
     }
 
     const data = (await response.json()) as any;

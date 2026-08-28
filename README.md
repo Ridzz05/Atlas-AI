@@ -1,8 +1,10 @@
 # ATLAS AI OS
 
+> Current working checkpoint (27 August 2026): native self-hosted terminal development is supported; Docker is optional.
+
 > Multi-agent Personal AI Operating System controlled via Telegram, powered by shared memory, controlled task delegation, human approval gates, and real-time observability.
 
-> Release status (26 August 2026): local lint, typecheck, tests, production build, formatting, and high-severity dependency audit pass. Fail-closed DB/queue readiness, request-ID correlation, validated task pagination, Redis-backed rate limiting, dependency-aware worker/Telegram readiness, Compose service healthchecks, authenticated event replay, durable global/per-run budget accounting, worker lease recovery and telemetry, aggregate cost/budget metrics, read-only governance settings, verified-only agent memory search, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, safe research tool boundaries, research output evidence contracts, Tool Gateway timeout cancellation propagation, memory expiry/deprecation cleanup with audit records, fail-closed production model-provider configuration, strict external-write environment parsing, and fail-closed policy handling for all registered external/production side effects are implemented; the dashboard dependency tree is pinned to patched Next.js 15.5.24, sharp 0.35.3, and PostCSS 8.5.26. Real PostgreSQL/Redis boot, backup/restore, and restart recovery still require a Docker environment. External writes remain disabled until approved connectors and providers are verified.
+> Release status (27 August 2026): local lint, typecheck, tests, production build, formatting, and high-severity dependency audit pass. Fail-closed DB/queue readiness, request-ID correlation, validated task pagination, Redis-backed rate limiting, dependency-aware worker/Telegram readiness, authenticated event replay, durable global/per-run budget accounting, worker lease recovery and telemetry, aggregate cost/budget metrics, secure encrypted OpenRouter credential settings, verified-only agent memory search, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, safe research tool boundaries, research output evidence contracts, Tool Gateway timeout cancellation propagation, memory expiry/deprecation cleanup with audit records, fail-closed production model-provider configuration, strict external-write environment parsing, and fail-closed policy handling for all registered external/production side effects are implemented. A historical Docker Compose boot/recovery/backup smoke passed before Docker/WSL were removed from the current host; native PostgreSQL/Redis and terminal startup are now the active path. Clean-host recovery, live provider verification, alerting/retention/rollback, and external writes remain release gates.
 
 ## Architecture Highlights
 - **Single Root Entry**: Human talks to **Chief**, who plans, delegates, reviews, and synthesizes.
@@ -43,7 +45,9 @@ atlas-ai-os/
 ### Prerequisites
 - Node.js >= 20
 - pnpm >= 9
-- Docker & Docker Compose (required to run the durable DB/Redis-backed services; optional for isolated unit tests)
+- Native PostgreSQL 16 with the `pgvector` extension
+- Native Redis 7
+- Docker & Docker Compose are optional and only needed for the production-like Compose smoke test
 
 ### Setup
 ```bash
@@ -53,12 +57,36 @@ pnpm install
 # 2. Setup environment
 cp .env.example .env
 
-# 3. Start PostgreSQL and Redis (via Docker, required for the full runtime)
-docker-compose up -d
+# 3. Configure .env for the native PostgreSQL/Redis instances.
+#    Keep MODEL_PROVIDER=openrouter (the default) and enter the API key from Dashboard > Settings.
 
-# 4. Run repository verification
+# 4. Check that native PostgreSQL and Redis are reachable
+npm run dev:check
+
+# 5. Start the API, worker, and dashboard without Docker
+npm run dev
+
+# Dashboard: http://localhost:3000
+# API:       http://127.0.0.1:4000/health
+# Worker:    http://127.0.0.1:8081/ready
+# Telegram:  http://127.0.0.1:8082/ready (only when TELEGRAM_BOT_TOKEN is set)
+
+# 5. Run repository verification
 pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+`npm run dev` loads the root `.env`, performs a fail-fast TCP check for PostgreSQL and Redis, compiles the native services, watches TypeScript output, and starts the API, worker, and dashboard. Telegram starts automatically when `TELEGRAM_BOT_TOKEN` is configured; otherwise it is intentionally skipped. The command never starts Docker.
+
+For a disposable production-like recovery check, use `bash ./scripts/ci-compose-smoke.sh`. It builds the optional application images, verifies durable intake and queued-task recovery, restarts the API and worker, checks the dashboard task/SSE proxy, validates Telegram readiness, and exercises PostgreSQL backup/restore. The smoke test removes its temporary containers and volumes when it finishes.
+
+### Optional Docker Compose runtime
+
+Use Docker only when you need an isolated production-like stack or the Compose recovery smoke. The native development path remains the recommended low-resource self-hosted workflow:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+./scripts/healthcheck.sh
 ```

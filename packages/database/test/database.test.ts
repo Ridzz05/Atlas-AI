@@ -16,6 +16,7 @@ describe('@atlas/database tests', () => {
     expect(files).toContain('008_memory_maintenance.sql');
     expect(files).toContain('009_persisted_lead_rubrics.sql');
     expect(files).toContain('010_task_status_integrity.sql');
+    expect(files).toContain('011_model_provider_settings.sql');
 
     for (const file of files) {
       const content = fs.readFileSync(path.join(migrationsDir, file), 'utf-8');
@@ -56,6 +57,11 @@ describe('@atlas/database tests', () => {
         expect(content).toContain("WHERE status = 'timed_out'");
         expect(content).toContain('tasks_status_check');
         expect(content).toContain("'approval_pending'");
+      }
+      if (file === '011_model_provider_settings.sql') {
+        expect(content).toContain('model_provider_settings');
+        expect(content).toContain('encrypted_api_key');
+        expect(content).toContain('model_provider_settings_singleton');
       }
     }
   });

@@ -22,12 +22,15 @@ async function main() {
     taskQueue: runtime.taskQueue
   });
   await bot.start();
-  const healthServer = createServiceHealthServer({
-    service: 'telegram-bot',
-    isRunning: () => bot.getStatus().isRunning,
-    database: runtime.db,
-    queue: runtime.taskQueue
-  });
+  const healthServer = createServiceHealthServer(
+    {
+      service: 'telegram-bot',
+      isRunning: () => bot.getStatus().isRunning,
+      database: runtime.db,
+      queue: runtime.taskQueue
+    },
+    { port: env.TELEGRAM_HEALTH_PORT }
+  );
   await healthServer.start();
 
   const shutdown = async (signal: string) => {

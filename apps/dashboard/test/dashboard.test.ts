@@ -8,6 +8,8 @@ import { subscribeToAtlasEvents } from '../src/lib/event-stream';
 import { buildCommunicationFeed } from '../src/lib/communications';
 import { GET as proxyGet } from '../src/app/api/atlas/[...path]/route';
 
+const mutableProcessEnv = process.env as Record<string, string | undefined>;
+
 class FakeEventSource {
   private listeners = new Map<string, Set<EventListener>>();
 
@@ -106,7 +108,9 @@ describe('@atlas/dashboard Integration Tests', () => {
 
   it('proxies dashboard API paths to the versioned agent-service API', async () => {
     const previousBaseUrl = process.env.ATLAS_API_BASE_URL;
+    const previousNodeEnv = mutableProcessEnv.NODE_ENV;
     delete process.env.ATLAS_API_BASE_URL;
+    mutableProcessEnv.NODE_ENV = 'development';
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('{"ok":true}', {
         status: 200,
@@ -122,12 +126,63 @@ describe('@atlas/dashboard Integration Tests', () => {
 
       expect(response.status).toBe(200);
       expect(fetchMock).toHaveBeenCalledWith(
+        'http://127.0.0.1:4000/api/v1/control',
+        expect.objectContaining({ method: 'GET', cache: 'no-store' })
+      );
+    } finally {
+      if (previousBaseUrl === undefined) delete process.env.ATLAS_API_BASE_URL;
+      else process.env.ATLAS_API_BASE_URL = previousBaseUrl;
+      if (previousNodeEnv === undefined) delete mutableProcessEnv.NODE_ENV;
+      else mutableProcessEnv.NODE_ENV = previousNodeEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('uses the Compose agent-service hostname as the production proxy default', async () => {
+    const previousBaseUrl = process.env.ATLAS_API_BASE_URL;
+    const previousNodeEnv = mutableProcessEnv.NODE_ENV;
+    delete process.env.ATLAS_API_BASE_URL;
+    mutableProcessEnv.NODE_ENV = 'production';
+    const fetchMock = vi.fn().mockResolvedValue(new Response('{"ok":true}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    try {
+      await proxyGet(new NextRequest('http://dashboard.test/api/atlas/control'), {
+        params: Promise.resolve({ path: ['control'] })
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
         'http://agent-service:4000/api/v1/control',
         expect.objectContaining({ method: 'GET', cache: 'no-store' })
       );
     } finally {
       if (previousBaseUrl === undefined) delete process.env.ATLAS_API_BASE_URL;
       else process.env.ATLAS_API_BASE_URL = previousBaseUrl;
+      if (previousNodeEnv === undefined) delete mutableProcessEnv.NODE_ENV;
+      else mutableProcessEnv.NODE_ENV = previousNodeEnv;
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('returns a sanitized 503 when the agent-service proxy is unavailable', async () => {
+    const previousBaseUrl = process.env.ATLAS_API_BASE_URL;
+    const previousNodeEnv = mutableProcessEnv.NODE_ENV;
+    delete process.env.ATLAS_API_BASE_URL;
+    mutableProcessEnv.NODE_ENV = 'development';
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('getaddrinfo ENOTFOUND agent-service')));
+
+    try {
+      const response = await proxyGet(new NextRequest('http://dashboard.test/api/atlas/tasks'), {
+        params: Promise.resolve({ path: ['tasks'] })
+      });
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toEqual({ error: 'ATLAS API unavailable.' });
+    } finally {
+      if (previousBaseUrl === undefined) delete process.env.ATLAS_API_BASE_URL;
+      else process.env.ATLAS_API_BASE_URL = previousBaseUrl;
+      if (previousNodeEnv === undefined) delete mutableProcessEnv.NODE_ENV;
+      else mutableProcessEnv.NODE_ENV = previousNodeEnv;
       vi.unstubAllGlobals();
     }
   });
@@ -135,6 +190,15 @@ describe('@atlas/dashboard Integration Tests', () => {
   it('keeps production Compose aligned with the versioned dashboard proxy target', () => {
     const compose = readFileSync(resolve(process.cwd(), '../../docker-compose.prod.yml'), 'utf8');
     expect(compose).toContain('ATLAS_API_BASE_URL: http://agent-service:4000/api/v1');
+  });
+
+  it('passes the production API auth token to every shared-runtime service', () => {
+    const compose = readFileSync(resolve(process.cwd(), '../../docker-compose.prod.yml'), 'utf8');
+    const worker = compose.slice(compose.indexOf('\n  worker:'), compose.indexOf('\n  telegram-bot:'));
+    const telegramBot = compose.slice(compose.indexOf('\n  telegram-bot:'), compose.indexOf('\n  dashboard:'));
+
+    expect(worker).toContain('API_AUTH_TOKEN: ${API_AUTH_TOKEN:?API_AUTH_TOKEN must be set}');
+    expect(telegramBot).toContain('API_AUTH_TOKEN: ${API_AUTH_TOKEN:?API_AUTH_TOKEN must be set}');
   });
 
   it('keeps Compose smoke containers isolated without changing the production default names', () => {
@@ -147,6 +211,11 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(smoke).toContain('export ATLAS_CONTAINER_PREFIX');
     expect(smoke).toContain('assert_task_intake_persistence');
     expect(smoke).toContain('/api/v1/messages?taskId=');
+    expect(smoke).toContain('up -d telegram-bot');
+    expect(smoke).toContain('wait_for_health telegram-bot');
+    expect(smoke).toContain('assert_dashboard_proxy');
+    expect(smoke).toContain('/api/atlas/tasks?limit=1');
+    expect(smoke).toContain('/api/atlas/events/stream');
 
     const backup = readFileSync(resolve(process.cwd(), '../../scripts/backup-db.sh'), 'utf8');
     const restore = readFileSync(resolve(process.cwd(), '../../scripts/restore-db.sh'), 'utf8');
@@ -170,5 +239,12 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(dockerignore.split(/\r?\n/)).toContain('node_modules');
     expect(dockerignore.split(/\r?\n/)).toContain('.git');
     expect(dockerignore.split(/\r?\n/)).toContain('**/data');
+    expect(dockerignore.split(/\r?\n/)).toContain('**/*.tsbuildinfo');
+    expect(dockerignore.split(/\r?\n/)).toContain('**/.turbo');
+  });
+
+  it('keeps the dashboard runtime image able to execute its Next.js start command', () => {
+    const dockerfile = readFileSync(resolve(process.cwd(), 'Dockerfile'), 'utf8');
+    expect(dockerfile).toContain('CMD ["node", "apps/dashboard/node_modules/next/dist/bin/next", "start", "apps/dashboard", "-p", "3000"]');
   });
 });

@@ -27,12 +27,15 @@ async function main() {
   });
 
   await runner.start();
-  const healthServer = createServiceHealthServer({
-    service: 'worker',
-    isRunning: () => runner.getStatus().isRunning,
-    database: runtime.db,
-    queue: runtime.taskQueue
-  });
+  const healthServer = createServiceHealthServer(
+    {
+      service: 'worker',
+      isRunning: () => runner.getStatus().isRunning,
+      database: runtime.db,
+      queue: runtime.taskQueue
+    },
+    { port: config.WORKER_HEALTH_PORT }
+  );
   await healthServer.start();
 
   const shutdown = async (signal: string) => {

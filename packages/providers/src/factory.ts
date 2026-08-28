@@ -1,6 +1,7 @@
 import { ModelProvider } from './types.js';
 import { MockModelProvider } from './mock.js';
 import { OpenAICompatibleProvider } from './openai.js';
+import { OpenRouterProvider } from './openrouter.js';
 
 export interface ProviderConfig {
   providerType?: string;
@@ -10,7 +11,7 @@ export interface ProviderConfig {
 }
 
 export function createModelProvider(config: ProviderConfig = {}): ModelProvider {
-  const type = (config.providerType || process.env.MODEL_PROVIDER || 'mock').toLowerCase();
+  const type = (config.providerType || process.env.MODEL_PROVIDER || 'openrouter').toLowerCase();
 
   switch (type) {
     case 'openai':
@@ -25,6 +26,12 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
         baseUrl: config.baseUrl,
         defaultModel: config.model
       });
+    case 'openrouter':
+      return new OpenRouterProvider({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl,
+        defaultModel: config.model
+      });
     case 'groq':
       return new OpenAICompatibleProvider({
         apiKey: config.apiKey,
@@ -35,7 +42,8 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
       return new OpenAICompatibleProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl || 'http://localhost:11434/v1',
-        defaultModel: config.model
+        defaultModel: config.model,
+        requireApiKey: false
       });
     case 'deepseek':
       return new OpenAICompatibleProvider({

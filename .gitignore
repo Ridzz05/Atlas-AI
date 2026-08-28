@@ -9,6 +9,9 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .pnpm-store/
+**/*.tsbuildinfo
+
+key.txt
 
 # Next.js
 .next/
@@ -34,3 +37,4 @@ coverage/
 /data/artifacts/
 /data/postgres/
 /data/redis/
+packages/tools/data/test-artifacts-persistence/

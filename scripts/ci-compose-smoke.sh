@@ -105,6 +105,32 @@ assert_task_recovered() {
   return 1
 }
 
+assert_dashboard_proxy() {
+  local caddy_host="${ATLAS_DOMAIN}:443:127.0.0.1"
+  curl --fail --silent --show-error --insecure --max-time 10 --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/api/atlas/tasks?limit=1" >/dev/null
+
+  local stream_headers=""
+  local stream_status=0
+  stream_headers="$(mktemp)"
+  set +e
+  curl --silent --insecure --max-time 5 --dump-header "$stream_headers" --output /dev/null --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/api/atlas/events/stream"
+  stream_status=$?
+  set -e
+  if [[ "$stream_status" -ne 0 && "$stream_status" -ne 28 ]]; then
+    cat "$stream_headers"
+    rm -f "$stream_headers"
+    echo "Dashboard SSE proxy request failed with curl status: ${stream_status}" >&2
+    return 1
+  fi
+  if ! grep -qi '^content-type: text/event-stream' "$stream_headers"; then
+    cat "$stream_headers"
+    rm -f "$stream_headers"
+    echo "Dashboard SSE proxy did not return an event-stream content type." >&2
+    return 1
+  fi
+  rm -f "$stream_headers"
+}
+
 echo "==> Building application images used by the smoke test..."
 "${COMPOSE[@]}" build agent-service worker telegram-bot dashboard
 
@@ -141,12 +167,19 @@ if [[ "$agent_count" != "5" ]]; then
   exit 1
 fi
 
+echo "==> Starting Telegram bot and verifying service readiness..."
+"${COMPOSE[@]}" up -d telegram-bot
+wait_for_health telegram-bot
+assert_ready telegram-bot http://127.0.0.1:8082/ready
+
 echo "==> Starting dashboard and Caddy..."
 "${COMPOSE[@]}" up -d dashboard caddy
 wait_for_health dashboard
 wait_for_health caddy
 curl --fail --silent --show-error -H "Host: ${ATLAS_DOMAIN}" http://127.0.0.1/health >/dev/null
 curl --fail --silent --show-error -H "Host: ${ATLAS_DOMAIN}" http://127.0.0.1/ >/dev/null
+echo "==> Verifying dashboard task and SSE proxy routes..."
+assert_dashboard_proxy
 
 echo "==> Verifying PostgreSQL backup and restore..."
 CI_BACKUP_FILE="$(mktemp)"

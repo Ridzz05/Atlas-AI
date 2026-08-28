@@ -13,16 +13,22 @@
 - [x] Create shared runtime bootstrap for DB, repositories, Redis, queue, event bus, provider, tools, and policy services.
 - [x] Run migrations and seed/version the five agent definitions at startup.
 - [x] Implement BullMQ/Redis queue adapter with idempotent jobs, retries, and graceful shutdown.
-- [x] Recover persisted `queued` tasks at worker startup and on a configurable interval with paginated task/run-id idempotent enqueue; real PostgreSQL/Redis restart verification remains open.
+- [x] Recover persisted `queued` tasks at worker startup and on a configurable interval with paginated task/run-id idempotent enqueue; local PostgreSQL/Redis restart recovery passed in Compose smoke, while clean-host repetition remains open.
 - [x] Persist every plan dependency, message, tool call, artifact metadata, and audit event end-to-end for the implemented orchestration paths.
 - [x] Add PostgreSQL event outbox/pub-sub and dependency-aware readiness checks.
 
 ## Checkpoint: Durable core
 
-- [ ] Empty Compose environment boots cleanly (WSL 2.7.12 is installed; Windows/Docker restart and Linux-engine health verification are still pending).
+- [x] Historical local Compose environment booted cleanly (Docker Desktop + WSL 2.7.12; image build, migrations/seeding, service readiness, dashboard/Caddy health, and backup/restore smoke passed) before the optional tools were removed from this host. Native terminal verification is now primary; clean-host repetition remains open.
 - [x] API and worker share the runtime queue configuration.
-- [ ] Task survives API/worker restart (requires Docker/PostgreSQL/Redis drill).
+- [x] Queued task is recovered before worker startup and API/worker readiness survives service restart in the local Compose smoke; Telegram active-run recovery still needs a separate drill.
 - [x] DB readiness fails closed when the configured database is unavailable.
+
+## Checkpoint: Native self-hosted development
+
+- [x] `npm run dev` and `pnpm dev` use a native launcher that loads `.env`, preflights PostgreSQL/Redis, builds/watch-compiles TypeScript, and starts the API, worker, and dashboard without starting Docker.
+- [x] Native worker and Telegram health ports are separated (`8081` and `8082`) so terminal development has no port collision.
+- [x] Telegram is optional in native development and is skipped until `TELEGRAM_BOT_TOKEN` is configured; the durable PostgreSQL/Redis runtime remains fail-closed.
 
 ## Phase 2 — Enforce orchestration and approval policy
 
@@ -45,7 +51,7 @@
 - [x] Telegram `/new` and dashboard task creation enqueue persisted tasks through the shared runtime.
 - [x] Dashboard task/status/approval flows work after refresh against the API.
 - [x] Duplicate Telegram updates remain deduplicated across process restart through PostgreSQL claims.
-- [x] Emergency stop blocks intake and cancels active runs durably; cross-restart verification remains open.
+- [x] Emergency stop blocks intake and cancels active runs durably; Telegram active-run cross-restart behavior remains open.
 
 ## Phase 4 — Make research and memory truthful
 
@@ -62,18 +68,19 @@
 
 - [x] Add repository lint and Prettier formatting gates and run them in CI.
 - [x] Add mandatory dependency audit and signature CI gates; the latest lockfile audit reports zero high/critical findings and registry signatures are verified for 332 packages.
-- [ ] Add integration/e2e/security tests for restart, approval, emergency stop, budget, prompt injection, and backup restore.
+- [x] Add integration/e2e/security coverage for restart, approval, emergency stop, budget, prompt-injection-safe research, and backup restore through package regressions plus the Compose smoke.
 - [x] Add local provider security regressions and a provider-to-Tool-Gateway vertical test for unsafe URLs, DNS, redirects, response bounds, timeouts, evidence, and untrusted content.
 - [x] Align production environment variable names, remove insecure production Compose fallbacks, and fail closed on incomplete/unsupported model-provider configuration.
-- [x] Add production Compose healthchecks and healthy-dependency ordering; Docker boot verification remains open.
-- [x] Add dependency-aware `/ready` endpoints for worker and Telegram and route Compose healthchecks through them; Docker boot verification remains open.
+- [x] Configure OpenRouter `z-ai/glm-5.2:free` with an explicit adapter and encrypted, audited Settings flow for the API key; live provider verification remains open.
+- [x] Add production Compose healthchecks and healthy-dependency ordering; local Docker boot verification passed, with clean-host repetition remaining open.
+- [x] Add dependency-aware `/ready` endpoints for worker and Telegram and route Compose healthchecks through them; local Telegram readiness passed in Compose smoke, with real Telegram message flow remaining open.
 - [x] Make the Caddy deployment hostname environment-driven; use `localhost` only as a staging fallback.
-- [x] Persist artifact metadata and expose read-only artifact, memory, and audit APIs; backup archive validation and transactional restore safeguards are implemented, while a real PostgreSQL restore verification remains open.
+- [x] Persist artifact metadata and expose read-only artifact, memory, and audit APIs; backup archive validation and transactional restore safeguards are implemented, and local PostgreSQL backup/restore verification passed.
 - [x] Update implementation blueprint and runbook with current phase status and known limitations.
 
 ## Current execution checkpoint
 
-Current release state supersedes the historical implementation inventory below: the latest implementation checkpoint is `4a7c262`, with task-status integrity, lifecycle events, atomic API/Telegram intake message persistence, durable dashboard Tasks/Communications feeds, live SSE refresh, prefix-isolated Compose containers, durable intake coverage in the Compose smoke test, backup/restore prefix compatibility, and duplicate-safe queued-task recovery. The focused intake and queue/worker recovery slices pass 31/31 and 18/18 tests; the latest full workspace run passes 26/26 package tasks, including database 38 tests, orchestration 39, agent-service 48, Telegram 18, worker 11, and dashboard 9. The full local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15; Docker-backed recovery and live provider/connector validation remain release criteria.
+Current release state supersedes the historical implementation inventory below: the latest committed implementation checkpoint is `4a7c262`, with task-status integrity, lifecycle events, atomic API/Telegram intake message persistence, durable dashboard Tasks/Communications feeds, live SSE refresh, prefix-isolated Compose containers, durable intake coverage in the Compose smoke test, backup/restore prefix compatibility, and duplicate-safe queued-task recovery. The working tree additionally fixes Docker build metadata exclusion, image build filters, Redis rate-limit startup behavior, shared API auth propagation, the dashboard production entrypoint, the local dashboard proxy default, native terminal startup, and encrypted/audited OpenRouter settings for `z-ai/glm-5.2:free`. The focused intake and queue/worker recovery slices pass 31/31 and 18/18 tests; the latest full workspace run passes 26/26 package tasks, including database 39 tests, orchestration 39, agent-service 52, Telegram 18, worker 11, providers 10, and dashboard 13. The full local gates pass format, lint, typecheck 26/26, test 26/26, and build 15/15. Docker-backed boot/recovery/backup verification is historical; native `dev:check` currently stops because PostgreSQL and Redis are not available on this host, while clean-host and live provider/connector validation remain release criteria.
 
 Commits `0d25fb7` and `6279440` map watchdog timeout outcomes to valid task `failed` state, publish task lifecycle events, repair legacy invalid rows, and enforce the database status constraint. Commit `bac3083` persists API and Telegram task-intake messages and makes the dashboard Communications page load durable messages/tool-call metadata with authenticated SSE refresh while omitting raw tool payloads. Commit `4a7c262` makes production task and originating-message persistence atomic through one PostgreSQL transaction and prevents queue dispatch when history insertion fails. Best-effort history persistence now applies only when a shared DatabaseClient is not available, such as injected test or legacy adapters.
 

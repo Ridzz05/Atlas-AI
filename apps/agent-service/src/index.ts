@@ -21,6 +21,7 @@ async function main() {
     toolCallRepo: runtime.toolCallRepo,
     budgetRepo: runtime.budgetRepo,
     rubricRepo: runtime.rubricRepo,
+    modelProviderSettingsRepo: runtime.modelProviderSettingsRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

@@ -7,7 +7,7 @@ FROM base AS builder
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile
-RUN pnpm --filter @atlas/agent-service... build
+RUN pnpm exec turbo run build --filter=@atlas/agent-service...
 
 FROM node:22-alpine AS runner
 WORKDIR /app

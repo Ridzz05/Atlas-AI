@@ -1,0 +1,19 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared" },
+    { "path": "packages/policy" },
+    { "path": "packages/events" },
+    { "path": "packages/observability" },
+    { "path": "packages/database" },
+    { "path": "packages/providers" },
+    { "path": "packages/agents" },
+    { "path": "packages/memory" },
+    { "path": "packages/tools" },
+    { "path": "packages/orchestration" },
+    { "path": "packages/runtime" },
+    { "path": "apps/agent-service" },
+    { "path": "apps/worker" },
+    { "path": "apps/telegram-bot" }
+  ]
+}

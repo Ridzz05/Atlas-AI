@@ -12,8 +12,8 @@ node_modules
 **/.next
 dist
 **/dist
-*.tsbuildinfo
-.turbo
+**/*.tsbuildinfo
+**/.turbo
 coverage
 
 # Runtime/test data belongs in named volumes or test workspaces, not images.

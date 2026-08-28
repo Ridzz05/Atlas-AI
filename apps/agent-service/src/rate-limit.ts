@@ -77,7 +77,9 @@ export class RedisRateLimiter implements RateLimiter {
       new Redis(options.redisUrl, {
         lazyConnect: true,
         maxRetriesPerRequest: 1,
-        enableOfflineQueue: false
+        // Queue only while the initial connection is being established; a
+        // failed command still rejects after one retry and remains fail-closed.
+        enableOfflineQueue: true
       });
     this.ownsClient = !options.client;
     this.windowMs = options.windowMs;

@@ -1,18 +1,60 @@
 # ATLAS AI OS — Production Operations Runbook
 
+> Current working checkpoint (27 August 2026): native terminal development is supported with host PostgreSQL/Redis; Docker remains optional.
+
 This document provides operational instructions, deployment guidelines, disaster recovery steps, and incident playbooks for running ATLAS AI OS in production.
 
-> Release status (26 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, Telegram polling with durable update/control state, cross-process cancellation, valid task-status enforcement, task lifecycle events, atomic production API/Telegram task-intake plus originating-message persistence, Tool Gateway timeout cancellation propagation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, durable dashboard Communications feed with authenticated SSE refresh, scoped MemoryTools with verified-only search and scheduled expiry/deprecation cleanup plus canonical-memory audit records, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, authenticated and audited agent-service rubric control API, opt-in Brave research adapter with bounded safe fetch and untrusted-content evidence boundaries, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, read-only governance settings, explicit provider adapter routing, patched dashboard dependencies, repository formatting enforcement, fail-closed handling for every registered external/production side effect, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. The latest high-severity dependency audit reports zero high/critical findings and all 332 installed packages have verified registry signatures. Do not enable external writes yet: no approved outbound connector is configured, and the research provider is not live-verified. Backup/recovery drills, clean Compose boot, and live provider verification still require a Docker host or external integration environment.
+> Release status (27 August 2026): durable runtime, fail-closed DB/queue readiness, request-ID correlation, validated task pagination, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, Telegram polling with durable update/control state, cross-process cancellation, valid task-status enforcement, task lifecycle events, atomic production API/Telegram task-intake plus originating-message persistence, Tool Gateway timeout cancellation propagation, plan validation, durable approval request/decision/token/claim/finalize/resume, persisted message/tool-call history, durable dashboard Communications feed with authenticated SSE refresh, scoped MemoryTools with verified-only search and scheduled expiry/deprecation cleanup plus canonical-memory audit records, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, authenticated and audited agent-service rubric control API, opt-in Brave research adapter with bounded safe fetch and untrusted-content evidence boundaries, PostgreSQL event streaming with reconnect replay, durable global/per-run budget accounting, worker leases/heartbeats with stale-run recovery and recovery telemetry, metadata APIs, aggregate cost/budget metrics, secure OpenRouter settings with encrypted credential persistence, explicit provider adapter routing, patched dashboard dependencies, repository formatting enforcement, fail-closed handling for every registered external/production side effect, and API-backed dashboard task/approval/agent/artifact/audit/memory views plus durable dashboard pause/resume/emergency-stop controls are implemented and locally tested. The latest high-severity dependency audit reports zero high/critical findings and all 332 installed packages have verified registry signatures. Do not enable external writes yet: no approved outbound connector is configured, and the research provider is not live-verified. The historical Docker Compose boot/readiness/restart/backup-restore smoke passed before Docker/WSL removal; current development uses native PostgreSQL/Redis and the terminal launcher.
 
 ---
 
 > Dashboard realtime checkpoint (26 August 2026): commit `53f771f` adds authenticated SSE refresh to the Tasks page, matching the durable Communications feed. Both pages close the connection and remove all listeners on unmount.
 
-> Compose verification checkpoint (26 August 2026): commits `2b109c5` and `3411cf5` isolate smoke-test container names using `ATLAS_CONTAINER_PREFIX` and verify that API task intake creates a durable message record. Commit `ef7694e` makes backup/restore scripts use the same prefix while preserving the default production container name. Run the smoke test on a Docker-capable host before release.
+> Compose verification checkpoint (historical, 26 August 2026): commits `2b109c5` and `3411cf5` isolate smoke-test container names using `ATLAS_CONTAINER_PREFIX` and verify that API task intake creates a durable message record. Commit `ef7694e` makes backup/restore scripts use the same prefix while preserving the default production container name. The smoke test passed on Docker Desktop with WSL 2.7.12 before those optional tools were removed from this host; repeat it only on a separate clean production-like host if Compose deployment is chosen.
 
 > Queue recovery checkpoint (26 August 2026): commit `784394e` prevents periodic recovery from duplicating a task whose base or deferred queue job is still pending and replaces terminal BullMQ records before requeueing. The local queue/worker regression slice passes 18/18; verify cross-process behavior with the Compose smoke test.
 
 > Intake durability checkpoint (26 August 2026): commit `4a7c262` makes production API and Telegram `/new` task creation plus originating-message persistence use one PostgreSQL transaction. A history failure rolls back task creation and prevents enqueue; the focused database/API/Telegram slice passes 31/31 tests.
+
+## Current local verification — 27 August 2026
+
+The historical Docker Compose smoke passed image builds, PostgreSQL/Redis/agent-service/worker/telegram-bot readiness, durable API intake history, queued-task recovery, service restart readiness, dashboard/Caddy health, dashboard `/api/atlas/tasks` and SSE proxy routes over HTTPS, and PostgreSQL backup/restore. Docker Desktop and WSL are intentionally absent from the current host, so native PostgreSQL/Redis plus `npm run dev` are the active path. Real Telegram message/active-run recovery, live OpenRouter verification, alerting, retention, rollback, and outbound connector approval remain open.
+
+## Native self-hosted development
+
+Docker is optional for local development. Install PostgreSQL 16 with `pgvector` and Redis 7 as host services, copy `.env.example` to `.env`, and keep the native URLs pointed at `localhost`:
+
+```bash
+pnpm install
+npm run dev:check
+npm run dev
+```
+
+The launcher runs the TypeScript build/watch process and starts the API, worker, and dashboard from the terminal. It does not start Docker. Telegram is included only when `TELEGRAM_BOT_TOKEN` is non-empty. Native health endpoints are API `4000`, worker `8081`, and Telegram `8082`.
+
+If `npm run dev:check` fails, start the native PostgreSQL and Redis services or correct `DATABASE_URL`/`REDIS_URL`; the application intentionally fails closed instead of silently switching to an in-memory queue or database.
+
+### Native Windows dependency setup
+
+Run the host installation commands from an **Administrator** terminal. PostgreSQL 16 is available from the official Windows installer, while Memurai Developer provides a Redis-compatible native Windows service for development:
+
+```powershell
+winget install --id PostgreSQL.PostgreSQL.16 --exact --accept-source-agreements --accept-package-agreements
+winget install --id Memurai.MemuraiDeveloper --exact --accept-source-agreements --accept-package-agreements
+```
+
+ATLAS migrations also create the `vector` extension. The official PostgreSQL installer does not supply pgvector automatically on Windows; install the Visual Studio C++ workload, open **x64 Native Tools Command Prompt for VS** as Administrator, and build the extension against the installed PostgreSQL version:
+
+```cmd
+set "PGROOT=C:\Program Files\PostgreSQL\16"
+cd %TEMP%
+git clone --branch v0.8.6 https://github.com/pgvector/pgvector.git
+cd pgvector
+nmake /F Makefile.win
+nmake /F Makefile.win install
+```
+
+Create the local `atlas` role/database to match the development `DATABASE_URL`, then verify `CREATE EXTENSION vector;` once in that database. The pgvector project documents the Windows build prerequisites and commands in its [official installation guide](https://github.com/pgvector/pgvector#installation), PostgreSQL publishes the [official Windows installer](https://www.postgresql.org/download/windows/), and Memurai documents its [native service installation](https://docs.memurai.com/en/installation.html). Memurai Developer is suitable for development/testing; use a licensed/native production Redis-compatible service for production uptime requirements.
 
 ## 1. System Architecture & Inventory
 
@@ -20,15 +62,25 @@ This document provides operational instructions, deployment guidelines, disaster
 |:---|:---:|:---|:---|
 | `caddy` | 80, 443 | Caddy 2 Alpine | Reverse proxy, SSL/TLS automation |
 | `agent-service` | 4000 | Fastify, TypeScript | Core API, HTTP endpoints, task intake |
-| `worker` | — | Node.js, BullMQ | Background async multi-agent execution loop |
-| `telegram-bot` | — | Node.js | Telegram Mobile Control Plane |
+| `worker` | 8081 | Node.js, BullMQ | Background async multi-agent execution loop |
+| `telegram-bot` | 8082 | Node.js | Telegram Mobile Control Plane |
 | `dashboard` | 3000 | Next.js 15, Tailwind | API-backed Web Management Control Room |
 | `postgres` | 5432 | PostgreSQL 16 + pgvector | Relational state, memory, vectors, audit |
 | `redis` | 6379 | Redis 7 Alpine | Distributed task queue and pub/sub bus |
 
 ---
 
-## 2. Production Deployment (Docker Compose)
+## Native OpenRouter Configuration
+
+The default model is `z-ai/glm-5.2:free` through OpenRouter's OpenAI-compatible API. Set `MODEL_PROVIDER=openrouter`, `MODEL_BASE_URL=https://openrouter.ai/api/v1`, and `MODEL_NAME=z-ai/glm-5.2:free` in `.env` (these values are already in `.env.example`).
+
+For the native dashboard, start PostgreSQL and Redis, run `npm run dev`, open `http://localhost:3000/settings`, and paste the OpenRouter key into **OpenRouter connection**. The authenticated API encrypts the key with `ENCRYPTION_KEY`; the browser receives only configuration status and a non-reversible fingerprint. The worker reloads the persisted setting on the next model call, so no restart is required. OpenRouter documents the Bearer-key chat endpoint and notes that free models are rate-limited: [OpenRouter Quickstart](https://openrouter.ai/docs/quickstart), [GLM 5.2 model page](https://openrouter.ai/z-ai/glm-5.2:free).
+
+If the key is absent, model execution fails closed with `MODEL_API_KEY_MISSING`; no request is sent to an unauthenticated provider.
+
+## 2. Optional Docker Compose Deployment
+
+Docker/WSL are not required by ATLAS. The commands in this section are retained only for a separate host that explicitly chooses Compose; the supported local path is the native launcher above.
 
 ### 2.1 Initial Server Setup
 ```bash
@@ -189,6 +241,7 @@ The worker scans persisted tasks with status `queued` in pages before accepting 
 2. Update `ENCRYPTION_KEY` and `API_AUTH_TOKEN` in `.env`.
 3. Restart `agent-service`, `worker`, `telegram-bot`, and `dashboard`.
 4. Re-issue pending approval decisions after a key rotation.
+5. Re-enter the OpenRouter API key in Dashboard > Settings after changing `ENCRYPTION_KEY`; persisted model credentials are intentionally unreadable with the old encryption key.
 
 ### 5.2 Rotating Telegram Bot Token
 1. Generate new token via Telegram `@BotFather`.

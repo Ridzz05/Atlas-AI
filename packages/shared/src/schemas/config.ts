@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'groq', 'ollama', 'deepseek']);
+const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'openrouter', 'groq', 'ollama', 'deepseek']);
 const ResearchProviderSchema = z.enum(['none', 'brave']);
 const StrictBooleanFromEnvSchema = z.preprocess(value => {
   if (typeof value !== 'string') return value;
@@ -17,6 +17,8 @@ export const EnvConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().default(4000),
+    WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(8081),
+    TELEGRAM_HEALTH_PORT: z.coerce.number().int().positive().default(8082),
     APP_BASE_URL: z.string().url().default('http://localhost:3000'),
     API_AUTH_TOKEN: z.string().min(32).optional(),
     API_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
@@ -27,7 +29,7 @@ export const EnvConfigSchema = z
     TELEGRAM_BOT_TOKEN: z.string().optional(),
     TELEGRAM_ALLOWED_USER_IDS: z.string().optional(),
     TELEGRAM_WEBHOOK_SECRET: z.string().optional(),
-    MODEL_PROVIDER: ModelProviderSchema.default('mock'),
+    MODEL_PROVIDER: ModelProviderSchema.default('openrouter'),
     MODEL_API_KEY: z.string().optional(),
     MODEL_BASE_URL: z.preprocess(value => (value === '' ? undefined : value), z.string().url().optional()),
     MODEL_NAME: z.preprocess(value => (value === '' ? undefined : value), z.string().trim().min(1).max(128).optional()),
@@ -93,7 +95,12 @@ export const EnvConfigSchema = z
         message: 'MODEL_BASE_URL is required for Ollama in production.'
       });
     }
-    if (config.NODE_ENV === 'production' && config.MODEL_PROVIDER !== 'ollama' && !config.MODEL_API_KEY) {
+    if (
+      config.NODE_ENV === 'production' &&
+      config.MODEL_PROVIDER !== 'ollama' &&
+      config.MODEL_PROVIDER !== 'openrouter' &&
+      !config.MODEL_API_KEY
+    ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['MODEL_API_KEY'],

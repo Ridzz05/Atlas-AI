@@ -1,5 +1,7 @@
 # ATLAS AI OS — Implementation Blueprint
 
+> Current working checkpoint (27 August 2026): native self-hosted terminal development is now the default local path; Docker is optional.
+
 > Blueprint teknis untuk membangun sistem orkestrasi multi-agent yang dikendalikan melalui Telegram, memiliki shared memory, task delegation, human approval, dan dashboard observability real-time.
 
 | Metadata | Nilai |
@@ -8,8 +10,16 @@
 | Versi | 0.1.0 |
 | Tanggal | 26 Agustus 2026 |
 | Target awal | Single-user, self-hosted, production-aware MVP |
-| Deployment utama | Ubuntu VPS menggunakan Docker Compose |
+| Deployment utama | Self-hosted native Node.js + PostgreSQL/Redis; Docker Compose opsional untuk VPS/recovery |
 | Bahasa utama | TypeScript |
+
+## Current verification status — 27 August 2026
+
+The historical local runtime gate was verified on Docker Desktop with WSL 2.7.12 before both optional tools were removed from the current host. That Compose smoke passed application image builds, PostgreSQL/Redis/agent-service/worker/telegram-bot readiness, authenticated API behavior, durable API intake history, queued-task recovery before worker startup, agent-service/worker restart readiness, dashboard/Caddy health, dashboard `/api/atlas/tasks` and SSE proxy routes over HTTPS, and PostgreSQL gzip backup/restore into a separate database. Current development verification uses native PostgreSQL/Redis and the terminal launcher.
+
+The working tree also contains runtime fixes discovered during that verification: nested TypeScript/Turbo metadata is excluded from Docker contexts, application images build through Turbo, worker and Telegram receive the required production API token, Redis rate limiting tolerates initial connection establishment while remaining fail-closed after retry, dashboard development proxies use `127.0.0.1`, and the production dashboard image starts Next.js directly from its workspace build.
+
+This is not yet a production-ready declaration. A clean-host repeat, Telegram active-run recovery, live model/research provider verification, approved outbound connector, alerting/retention/rollback drill, and owner approval for external writes remain open. The runtime fixes are currently uncommitted in the working tree.
 
 > Follow-up reliability checkpoint (26 August 2026): commits `61bb83f`, `bfdbb09`, and `4121b3d` add paginated startup/periodic recovery for persisted `queued` tasks and CI smoke coverage. Commits `e2992df` and `1d00576` make the OpenAI-compatible provider honor `max_tokens` and preserve a `length` completion result. Commit `76837ea` classifies provider rejections caused by the watchdog as `timed_out` while preserving user/process cancellation as `cancelled`. Commits `784394e` and `4a7c262` close queued-task recovery duplication and make production task/message intake atomic. The local worker suite now passes 11 tests; Docker-backed cross-process recovery remains a release criterion.
 
@@ -17,9 +27,9 @@
 
 > Task integrity and communications checkpoint (26 August 2026): commits `0d25fb7` and `6279440` normalize watchdog timeouts to valid task `failed` state, publish task lifecycle events for API/plan execution, and add a database status constraint with migration repair. Commit `bac3083` persists API and Telegram task-intake messages and replaces the dashboard's browser-local command log with a durable messages/tool-call feed that refreshes from authenticated SSE events. Commit `53f771f` adds the same live SSE refresh behavior to the Tasks page. Commit `4a7c262` makes production API and Telegram intake persist the task and originating message through one PostgreSQL transaction and prevents queue dispatch when that transaction fails. Tool payload input/output is intentionally not rendered in the dashboard.
 
-> Compose verification checkpoint (26 August 2026): commits `2b109c5` and `3411cf5` make CI container names prefix-driven while preserving production defaults, and extend the Compose smoke test to verify API task intake is persisted in durable message history. Commit `ef7694e` aligns backup/restore defaults with the same `ATLAS_CONTAINER_PREFIX` setting. Docker execution remains pending on a Docker-capable host.
+> Compose verification checkpoint (historical, 26 August 2026): commits `2b109c5` and `3411cf5` make CI container names prefix-driven while preserving production defaults, and extend the Compose smoke test to verify API task intake is persisted in durable message history. Commit `ef7694e` aligns backup/restore defaults with the same `ATLAS_CONTAINER_PREFIX` setting. The full Compose smoke passed before Docker/WSL removal. Remote clean-host execution, real Telegram message flow, and live provider verification remain release gates if that optional deployment path is selected.
 
-> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement at search and direct lookup boundaries, verified-only agent memory search, scheduled expiry/deprecation/deletion maintenance with canonical-memory audit records, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, configured delegation depth enforcement, versioned lead rubric and per-dimension evidence validation, persisted versioned rubric storage with active-version bootstrap hydration, deterministic `lead.score`, provider-output evidence contracts, registered `web.fetch_safe`/`lead.enrich` research boundaries with safe URL, public-hostname, and untrusted-content handling, `policy.verify`, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, read-only governance settings, authenticated and audited agent-service rubric control API, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls and versioned server-side proxy routing, Tool Gateway output-schema enforcement with timeout-driven `AbortSignal` propagation, patched dashboard dependencies, durable Telegram `/cost` and `/status` telemetry, fail-closed production model-provider configuration, strict fail-closed parsing of the external-write environment flag, and fail-closed policy handling for every registered external/production side-effect action are implemented and locally tested through commit `4a7c262`; the opt-in research provider and DNS-pinned safe-fetch slice is recorded in `98ea6f6` and `a083c83`, and duplicate-safe queued-task recovery is recorded in `784394e`. The dashboard dependency tree is pinned to Next.js 15.5.24, sharp 0.35.3, and PostCSS 8.5.26; `pnpm audit --audit-level high` reports zero high/critical findings and `pnpm audit signatures` verifies 332 packages. Repository formatting is enforced by Prettier 3.9.6 and `pnpm format:check` passes in CI. Docker build contexts now exclude local secrets and generated/runtime data through `.dockerignore`. A CI Docker Compose boot/readiness/restart/backup-restore smoke job is now defined, but its first successful remote run remains pending. External writes remain disabled: an approved outbound connector, a live-verified research provider, clean-environment recovery drills, backup verification, and production operations controls remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
+> Implementation checkpoint (26 August 2026): DB/Redis runtime composition, BullMQ, transactional agent seeding, fail-closed DB/queue readiness probes, request-ID correlation, validated task filters/pagination/resource IDs, PostgreSQL event outbox, API auth/CORS/Redis-backed rate limiting, dependency-aware worker/Telegram readiness, production Compose healthchecks, PostgreSQL migration advisory locking, plan validation, fail-closed QA/approval paths, durable approval request/decision/token/claim/finalize/resume, cross-process run cancellation, Telegram polling with durable update/control state, persisted orchestration history, scoped MemoryTools with expiry enforcement at search and direct lookup boundaries, verified-only agent memory search, scheduled expiry/deprecation/deletion maintenance with canonical-memory audit records, authenticated event streaming with reconnect replay, durable global/per-run budget reservation and settlement, worker leases/heartbeats/stale-run recovery, configured delegation depth enforcement, versioned lead rubric and per-dimension evidence validation, persisted versioned rubric storage with active-version bootstrap hydration, deterministic `lead.score`, provider-output evidence contracts, registered `web.fetch_safe`/`lead.enrich` research boundaries with safe URL, public-hostname, and untrusted-content handling, `policy.verify`, metadata repositories/APIs, worker recovery telemetry, aggregate cost/budget metrics, encrypted/audited OpenRouter settings for `z-ai/glm-5.2:free`, authenticated and audited agent-service rubric control API, API-backed dashboard observability pages with durable pause/resume/emergency-stop controls and versioned server-side proxy routing, Tool Gateway output-schema enforcement with timeout-driven `AbortSignal` propagation, patched dashboard dependencies, durable Telegram `/cost` and `/status` telemetry, fail-closed production model-provider configuration, strict fail-closed parsing of the external-write environment flag, and fail-closed policy handling for every registered external/production side-effect action are implemented and locally tested through commit `4a7c262` plus the current uncommitted OpenRouter slice; the opt-in research provider and DNS-pinned safe-fetch slice is recorded in `98ea6f6` and `a083c83`, and duplicate-safe queued-task recovery is recorded in `784394e`. The dashboard dependency tree is pinned to Next.js 15.5.24, sharp 0.35.3, and PostCSS 8.5.26; `pnpm audit --audit-level high` reports zero high/critical findings and `pnpm audit signatures` verifies 332 packages. Repository formatting is enforced by Prettier 3.9.6 and `pnpm format:check` passes in CI. Docker build contexts now exclude local secrets and generated/runtime data through `.dockerignore`. External writes remain disabled: an approved outbound connector, a live-verified research provider, clean-environment recovery drills, backup verification, and production operations controls remain before release. See [`tasks/plan.md`](tasks/plan.md) and [`RUNBOOK.md`](RUNBOOK.md) for evidence and operating constraints.
 
 ---
 
@@ -197,12 +207,12 @@ flowchart TD
 | Telegram | Telegram Bot API | Command interface utama dari ponsel |
 | Agent tools | MCP-compatible tool gateway | Kontrak tool terstandar dan dapat dikembangkan |
 | Storage | Local/S3-compatible object storage | Artifact, report, CSV, gambar, dan export |
-| Deployment | Docker Compose + reverse proxy | Cocok untuk single VPS dan mudah dipulihkan |
+| Deployment | Native Node.js processes + native PostgreSQL/Redis; Docker Compose optional | Self-hosted ringan untuk development, Compose tetap tersedia untuk deployment/recovery terisolasi |
 | Observability | Structured logs + metrics + traces | Debugging multi-agent membutuhkan bukti, bukan tebakan |
 
 ### 6.2 Model provider strategy
 
-Gunakan adapter agar sistem tidak terkunci pada satu provider:
+Gunakan adapter agar sistem tidak terkunci pada satu provider. Konfigurasi default ATLAS sekarang diarahkan ke OpenRouter dengan model `z-ai/glm-5.2:free` melalui endpoint OpenAI-compatible `https://openrouter.ai/api/v1`.
 
 ```ts
 interface ModelProvider {
@@ -219,8 +229,9 @@ Provider yang tersedia melalui adapter saat ini:
 - Groq;
 - DeepSeek;
 - Ollama melalui base URL yang dikonfigurasi.
+- OpenRouter melalui `https://openrouter.ai/api/v1`, default model `z-ai/glm-5.2:free`.
 
-Claude-compatible dan provider lain masih dapat ditambahkan sebagai adapter terpisah. Untuk production, `MODEL_PROVIDER` harus eksplisit dan bukan `mock`; provider non-OpenAI memerlukan `MODEL_NAME`, provider berbasis jaringan memerlukan `MODEL_API_KEY`, dan Ollama memerlukan `MODEL_BASE_URL`.
+Claude-compatible dan provider lain masih dapat ditambahkan sebagai adapter terpisah. Untuk production, `MODEL_PROVIDER` harus eksplisit dan bukan `mock`; provider non-OpenAI memerlukan `MODEL_NAME`, provider berbasis jaringan memerlukan `MODEL_API_KEY`, dan Ollama memerlukan `MODEL_BASE_URL`. OpenRouter dapat menerima API key melalui Settings; key dienkripsi server-side dengan `ENCRYPTION_KEY` dan tidak pernah dikirim kembali ke browser.
 
 Untuk eksperimen lokal, runtime berbasis CLI dapat disediakan sebagai adapter terpisah. Untuk production, gunakan autentikasi resmi dan billing yang dapat diaudit.
 
@@ -894,7 +905,7 @@ Tidak boleh ada credential asli dalam repository.
 
 - monorepo;
 - linting, formatting, typecheck, unit test;
-- Docker Compose untuk PostgreSQL dan Redis;
+- native PostgreSQL/Redis setup dengan Docker Compose sebagai opsi;
 - migration system;
 - shared schemas;
 - health endpoints;
@@ -1259,18 +1270,21 @@ Agent baru seperti Iris, Apollo, Calliope, atau dedicated finance agent hanya di
 - [x] Arbitrary shell tidak tersedia pada MVP.
 - [x] Agent state berasal dari real events.
 - [x] Provider dibuat swappable melalui adapter.
-- [x] Deployment target adalah Docker Compose di VPS.
+- [x] Deployment self-hosted dapat berjalan sebagai proses native (`npm run dev`/`pnpm dev`) dengan PostgreSQL dan Redis host.
+- [x] Docker Compose tetap tersedia sebagai opsi deployment VPS dan smoke/recovery terisolasi.
 
 ---
 
 ## 31. Immediate Next Action
 
-Langkah berikutnya adalah menutup release gate pada lingkungan yang memiliki Docker, PostgreSQL, Redis, dan kredensial provider yang disetujui:
+Jalur development self-hosted sekarang tidak bergantung pada Docker. `npm run dev` menjalankan launcher native, melakukan preflight PostgreSQL/Redis, membangun/watch service TypeScript, dan menyalakan API, worker, serta dashboard dari terminal. Telegram otomatis diikutkan bila `TELEGRAM_BOT_TOKEN` tersedia; bila kosong, service itu dilewati. Worker menggunakan health port 8081 dan Telegram 8082 agar tidak bentrok. Docker Compose tetap opsional untuk deployment terisolasi dan recovery smoke.
+
+Langkah berikutnya adalah menutup release gate pada lingkungan yang memiliki PostgreSQL, Redis, dan kredensial provider yang disetujui; Docker bukan lagi prasyarat development:
 
 1. jalankan lint, typecheck, test, dan production build dari clean checkout;
 2. boot Compose dari database kosong dan verifikasi migration/agent seeding;
 3. uji task execution lintas restart API/worker, duplicate Telegram update, pause/emergency stop, cancellation, dan approval execute-once;
 4. buat backup PostgreSQL, lakukan restore ke database terpisah, lalu verifikasi artifact/message/tool-call history;
-5. verifikasi reconnect replay, budget reservation/settlement, worker lease recovery, dan backup restore pada host Docker.
+5. verifikasi reconnect replay, budget reservation/settlement, worker lease recovery, dan backup restore pada host self-hosted; ulangi Compose smoke bila deployment Docker dipilih.
 
 External writes tetap nonaktif sampai connector outbound, research provider dan model provider dipilih serta diuji, dan owner memberikan approval production. Untuk research, kode adapter sudah tersedia secara opt-in tetapi belum live-verified di environment ini.
