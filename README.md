@@ -1,39 +1,55 @@
 # ATLAS AI OS
 
-> Current working checkpoint (27 August 2026): native self-hosted terminal development is supported; Docker is optional.
-
-> Multi-agent Personal AI Operating System controlled via Telegram, powered by shared memory, controlled task delegation, human approval gates, and real-time observability.
-
-> Release status (27 August 2026): local lint, typecheck, tests, production build, formatting, and high-severity dependency audit pass. Fail-closed DB/queue readiness, request-ID correlation, validated task pagination, Redis-backed rate limiting, dependency-aware worker/Telegram readiness, authenticated event replay, durable global/per-run budget accounting, worker lease recovery and telemetry, aggregate cost/budget metrics, secure encrypted OpenRouter credential settings, verified-only agent memory search, deterministic lead scoring, versioned/persisted lead rubrics with active-version bootstrap, safe research tool boundaries, research output evidence contracts, Tool Gateway timeout cancellation propagation, memory expiry/deprecation cleanup with audit records, fail-closed production model-provider configuration, strict external-write environment parsing, and fail-closed policy handling for all registered external/production side effects are implemented. A historical Docker Compose boot/recovery/backup smoke passed before Docker/WSL were removed from the current host; native PostgreSQL/Redis and terminal startup are now the active path. Clean-host recovery, live provider verification, alerting/retention/rollback, and external writes remain release gates.
-
-## Architecture Highlights
-- **Single Root Entry**: Human talks to **Chief**, who plans, delegates, reviews, and synthesizes.
-- **Controlled Specialists**: Ned (Research), Layla (Lead Scoring), Hermes (Content), Argus (QA & Risk).
-- **Deterministic Tool Gateway & Policy Matrix**: Enforces least privilege, approval tokens, and strict audit trails.
-- **Shared Memory Layer**: Multi-tiered memory (working, conversation, episodic, semantic, entity, artifacts, policy).
+Multi-agent Personal AI Operating System powered by durable task orchestration, shared Second Brain knowledge vault, controlled delegation, human approval gates, and real-time observability.
 
 ---
 
-## Monorepo Structure
+## Key Highlights
+
+- **Single Root Entry Point**: You interact directly with **Chief**, who plans, decomposes goals, delegates tasks to specialists, and synthesizes final answers.
+- **Specialist Agent Fleet**:
+  - **Ned** (Research Specialist): Evidence-backed search and structured investigation.
+  - **Layla** (Lead Scoring): Deterministic ICP qualification and versioned rubric analysis.
+  - **Hermes** (Content Specialist): Document drafting, meeting agendas, and marketing copy.
+  - **Argus** (QA & Risk Gate): Quality assurance checklists, policy enforcement, and verification.
+- **Second Brain & Grounded RAG**:
+  - Dense vector embeddings and semantic search powered by `pgvector`.
+  - Automated Markdown knowledge vault ingestion and chunking.
+  - Transparent citation inspector with relevance scores and grounded excerpts.
+- **High-Performance Inference Providers**:
+  - Direct support for **Groq** (ultra-fast LPU inference: `openai/gpt-oss-120b`, `llama-3.3-70b-versatile`), **OpenRouter**, **OpenAI-compatible**, **Ollama**, and **DeepSeek**.
+  - Built-in rate limit handling (`HTTP 429`), upstream `retry-after` header parsing, and exponential backoff.
+- **Human Approval Control Room**:
+  - One-time token validation and safety gating for sensitive external side-effects.
+- **Modern Command Center Dashboard**:
+  - Built with Next.js 15 App Router, Material UI, and Tailwind CSS.
+  - Clean typography featuring **Valley Sans** and minimalist iconography with **Circum Icons** (`react-icons/ci`).
+  - Real-time SSE event stream and rich Markdown message formatting.
+- **Durable Scheduling & Cron Automation**:
+  - Built-in background job scheduler and BullMQ worker queue with lease recovery.
+
+---
+
+## Monorepo Architecture
 
 ```text
 atlas-ai-os/
 ├── apps/
-│   ├── agent-service/            # Fastify orchestration API
-│   ├── worker/                   # BullMQ agent workers
-│   ├── dashboard/                # Next.js command center
-│   └── telegram-bot/             # Telegram bot webhook/polling
+│   ├── agent-service/            # Fastify orchestration API and SSE event bus
+│   ├── worker/                   # BullMQ agent execution workers and scheduled jobs
+│   ├── dashboard/                # Next.js Command Center and Second Brain UI
+│   └── telegram-bot/             # Telegram bot interface (webhook / polling)
 ├── packages/
-│   ├── shared/                   # Shared types, Zod schemas, utilities
-│   ├── database/                 # Schema, migrations, repositories
-│   ├── events/                   # Event schemas and event bus
-│   ├── policy/                   # Permissions, approval rules, depth guard
-│   ├── observability/            # Structured logging, audit events
-│   ├── agents/                   # Agent definitions and prompts
-│   ├── orchestration/            # Planner, router, delegation, synthesis
-│   ├── memory/                   # Retrieval, ingestion, summarization
-│   ├── tools/                    # Tool registry and implementations
-│   └── providers/                # LLM provider adapters
+│   ├── shared/                   # Zod schemas, contract types, and configuration
+│   ├── database/                 # PostgreSQL migrations, repositories, and pgvector
+│   ├── events/                   # Event schemas and pub/sub event bus
+│   ├── policy/                   # Permissions, approval rules, and depth limits
+│   ├── observability/            # Structured logging, telemetry, and audit events
+│   ├── agents/                   # Agent definitions, system prompts, and personas
+│   ├── orchestration/            # Planner, router, scheduled job scheduler, and synthesis
+│   ├── memory/                   # Second Brain retrieval, RAG, and memory tools
+│   ├── tools/                    # Tool gateway, sandboxed executions, and rubrics
+│   └── providers/                # LLM provider adapters (Groq, OpenRouter, OpenAI)
 ├── docker-compose.yml
 └── pnpm-workspace.yaml
 ```
@@ -45,48 +61,68 @@ atlas-ai-os/
 ### Prerequisites
 - Node.js >= 20
 - pnpm >= 9
-- Native PostgreSQL 16 with the `pgvector` extension
-- Native Redis 7
-- Docker & Docker Compose are optional and only needed for the production-like Compose smoke test
+- PostgreSQL 16 with the `pgvector` extension
+- Redis 7
 
-### Setup
+### Installation & Setup
+
+1. **Clone and install dependencies**:
+   ```bash
+   git clone https://github.com/Ridzz05/Atlas-AI.git
+   cd Atlas-AI
+   pnpm install
+   ```
+
+2. **Configure environment**:
+   ```bash
+   cp .env.example .env
+   ```
+   Set your database credentials, Redis URL, and chosen model provider in `.env`:
+   ```env
+   DATABASE_URL=postgresql://atlas:atlas@localhost:5432/atlas
+   REDIS_URL=redis://localhost:6379
+   
+   # Model Provider (Groq / OpenRouter / OpenAI)
+   MODEL_PROVIDER=groq
+   MODEL_API_KEY=gsk_your_groq_api_key_here
+   MODEL_NAME=openai/gpt-oss-120b
+   ```
+
+3. **Check connectivity**:
+   ```bash
+   npm run dev:check
+   ```
+
+4. **Start the development suite**:
+   ```bash
+   npm run dev
+   ```
+
+   Once started, the following services are available:
+   - **Dashboard**: `http://localhost:3000`
+   - **Fastify API**: `http://127.0.0.1:4000/health`
+   - **Worker Health**: `http://127.0.0.1:8081/ready`
+   - **Telegram Bot**: Activated automatically when `TELEGRAM_BOT_TOKEN` is set.
+
+---
+
+## Verification & Testing
+
+To verify the whole monorepo:
+
 ```bash
-# 1. Install dependencies
-pnpm install
-
-# 2. Setup environment
-cp .env.example .env
-
-# 3. Configure .env for the native PostgreSQL/Redis instances.
-#    Keep MODEL_PROVIDER=openrouter (the default) and enter the API key from Dashboard > Settings.
-
-# 4. Check that native PostgreSQL and Redis are reachable
-npm run dev:check
-
-# 5. Start the API, worker, and dashboard without Docker
-npm run dev
-
-# Dashboard: http://localhost:3000
-# API:       http://127.0.0.1:4000/health
-# Worker:    http://127.0.0.1:8081/ready
-# Telegram:  http://127.0.0.1:8082/ready (only when TELEGRAM_BOT_TOKEN is set)
-
-# 5. Run repository verification
-pnpm lint
-pnpm typecheck
+# Run unit and integration tests
 pnpm test
+
+# Check TypeScript types across all workspaces
+pnpm typecheck
+
+# Build all packages and applications
 pnpm build
 ```
 
-`npm run dev` loads the root `.env`, performs a fail-fast TCP check for PostgreSQL and Redis, compiles the native services, watches TypeScript output, and starts the API, worker, and dashboard. Telegram starts automatically when `TELEGRAM_BOT_TOKEN` is configured; otherwise it is intentionally skipped. The command never starts Docker.
+---
 
-For a disposable production-like recovery check, use `bash ./scripts/ci-compose-smoke.sh`. It builds the optional application images, verifies durable intake and queued-task recovery, restarts the API and worker, checks the dashboard task/SSE proxy, validates Telegram readiness, and exercises PostgreSQL backup/restore. The smoke test removes its temporary containers and volumes when it finishes.
+## License
 
-### Optional Docker Compose runtime
-
-Use Docker only when you need an isolated production-like stack or the Compose recovery smoke. The native development path remains the recommended low-resource self-hosted workflow:
-
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-./scripts/healthcheck.sh
-```
+MIT License. Crafted for resilient personal AI workflows.
