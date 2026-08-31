@@ -5,17 +5,17 @@ let theme = createTheme({
   palette: {
     mode: 'light',
     background: {
-      default: '#fbf8f2', // Smooth Warm Vanilla Canvas
-      paper: '#ffffff'   // Pure Crisp White Cards
+      default: '#fbf8f2',
+      paper: '#ffffff'
     },
     primary: {
-      main: '#ff4f00',   // Zapier Electric Orange
-      light: '#ff6d29',
-      dark: '#d64200',
+      main: '#c2410c',
+      light: '#d64200',
+      dark: '#a83200',
       contrastText: '#ffffff'
     },
     secondary: {
-      main: '#201515',   // Deep Coffee Ink
+      main: '#201515',
       light: '#362a2a',
       dark: '#120c0c',
       contrastText: '#ffffff'
@@ -27,9 +27,9 @@ let theme = createTheme({
       contrastText: '#ffffff'
     },
     warning: {
-      main: '#ff4f00',
-      light: '#ff6d29',
-      dark: '#d64200',
+      main: '#c2410c',
+      light: '#d64200',
+      dark: '#a83200',
       contrastText: '#ffffff'
     },
     error: {
@@ -45,22 +45,14 @@ let theme = createTheme({
       contrastText: '#ffffff'
     },
     text: {
-      primary: '#201515',   // Deep Coffee Ink text
-      secondary: '#666155', // Warm Muted Body
+      primary: '#201515',
+      secondary: '#666155',
       disabled: '#a8a29e'
     },
     divider: 'rgba(32, 21, 21, 0.08)'
   },
   typography: {
-    fontFamily: [
-      'Inter',
-      'system-ui',
-      '-apple-system',
-      'BlinkMacSystemFont',
-      '"Segoe UI"',
-      'Roboto',
-      'sans-serif'
-    ].join(','),
+    fontFamily: ['"Valley Sans"', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'].join(','),
     h1: { fontWeight: 700, letterSpacing: '-0.025em', color: '#201515' },
     h2: { fontWeight: 700, letterSpacing: '-0.02em', color: '#201515' },
     h3: { fontWeight: 700, letterSpacing: '-0.015em', color: '#201515' },
@@ -115,7 +107,7 @@ let theme = createTheme({
           transform: 'none !important',
           transition: 'border-color 0.15s ease-in-out',
           '&:hover': {
-            borderColor: 'rgba(255, 79, 0, 0.35)',
+            borderColor: 'rgba(32, 21, 21, 0.18)',
             transform: 'none !important'
           }
         }
@@ -138,13 +130,16 @@ let theme = createTheme({
           }
         },
         contained: {
-          backgroundColor: '#ff4f00',
+          backgroundColor: '#c2410c',
           color: '#ffffff',
           boxShadow: 'none',
           '&:hover': {
-            backgroundColor: '#ff6d29',
+            backgroundColor: '#a83200',
             boxShadow: 'none',
             transform: 'none !important'
+          },
+          '&.Mui-focusVisible': {
+            boxShadow: '0 0 0 2px #ffffff, 0 0 0 4px #a83200'
           }
         },
         outlined: {
@@ -153,12 +148,59 @@ let theme = createTheme({
           color: '#201515',
           boxShadow: 'none',
           '&:hover': {
-            borderColor: '#ff4f00',
+            borderColor: '#c2410c',
             backgroundColor: '#fff9f5',
-            color: '#ff4f00',
+            color: '#c2410c',
             boxShadow: 'none',
             transform: 'none !important'
           }
+        }
+      }
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          '&.Mui-focusVisible': {
+            boxShadow: '0 0 0 2px #ffffff, 0 0 0 4px #a83200'
+          }
+        }
+      }
+    },
+    MuiInputLabel: {
+      styleOverrides: {
+        root: {
+          color: '#666155',
+          fontSize: '0.88rem',
+          fontWeight: 500,
+          '&.Mui-focused': {
+            color: '#c2410c'
+          }
+        }
+      }
+    },
+    MuiFormHelperText: {
+      styleOverrides: {
+        root: {
+          fontSize: '0.75rem',
+          color: '#666155',
+          marginTop: '4px'
+        }
+      }
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+          backgroundColor: '#ffffff',
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#201515'
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#c2410c'
+          }
+        },
+        notchedOutline: {
+          borderColor: 'rgba(32, 21, 21, 0.18)'
         }
       }
     },

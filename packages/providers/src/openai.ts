@@ -100,56 +100,97 @@ export class OpenAICompatibleProvider implements ModelProvider {
       headers['Authorization'] = `Bearer ${this.apiKey}`;
     }
 
-    const response = await fetch(`${this.baseUrl}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload),
-      signal: request.signal
-    });
+    const maxRetries = 3;
+    let lastError: Error | null = null;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      const safeErrorText = this.apiKey ? errorText.replaceAll(this.apiKey, '[REDACTED]') : errorText;
-      throw new Error(`${this.name} HTTP ${response.status}: ${safeErrorText}`);
-    }
-
-    const data = (await response.json()) as any;
-    const choice = data.choices?.[0];
-    const message = choice?.message;
-
-    const toolCalls: ToolCallRequest[] = [];
-    if (message?.tool_calls) {
-      for (const tc of message.tool_calls) {
-        let args = {};
-        try {
-          args = JSON.parse(tc.function.arguments);
-        } catch {
-          args = { raw: tc.function.arguments };
-        }
-        toolCalls.push({
-          id: tc.id,
-          name: tc.function.name,
-          arguments: args
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      let response: Response;
+      try {
+        response = await fetch(`${this.baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(payload),
+          signal: request.signal
         });
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        if (attempt < maxRetries && !request.signal?.aborted) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+          continue;
+        }
+        throw lastError;
       }
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        const safeErrorText = this.apiKey ? errorText.replaceAll(this.apiKey, '[REDACTED]') : errorText;
+        lastError = new Error(`${this.name} HTTP ${response.status}: ${safeErrorText}`);
+
+        if ([429, 500, 502, 503, 504].includes(response.status) && attempt < maxRetries && !request.signal?.aborted) {
+          let delayMs = attempt * 2000;
+          const retryAfterHeader = response.headers.get('retry-after');
+          if (retryAfterHeader) {
+            const parsed = parseFloat(retryAfterHeader);
+            if (!isNaN(parsed) && parsed > 0) {
+              delayMs = Math.min(Math.ceil(parsed * 1000) + 500, 45000);
+            }
+          } else {
+            const match = errorText.match(/try again in (\d+(?:\.\d+)?)s/i);
+            if (match && match[1]) {
+              const parsed = parseFloat(match[1]);
+              if (!isNaN(parsed) && parsed > 0) {
+                delayMs = Math.min(Math.ceil(parsed * 1000) + 500, 45000);
+              }
+            }
+          }
+
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          continue;
+        }
+
+        throw lastError;
+      }
+
+      const data = (await response.json()) as any;
+      const choice = data.choices?.[0];
+      const message = choice?.message;
+
+      const toolCalls: ToolCallRequest[] = [];
+      if (message?.tool_calls) {
+        for (const tc of message.tool_calls) {
+          let args = {};
+          try {
+            args = JSON.parse(tc.function.arguments);
+          } catch {
+            args = { raw: tc.function.arguments };
+          }
+          toolCalls.push({
+            id: tc.id,
+            name: tc.function.name,
+            arguments: args
+          });
+        }
+      }
+
+      const inputTokens = data.usage?.prompt_tokens ?? 0;
+      const outputTokens = data.usage?.completion_tokens ?? 0;
+      let finishReason: ModelRunResult['finishReason'] = 'stop';
+      if (choice?.finish_reason === 'tool_calls') {
+        finishReason = 'tool_calls';
+      } else if (choice?.finish_reason === 'length') {
+        finishReason = 'length';
+      }
+
+      return {
+        content: message?.content || '',
+        toolCalls,
+        inputTokens,
+        outputTokens,
+        costUsd: this.estimateCost(inputTokens, outputTokens),
+        finishReason
+      };
     }
 
-    const inputTokens = data.usage?.prompt_tokens ?? 0;
-    const outputTokens = data.usage?.completion_tokens ?? 0;
-    let finishReason: ModelRunResult['finishReason'] = 'stop';
-    if (choice?.finish_reason === 'tool_calls') {
-      finishReason = 'tool_calls';
-    } else if (choice?.finish_reason === 'length') {
-      finishReason = 'length';
-    }
-
-    return {
-      content: message?.content || '',
-      toolCalls,
-      inputTokens,
-      outputTokens,
-      costUsd: this.estimateCost(inputTokens, outputTokens),
-      finishReason
-    };
+    throw lastError || new Error(`${this.name}: Max retries exceeded`);
   }
 }

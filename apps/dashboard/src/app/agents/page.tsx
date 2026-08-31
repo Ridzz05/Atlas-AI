@@ -10,7 +10,16 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Avatar from '@mui/material/Avatar';
-import { Shield, Search, TrendingUp, Edit3, CheckCircle2, Cpu, RefreshCw, Zap } from 'lucide-react';
+import {
+  CiLock,
+  CiSearch,
+  CiBadgeDollar,
+  CiEdit,
+  CiCircleCheck,
+  CiMicrochip,
+  CiUser,
+  CiRedo
+} from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface ApiAgent {
@@ -30,17 +39,17 @@ interface AgentListResponse {
 const getAgentIcon = (id: string) => {
   switch (id) {
     case 'chief':
-      return <Shield size={18} color="#ff4f00" />;
+      return <CiLock size={20} color="#c2410c" />;
     case 'ned':
-      return <Search size={18} color="#ff4f00" />;
+      return <CiSearch size={20} color="#2563eb" />;
     case 'layla':
-      return <TrendingUp size={18} color="#ff4f00" />;
+      return <CiBadgeDollar size={20} color="#16a34a" />;
     case 'hermes':
-      return <Edit3 size={18} color="#ff4f00" />;
+      return <CiEdit size={20} color="#7c3aed" />;
     case 'argus':
-      return <CheckCircle2 size={18} color="#ff4f00" />;
+      return <CiCircleCheck size={20} color="#d97706" />;
     default:
-      return <Cpu size={18} color="#ff4f00" />;
+      return <CiMicrochip size={20} color="#c2410c" />;
   }
 };
 
@@ -72,7 +81,7 @@ export default function AgentsPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiUser size={26} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Agent Fleet Registry
             </Typography>
@@ -92,7 +101,7 @@ export default function AgentsPage() {
           }}
           aria-label="Refresh agent registry"
         >
-          <RefreshCw size={16} />
+          <CiRedo size={18} />
         </IconButton>
       </Box>
 

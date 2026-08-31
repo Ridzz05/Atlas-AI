@@ -9,7 +9,7 @@ import Stack from '@mui/material/Stack';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
-import { Activity, RefreshCw, Zap } from 'lucide-react';
+import { CiWavePulse1, CiRedo } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface AuditRecord {
@@ -56,7 +56,7 @@ export default function AuditPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiWavePulse1 size={26} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Audit Trail & Cost Accounting
             </Typography>
@@ -77,7 +77,7 @@ export default function AuditPage() {
           }}
           aria-label="Refresh audit trail"
         >
-          <RefreshCw size={16} />
+          <CiRedo size={18} />
         </IconButton>
       </Box>
 
@@ -97,7 +97,7 @@ export default function AuditPage() {
           </Box>
         ) : records.length === 0 ? (
           <Box sx={{ p: 8, textAlign: 'center' }}>
-            <Activity size={40} color="#ff4f00" style={{ margin: '0 auto 12px' }} />
+            <CiWavePulse1 size={48} color="#c2410c" style={{ margin: '0 auto 12px', display: 'block' }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
               No Audit Events Recorded
             </Typography>

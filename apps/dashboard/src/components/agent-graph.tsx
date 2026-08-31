@@ -8,7 +8,17 @@ import Chip from '@mui/material/Chip';
 import Avatar from '@mui/material/Avatar';
 import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
-import { Shield, Search, TrendingUp, Edit3, CheckCircle2, Zap } from 'lucide-react';
+import {
+  CiLock,
+  CiSearch,
+  CiBadgeDollar,
+  CiEdit,
+  CiCircleCheck,
+  CiPlay1,
+  CiClock2,
+  CiCircleAlert,
+  CiCircleMinus
+} from 'react-icons/ci';
 
 export type AgentNodeStatus = 'IDLE' | 'QUEUED' | 'WORKING' | 'ERROR';
 
@@ -38,14 +48,15 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
       case 'WORKING':
         return (
           <Chip
-            label="● RUNNING"
+            icon={<CiPlay1 size={14} style={{ color: '#ffffff' }} />}
+            label="RUNNING"
             size="small"
             sx={{
               height: 24,
               fontSize: '0.68rem',
               fontWeight: 700,
               fontFamily: 'monospace',
-              bgcolor: '#ff4f00',
+              bgcolor: '#c2410c',
               color: '#ffffff'
             }}
           />
@@ -53,7 +64,8 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
       case 'QUEUED':
         return (
           <Chip
-            label="⏳ QUEUED"
+            icon={<CiClock2 size={14} style={{ color: '#d64200' }} />}
+            label="QUEUED"
             size="small"
             sx={{
               height: 24,
@@ -62,14 +74,15 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
               fontFamily: 'monospace',
               bgcolor: '#fff3eb',
               color: '#d64200',
-              border: '1px solid rgba(255, 79, 0, 0.25)'
+              border: '1px solid rgba(194, 65, 12, 0.25)'
             }}
           />
         );
       case 'ERROR':
         return (
           <Chip
-            label="✖ ERROR"
+            icon={<CiCircleAlert size={14} style={{ color: '#dc2626' }} />}
+            label="ERROR"
             size="small"
             sx={{
               height: 24,
@@ -86,7 +99,8 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
       default:
         return (
           <Chip
-            label="○ IDLE"
+            icon={<CiCircleMinus size={14} style={{ color: '#666155' }} />}
+            label="IDLE"
             size="small"
             sx={{
               height: 24,
@@ -105,17 +119,17 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
   const getAgentIcon = (id: string) => {
     switch (id) {
       case 'chief':
-        return <Shield size={18} color="#ff4f00" />;
+        return <CiLock size={20} color="#c2410c" />;
       case 'ned':
-        return <Search size={18} color="#ff4f00" />;
+        return <CiSearch size={20} color="#2563eb" />;
       case 'layla':
-        return <TrendingUp size={18} color="#ff4f00" />;
+        return <CiBadgeDollar size={20} color="#16a34a" />;
       case 'hermes':
-        return <Edit3 size={18} color="#ff4f00" />;
+        return <CiEdit size={20} color="#7c3aed" />;
       case 'argus':
-        return <CheckCircle2 size={18} color="#ff4f00" />;
+        return <CiCircleCheck size={20} color="#d97706" />;
       default:
-        return <Zap size={18} color="#ff4f00" />;
+        return <CiPlay1 size={20} color="#c2410c" />;
     }
   };
 
@@ -135,7 +149,7 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
       {/* Header */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, pb: 2, borderBottom: '1px solid rgba(32, 21, 21, 0.06)' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
-          <Zap size={20} color="#ff4f00" />
+          <CiPlay1 size={22} color="#c2410c" />
           <Box>
             <Typography variant="subtitle2" sx={{ fontWeight: 700, letterSpacing: '0.02em', color: '#201515' }}>
               MULTI-AGENT FLEET TOPOLOGY

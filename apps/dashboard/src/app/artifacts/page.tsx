@@ -10,7 +10,7 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
-import { FileText, RefreshCw, Zap } from 'lucide-react';
+import { CiFileOn, CiRedo } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface ArtifactRecord {
@@ -57,7 +57,7 @@ export default function ArtifactsPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiFileOn size={26} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Artifacts & Deliverables
             </Typography>
@@ -78,7 +78,7 @@ export default function ArtifactsPage() {
           }}
           aria-label="Refresh artifacts"
         >
-          <RefreshCw size={16} />
+          <CiRedo size={18} />
         </IconButton>
       </Box>
 
@@ -98,7 +98,7 @@ export default function ArtifactsPage() {
           </Box>
         ) : records.length === 0 ? (
           <Box sx={{ p: 8, textAlign: 'center' }}>
-            <FileText size={40} color="#ff4f00" style={{ margin: '0 auto 12px' }} />
+            <CiFileOn size={48} color="#c2410c" style={{ margin: '0 auto 12px', display: 'block' }} />
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
               No Artifacts Recorded
             </Typography>

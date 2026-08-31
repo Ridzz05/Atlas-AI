@@ -20,22 +20,20 @@ import Tab from '@mui/material/Tab';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
 import {
-  Brain,
-  RefreshCw,
-  Search,
-  BookOpen,
-  MessageSquare,
-  Sparkles,
-  Layers,
-  FileText,
-  Trash2,
-  Send,
-  PlusCircle,
-  FolderSync,
-  Database,
-  Cpu,
-  Zap
-} from 'lucide-react';
+  CiVault,
+  CiRedo,
+  CiSearch,
+  CiRead,
+  CiChat1,
+  CiMicrochip,
+  CiBoxes,
+  CiFileOn,
+  CiTrash,
+  CiPaperplane,
+  CiCirclePlus,
+  CiDatabase,
+  CiPlay1
+} from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface SecondBrainStats {
@@ -139,6 +137,8 @@ export default function SecondBrainPage() {
   const [newNotePath, setNewNotePath] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteTags, setNewNoteTags] = useState('');
+  const [ingestPending, setIngestPending] = useState(false);
+  const [ingestError, setIngestError] = useState<string | null>(null);
   const [ingestVaultPath, setIngestVaultPath] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -148,29 +148,13 @@ export default function SecondBrainPage() {
     setLoading(true);
     setError(null);
     try {
-      const statsRes = await atlasFetch<{ data: SecondBrainStats }>('/brain/stats').catch(() => ({
-        data: {
-          totalDocuments: 0,
-          totalChunks: 0,
-          totalEmbeddings: 0,
-          embeddingProvider: 'openrouter',
-          embeddingModel: 'minimax/minimax-m3:free',
-          vectorDimension: 1536,
-          lastSyncAt: null
-        }
-      }));
+      const [statsRes, docsRes, memoryRes] = await Promise.all([
+        atlasFetch<{ data: SecondBrainStats }>('/brain/stats'),
+        atlasFetch<{ data: SecondBrainDocument[]; count: number }>('/brain/notes?limit=100'),
+        atlasFetch<{ data: RawMemoryItem[]; count: number }>('/brain/memory?limit=50')
+      ]);
       setStats(statsRes.data);
-
-      const docsRes = await atlasFetch<{ data: SecondBrainDocument[]; count: number }>('/brain/notes?limit=100').catch(() => ({
-        data: [],
-        count: 0
-      }));
       setDocuments(docsRes.data);
-
-      const memoryRes = await atlasFetch<{ data: RawMemoryItem[]; count: number }>('/brain/memory?limit=50').catch(() => ({
-        data: [],
-        count: 0
-      }));
       setRawMemoryItems(memoryRes.data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load Second Brain data.');
@@ -182,6 +166,17 @@ export default function SecondBrainPage() {
   useEffect(() => {
     void loadData();
   }, []);
+
+  const openIngestDialog = () => {
+    setIngestError(null);
+    setShowIngestModal(true);
+  };
+
+  const closeIngestDialog = () => {
+    if (ingestPending) return;
+    setIngestError(null);
+    setShowIngestModal(false);
+  };
 
   // Handle RAG Chat Submit
   const handleChatSubmit = async (e: React.FormEvent) => {
@@ -195,7 +190,7 @@ export default function SecondBrainPage() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    setChatMessages((prev) => [...prev, userMsg]);
+    setChatMessages(prev => [...prev, userMsg]);
     const query = chatInput.trim();
     setChatInput('');
     setChatPending(true);
@@ -217,7 +212,7 @@ export default function SecondBrainPage() {
           sources: ragRes.data.sources
         };
 
-        setChatMessages((prev) => [...prev, assistantMsg]);
+        setChatMessages(prev => [...prev, assistantMsg]);
       } catch (err) {
         const errorMsg: ChatMessage = {
           id: `err-${Date.now()}`,
@@ -225,7 +220,7 @@ export default function SecondBrainPage() {
           text: `Error querying Second Brain: ${err instanceof Error ? err.message : 'Knowledge retrieval failed.'}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-        setChatMessages((prev) => [...prev, errorMsg]);
+        setChatMessages(prev => [...prev, errorMsg]);
       } finally {
         setChatPending(false);
       }
@@ -235,12 +230,14 @@ export default function SecondBrainPage() {
   // Handle Ingest Single Note
   const handleIngestNote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNoteTitle.trim() || !newNoteContent.trim()) return;
+    if (!newNoteTitle.trim() || !newNoteContent.trim() || ingestPending) return;
 
+    setIngestPending(true);
+    setIngestError(null);
     try {
       const tags = newNoteTags
         .split(',')
-        .map((t) => t.trim())
+        .map(t => t.trim())
         .filter(Boolean);
 
       await atlasFetch('/brain/notes', {
@@ -253,7 +250,7 @@ export default function SecondBrainPage() {
         })
       });
 
-      setSuccessMsg(`Note "${newNoteTitle}" ingested successfully with vector embeddings!`);
+      setSuccessMsg(`Note "${newNoteTitle}" added and indexed for search.`);
       setShowIngestModal(false);
       setNewNoteTitle('');
       setNewNotePath('');
@@ -261,7 +258,9 @@ export default function SecondBrainPage() {
       setNewNoteTags('');
       void loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to ingest note.');
+      setIngestError(err instanceof Error ? err.message : 'Failed to add note.');
+    } finally {
+      setIngestPending(false);
     }
   };
 
@@ -297,16 +296,16 @@ export default function SecondBrainPage() {
     }
   };
 
-  const allTags = Array.from(new Set(documents.flatMap((d) => d.tags))).sort();
+  const allTags = Array.from(new Set(documents.flatMap(d => d.tags))).sort();
 
-  const filteredDocuments = documents.filter((doc) => {
+  const filteredDocuments = documents.filter(doc => {
     const matchesSearch =
       searchQuery === '' ||
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.filePath.toLowerCase().includes(searchQuery.toLowerCase()) ||
       doc.content.toLowerCase().includes(searchQuery.toLowerCase());
 
-    const matchesTag = !selectedTag || doc.tags.some((t) => t.toLowerCase() === selectedTag.toLowerCase());
+    const matchesTag = !selectedTag || doc.tags.some(t => t.toLowerCase() === selectedTag.toLowerCase());
 
     return matchesSearch && matchesTag;
   });
@@ -317,11 +316,16 @@ export default function SecondBrainPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Brain size={26} color="#ff4f00" />
+            <CiVault size={28} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Second Brain & Knowledge RAG
             </Typography>
-            <Chip label="GLOBAL RAG" size="small" sx={{ bgcolor: '#ff4f00', color: '#ffffff', fontWeight: 700, fontSize: '0.65rem' }} />
+            <Chip
+              label="Global knowledge"
+              size="small"
+              variant="outlined"
+              sx={{ bgcolor: '#f5efe6', color: '#201515', fontWeight: 650, fontSize: '0.75rem' }}
+            />
           </Box>
           <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500, mt: 0.5, display: 'block' }}>
             Markdown knowledge vault with dense vector search, auto-chunking, and traceable citations.
@@ -339,27 +343,39 @@ export default function SecondBrainPage() {
             }}
             aria-label="Refresh Second Brain"
           >
-            <RefreshCw size={16} />
+            <CiRedo size={18} />
           </IconButton>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<PlusCircle size={16} />}
-            onClick={() => setShowIngestModal(true)}
-            sx={{ px: 2.5 }}
-          >
+          <Button variant="contained" color="primary" startIcon={<CiCirclePlus size={18} />} onClick={openIngestDialog} sx={{ px: 2.5 }}>
             Add Note
           </Button>
         </Stack>
       </Box>
 
+      {loading && (
+        <Alert icon={<CircularProgress size={18} color="inherit" />} severity="info" role="status">
+          Loading Second Brain data...
+        </Alert>
+      )}
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          role="alert"
+          action={
+            <Button color="inherit" size="small" onClick={() => void loadData()}>
+              Retry
+            </Button>
+          }
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
       {successMsg && (
-        <Alert severity="success" sx={{ bgcolor: '#dcfce7', border: '1px solid rgba(22, 163, 74, 0.3)', color: '#14532d', borderRadius: '12px' }} onClose={() => setSuccessMsg(null)}>
+        <Alert
+          severity="success"
+          sx={{ bgcolor: '#dcfce7', border: '1px solid rgba(22, 163, 74, 0.3)', color: '#14532d', borderRadius: '12px' }}
+          onClose={() => setSuccessMsg(null)}
+        >
           {successMsg}
         </Alert>
       )}
@@ -372,10 +388,10 @@ export default function SecondBrainPage() {
           gap: 2.25
         }}
       >
-        <MetricCard label="TOTAL DOCUMENTS" value={stats ? String(stats.totalDocuments) : '0'} icon={<BookOpen size={18} />} />
-        <MetricCard label="INDEXED CHUNKS" value={stats ? String(stats.totalChunks) : '0'} icon={<Layers size={18} />} />
-        <MetricCard label="VECTOR EMBEDDINGS" value={stats ? String(stats.totalEmbeddings) : '0'} icon={<Database size={18} />} />
-        <MetricCard label="EMBEDDING MODEL" value={stats?.embeddingModel?.split('/')[1] || 'minimax-m3'} icon={<Cpu size={18} />} />
+        <MetricCard label="Documents" value={stats ? String(stats.totalDocuments) : '—'} icon={<CiRead size={22} />} />
+        <MetricCard label="Indexed chunks" value={stats ? String(stats.totalChunks) : '—'} icon={<CiBoxes size={22} />} />
+        <MetricCard label="Vector embeddings" value={stats ? String(stats.totalEmbeddings) : '—'} icon={<CiDatabase size={22} />} />
+        <MetricCard label="Embedding model" value={stats?.embeddingModel?.split('/')[1] || '—'} icon={<CiMicrochip size={22} />} />
       </Box>
 
       {/* Navigation Tabs */}
@@ -393,13 +409,19 @@ export default function SecondBrainPage() {
               fontWeight: 600,
               textTransform: 'none',
               color: '#666155',
-              '&.Mui-selected': { color: '#ff4f00' }
+              '&.Mui-selected': { color: '#c2410c' },
+              '&.Mui-focusVisible': { outline: '2px solid #a83200', outlineOffset: '-2px' }
             }
           }}
         >
-          <Tab value="chat" icon={<MessageSquare size={16} />} iconPosition="start" label="Grounded RAG Chat" />
-          <Tab value="vault" icon={<FileText size={16} />} iconPosition="start" label={`Vault Knowledge (${documents.length})`} />
-          <Tab value="raw_memory" icon={<Sparkles size={16} />} iconPosition="start" label={`Agent Memory Store (${rawMemoryItems.length})`} />
+          <Tab value="chat" icon={<CiChat1 size={18} />} iconPosition="start" label="Grounded RAG Chat" />
+          <Tab value="vault" icon={<CiFileOn size={18} />} iconPosition="start" label={`Vault Knowledge (${documents.length})`} />
+          <Tab
+            value="raw_memory"
+            icon={<CiMicrochip size={18} />}
+            iconPosition="start"
+            label={`Agent Memory Store (${rawMemoryItems.length})`}
+          />
         </Tabs>
       </Card>
 
@@ -407,22 +429,39 @@ export default function SecondBrainPage() {
       {activeTab === 'chat' && (
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 340px' }, gap: 2.5 }}>
           {/* Chat Stream */}
-          <Card sx={{ bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', display: 'flex', flexDirection: 'column', height: 600 }}>
-            <Box sx={{ p: 2.5, borderBottom: '1px solid rgba(32, 21, 21, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Card
+            sx={{
+              bgcolor: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid rgba(32, 21, 21, 0.08)',
+              display: 'flex',
+              flexDirection: 'column',
+              height: 600
+            }}
+          >
+            <Box
+              sx={{
+                p: 2.5,
+                borderBottom: '1px solid rgba(32, 21, 21, 0.06)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Zap size={18} color="#ff4f00" />
+                <CiPlay1 size={18} color="#c2410c" />
                 <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
                   Grounded Knowledge Dialogue
                 </Typography>
               </Box>
-              <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
-                Cosine Similarity Search
+              <Typography variant="caption" sx={{ color: '#71685f' }}>
+                Semantic search
               </Typography>
             </Box>
 
             {/* Message History */}
             <Box sx={{ flex: 1, overflowY: 'auto', p: 3, display: 'flex', flexDirection: 'column', gap: 2.5, bgcolor: '#fbf8f2' }}>
-              {chatMessages.map((msg) => (
+              {chatMessages.map(msg => (
                 <Box
                   key={msg.id}
                   sx={{
@@ -437,7 +476,7 @@ export default function SecondBrainPage() {
                     sx={{
                       p: 2,
                       borderRadius: '14px',
-                      bgcolor: msg.sender === 'user' ? '#ff4f00' : '#ffffff',
+                      bgcolor: msg.sender === 'user' ? '#c2410c' : '#ffffff',
                       color: msg.sender === 'user' ? '#ffffff' : '#201515',
                       border: msg.sender === 'user' ? 'none' : '1px solid rgba(32, 21, 21, 0.08)',
                       fontSize: '0.86rem',
@@ -460,7 +499,7 @@ export default function SecondBrainPage() {
                             fontSize: '0.68rem',
                             fontWeight: 600,
                             bgcolor: '#ffffff',
-                            color: '#ff4f00',
+                            color: '#c2410c',
                             border: '1px solid rgba(255, 79, 0, 0.3)',
                             cursor: 'pointer',
                             '&:hover': { bgcolor: '#fff3eb' }
@@ -480,12 +519,16 @@ export default function SecondBrainPage() {
             </Box>
 
             {/* Input Form */}
-            <Box component="form" onSubmit={handleChatSubmit} sx={{ p: 2, borderTop: '1px solid rgba(32, 21, 21, 0.06)', bgcolor: '#ffffff', display: 'flex', gap: 1.5 }}>
+            <Box
+              component="form"
+              onSubmit={handleChatSubmit}
+              sx={{ p: 2, borderTop: '1px solid rgba(32, 21, 21, 0.06)', bgcolor: '#ffffff', display: 'flex', gap: 1.5 }}
+            >
               <TextField
                 fullWidth
                 size="small"
                 value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
+                onChange={e => setChatInput(e.target.value)}
                 placeholder="Ask about architecture, loop engineering, QA gating, or your notes…"
                 disabled={chatPending}
                 sx={{
@@ -493,37 +536,69 @@ export default function SecondBrainPage() {
                     bgcolor: '#fbf8f2',
                     borderRadius: '10px',
                     '& fieldset': { borderColor: 'rgba(32, 21, 21, 0.12)' },
-                    '&:hover fieldset': { borderColor: '#ff4f00' },
-                    '&.Mui-focused fieldset': { borderColor: '#ff4f00' }
+                    '&:hover fieldset': { borderColor: '#201515' },
+                    '&.Mui-focused fieldset': { borderColor: '#c2410c' }
                   }
                 }}
               />
-              <Button type="submit" variant="contained" color="primary" disabled={chatPending || !chatInput.trim()} sx={{ px: 2.5 }}>
-                <Send size={16} />
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                aria-label="Send message"
+                disabled={chatPending || !chatInput.trim()}
+                sx={{ px: 2.5 }}
+              >
+                <CiPaperplane size={18} />
               </Button>
             </Box>
           </Card>
 
           {/* Citation / Source Side Panel */}
-          <Card sx={{ bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', p: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Card
+            sx={{
+              bgcolor: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid rgba(32, 21, 21, 0.08)',
+              p: 3,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 2
+            }}
+          >
             <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
               Citation Inspector
             </Typography>
             {activeCitation ? (
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-                <Chip label={`Relevance: ${Math.round(activeCitation.relevanceScore * 100)}%`} color="primary" size="small" sx={{ width: 'fit-content', fontWeight: 700 }} />
+                <Chip
+                  label={`Relevance: ${Math.round(activeCitation.relevanceScore * 100)}%`}
+                  color="primary"
+                  size="small"
+                  sx={{ width: 'fit-content', fontWeight: 700 }}
+                />
                 <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515' }}>
                   {activeCitation.noteTitle}
                 </Typography>
-                <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
+                <Typography variant="caption" sx={{ color: '#71685f', fontFamily: 'monospace' }}>
                   {activeCitation.filePath}
                 </Typography>
-                <Paper sx={{ p: 2, bgcolor: '#fbf8f2', borderRadius: '10px', border: '1px solid rgba(32, 21, 21, 0.08)', fontSize: '0.78rem', color: '#201515', lineHeight: 1.6 }}>
+                <Paper
+                  sx={{
+                    p: 2,
+                    bgcolor: '#fbf8f2',
+                    borderRadius: '10px',
+                    border: '1px solid rgba(32, 21, 21, 0.08)',
+                    fontSize: '0.78rem',
+                    color: '#201515',
+                    lineHeight: 1.6
+                  }}
+                >
                   {activeCitation.excerpt}
                 </Paper>
               </Box>
             ) : (
-              <Typography variant="caption" sx={{ color: '#8c827a' }}>
+              <Typography variant="caption" sx={{ color: '#71685f' }}>
                 Click on any [[Citation]] badge in the conversation to inspect grounded evidence and source excerpts.
               </Typography>
             )}
@@ -541,14 +616,14 @@ export default function SecondBrainPage() {
                 size="small"
                 fullWidth
                 value={ingestVaultPath}
-                onChange={(e) => setIngestVaultPath(e.target.value)}
+                onChange={e => setIngestVaultPath(e.target.value)}
                 placeholder="Ingest Markdown folder path (e.g., docs/ or C:\Vault)..."
                 sx={{ flex: 1, minWidth: 260 }}
               />
               <Button
                 variant="contained"
                 color="primary"
-                startIcon={<FolderSync size={16} />}
+                startIcon={<CiRedo size={18} />}
                 onClick={() => void handleSyncVault()}
                 disabled={isSyncing || !ingestVaultPath.trim()}
               >
@@ -562,11 +637,11 @@ export default function SecondBrainPage() {
             <TextField
               size="small"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={e => setSearchQuery(e.target.value)}
               placeholder="Search vault documents..."
               slotProps={{
                 input: {
-                  startAdornment: <Search size={16} style={{ marginRight: 8, color: '#8c827a' }} />
+                  startAdornment: <CiSearch size={18} style={{ marginRight: 8, color: '#71685f' }} />
                 }
               }}
               sx={{ flex: 1, minWidth: 260 }}
@@ -577,20 +652,20 @@ export default function SecondBrainPage() {
                 size="small"
                 onClick={() => setSelectedTag(null)}
                 sx={{
-                  bgcolor: selectedTag === null ? '#ff4f00' : '#ffffff',
+                  bgcolor: selectedTag === null ? '#201515' : '#ffffff',
                   color: selectedTag === null ? '#ffffff' : '#201515',
                   fontWeight: 600,
                   cursor: 'pointer'
                 }}
               />
-              {allTags.map((tag) => (
+              {allTags.map(tag => (
                 <Chip
                   key={tag}
                   label={`#${tag}`}
                   size="small"
                   onClick={() => setSelectedTag(tag === selectedTag ? null : tag)}
                   sx={{
-                    bgcolor: selectedTag === tag ? '#ff4f00' : '#ffffff',
+                    bgcolor: selectedTag === tag ? '#201515' : '#ffffff',
                     color: selectedTag === tag ? '#ffffff' : '#201515',
                     fontWeight: 600,
                     cursor: 'pointer'
@@ -602,7 +677,7 @@ export default function SecondBrainPage() {
 
           {/* Documents Grid */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2.25 }}>
-            {filteredDocuments.map((doc) => (
+            {filteredDocuments.map(doc => (
               <Card
                 key={doc.id}
                 sx={{
@@ -614,26 +689,50 @@ export default function SecondBrainPage() {
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                   gap: 2,
-                  '&:hover': { borderColor: '#ff4f00' }
+                  '&:hover': { borderColor: 'rgba(32, 21, 21, 0.22)' }
                 }}
               >
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
                     {doc.title}
                   </Typography>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace', display: 'block', mt: 0.5 }}>
+                  <Typography variant="caption" sx={{ color: '#71685f', fontFamily: 'monospace', display: 'block', mt: 0.5 }}>
                     {doc.filePath}
                   </Typography>
-                  <Typography variant="body2" sx={{ color: '#666155', fontSize: '0.78rem', mt: 1.5, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: '#666155',
+                      fontSize: '0.78rem',
+                      mt: 1.5,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden'
+                    }}
+                  >
                     {doc.content}
                   </Typography>
                 </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pt: 1, borderTop: '1px solid rgba(32, 21, 21, 0.06)' }}>
-                  <Typography variant="caption" sx={{ color: '#8c827a' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    pt: 1,
+                    borderTop: '1px solid rgba(32, 21, 21, 0.06)'
+                  }}
+                >
+                  <Typography variant="caption" sx={{ color: '#71685f' }}>
                     {doc.chunksCount} chunks
                   </Typography>
-                  <IconButton size="small" onClick={() => void handleDeleteNote(doc.id, doc.title)} sx={{ color: '#dc2626' }}>
-                    <Trash2 size={14} />
+                  <IconButton
+                    size="small"
+                    aria-label={`Delete ${doc.title}`}
+                    onClick={() => void handleDeleteNote(doc.id, doc.title)}
+                    sx={{ color: '#dc2626' }}
+                  >
+                    <CiTrash size={16} />
                   </IconButton>
                 </Box>
               </Card>
@@ -649,16 +748,21 @@ export default function SecondBrainPage() {
             Learned Fleet Memories
           </Typography>
           {rawMemoryItems.length === 0 ? (
-            <Typography variant="caption" sx={{ color: '#8c827a' }}>
+            <Typography variant="caption" sx={{ color: '#71685f' }}>
               No learned memories recorded yet. Memories are automatically saved when agents complete tasks.
             </Typography>
           ) : (
             <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />}>
-              {rawMemoryItems.map((item) => (
+              {rawMemoryItems.map(item => (
                 <Box key={item.id} sx={{ py: 1 }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
-                    <Chip label={item.type.toUpperCase()} size="small" sx={{ bgcolor: '#ff4f00', color: '#ffffff', fontWeight: 700, fontSize: '0.65rem' }} />
-                    <Typography variant="caption" sx={{ color: '#8c827a' }}>
+                    <Chip
+                      label={item.type}
+                      size="small"
+                      variant="outlined"
+                      sx={{ bgcolor: '#f5efe6', color: '#201515', fontWeight: 650, fontSize: '0.75rem', textTransform: 'capitalize' }}
+                    />
+                    <Typography variant="caption" sx={{ color: '#71685f' }}>
                       Source: {item.source} · Confidence: {Math.round(item.confidence * 100)}%
                     </Typography>
                   </Box>
@@ -675,65 +779,96 @@ export default function SecondBrainPage() {
       {/* Add Note Modal */}
       <Dialog
         open={showIngestModal}
-        onClose={() => setShowIngestModal(false)}
+        onClose={closeIngestDialog}
         maxWidth="sm"
         fullWidth
         slotProps={{
           paper: {
             sx: {
               bgcolor: '#ffffff',
-              border: '1px solid rgba(255, 79, 0, 0.3)',
-              borderRadius: '16px',
-              boxShadow: '0 10px 25px rgba(32, 21, 21, 0.08)'
+              border: '1px solid rgba(32, 21, 21, 0.12)',
+              borderRadius: { xs: '12px', sm: '16px' },
+              m: { xs: 2, sm: 4 },
+              boxShadow: '0 12px 32px rgba(32, 21, 21, 0.08)'
             }
           }
         }}
       >
-        <form onSubmit={handleIngestNote}>
-          <DialogTitle sx={{ color: '#201515', fontWeight: 700, pb: 1 }}>
-            Add Document to Second Brain
+        <form onSubmit={handleIngestNote} aria-busy={ingestPending}>
+          <DialogTitle sx={{ color: '#201515', fontWeight: 700, px: 3, pt: 3, pb: 1 }}>
+            Add note to Second Brain
           </DialogTitle>
-          <DialogContent sx={{ pt: 1.5, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <DialogContent sx={{ px: 3, pt: '16px !important', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+            {ingestError && (
+              <Alert severity="error" role="alert" sx={{ borderRadius: '10px' }}>
+                {ingestError}
+              </Alert>
+            )}
             <TextField
-              label="Note Title"
+              label="Note title"
               fullWidth
-              size="small"
               required
+              autoFocus
+              disabled={ingestPending}
               value={newNoteTitle}
-              onChange={(e) => setNewNoteTitle(e.target.value)}
+              onChange={e => setNewNoteTitle(e.target.value)}
+              placeholder="e.g. Q1 Architecture Strategy"
             />
             <TextField
-              label="File Path (Optional)"
+              label="File path"
               fullWidth
-              size="small"
+              disabled={ingestPending}
               value={newNotePath}
-              onChange={(e) => setNewNotePath(e.target.value)}
+              onChange={e => setNewNotePath(e.target.value)}
               placeholder="vault/my-note.md"
+              helperText="Optional. A vault path is generated if left blank."
             />
             <TextField
-              label="Tags (Comma-separated)"
+              label="Tags"
               fullWidth
-              size="small"
+              disabled={ingestPending}
               value={newNoteTags}
-              onChange={(e) => setNewNoteTags(e.target.value)}
+              onChange={e => setNewNoteTags(e.target.value)}
               placeholder="marketing, strategy, q1"
+              helperText="Separate multiple tags with commas."
             />
             <TextField
-              label="Markdown Content"
+              label="Note content"
               fullWidth
               multiline
               rows={6}
               required
+              disabled={ingestPending}
               value={newNoteContent}
-              onChange={(e) => setNewNoteContent(e.target.value)}
+              onChange={e => setNewNoteContent(e.target.value)}
+              placeholder="Write your note in Markdown..."
+              helperText="Markdown is supported. The note is indexed for search after saving."
             />
           </DialogContent>
-          <DialogActions sx={{ p: 2.5, pt: 1, borderTop: '1px solid rgba(32, 21, 21, 0.06)' }}>
-            <Button onClick={() => setShowIngestModal(false)} sx={{ color: '#666155' }}>
+          <DialogActions
+            sx={{
+              p: 3,
+              pt: 2,
+              borderTop: '1px solid rgba(32, 21, 21, 0.08)',
+              flexDirection: { xs: 'column-reverse', sm: 'row' },
+              alignItems: 'stretch',
+              gap: 1.5,
+              '& .MuiButton-root': { minHeight: 44 },
+              '& > :not(style) ~ :not(style)': { ml: 0 }
+            }}
+          >
+            <Button onClick={closeIngestDialog} disabled={ingestPending} sx={{ color: '#666155', width: { xs: '100%', sm: 'auto' } }}>
               Cancel
             </Button>
-            <Button type="submit" variant="contained" color="primary">
-              Ingest & Embed Note
+            <Button type="submit" variant="contained" color="primary" disabled={ingestPending} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+              {ingestPending ? (
+                <>
+                  <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />
+                  Adding note...
+                </>
+              ) : (
+                'Add note'
+              )}
             </Button>
           </DialogActions>
         </form>
@@ -742,15 +877,7 @@ export default function SecondBrainPage() {
   );
 }
 
-function MetricCard({
-  label,
-  value,
-  icon
-}: {
-  label: string;
-  value: string;
-  icon: React.ReactNode;
-}) {
+function MetricCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
     <Card
       sx={{
@@ -765,7 +892,7 @@ function MetricCard({
       }}
     >
       <Box>
-        <Typography variant="caption" sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+        <Typography variant="caption" sx={{ color: '#666155', fontWeight: 650, fontSize: '0.78rem' }}>
           {label}
         </Typography>
         <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>
@@ -777,7 +904,7 @@ function MetricCard({
           p: 1.25,
           borderRadius: '10px',
           bgcolor: '#f5efe6',
-          color: '#ff4f00',
+          color: '#201515',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'

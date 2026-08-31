@@ -30,7 +30,15 @@ import {
   createMemoryTools
 } from '@atlas/tools';
 import type { ResearchProvider } from '@atlas/tools';
-import { AgentRunner, TaskDelegator, TaskQueue, InMemoryTaskQueue, ToolGatewayExecutor } from '@atlas/orchestration';
+import {
+  AgentRunner,
+  TaskDelegator,
+  TaskQueue,
+  InMemoryTaskQueue,
+  ToolGatewayExecutor,
+  ScheduledJobScheduler
+} from '@atlas/orchestration';
+import { ScheduledJobRepository } from '@atlas/database';
 
 export interface WorkerRunnerOptions {
   config: EnvConfig;
@@ -49,6 +57,7 @@ export interface WorkerRunnerOptions {
   messageRepo?: MessageRepository;
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
+  scheduledJobRepo?: ScheduledJobRepository;
   researchProvider?: ResearchProvider;
   workerId?: string;
   leaseSeconds?: number;
@@ -61,6 +70,7 @@ export class AgentWorkerRunner {
   private queueRecoveryTimer: NodeJS.Timeout | null = null;
   private queueRecoveryInFlight = false;
   private memoryMaintenance?: MemoryMaintenanceService;
+  private scheduledJobScheduler?: ScheduledJobScheduler;
   private runner: AgentRunner;
   private delegator: TaskDelegator;
   private taskQueue: TaskQueue;
@@ -180,6 +190,22 @@ export class AgentWorkerRunner {
       this.memoryMaintenanceTimer.unref?.();
     }
 
+    if (this.options.scheduledJobRepo && this.options.taskRepo) {
+      this.scheduledJobScheduler = new ScheduledJobScheduler({
+        scheduledJobRepo: this.options.scheduledJobRepo,
+        taskRepo: this.options.taskRepo,
+        registry: this.registry,
+        triggerHandler: async ({ job }) => {
+          rootLogger.info('Scheduled job tick processed', {
+            scheduledJobId: job.id,
+            jobType: job.jobType
+          });
+        },
+        syncIntervalSeconds: this.options.config.SCHEDULED_JOB_SYNC_INTERVAL_SECONDS || 30
+      });
+      await this.scheduledJobScheduler.start();
+    }
+
     this.isRunning = true;
     const concurrency = this.options.config.MAX_CONCURRENT_AGENT_RUNS || 3;
 
@@ -260,6 +286,10 @@ export class AgentWorkerRunner {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
+    if (this.scheduledJobScheduler) {
+      this.scheduledJobScheduler.stop();
+      this.scheduledJobScheduler = undefined;
+    }
     await this.taskQueue.close();
     rootLogger.info('ATLAS Agent Worker gracefully stopped');
   }
@@ -278,6 +308,10 @@ export class AgentWorkerRunner {
 
   public getQueue(): TaskQueue {
     return this.taskQueue;
+  }
+
+  public getScheduledJobScheduler(): ScheduledJobScheduler | undefined {
+    return this.scheduledJobScheduler;
   }
 
   private async runMemoryMaintenance(): Promise<void> {

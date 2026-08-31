@@ -7,3 +7,4 @@ export * from './planner/plan-validator.js';
 export * from './delegator/task-delegator.js';
 export * from './synthesizer/task-synthesizer.js';
 export * from './qa/qa-gate.js';
+export * from './scheduler/scheduled-job-scheduler.js';

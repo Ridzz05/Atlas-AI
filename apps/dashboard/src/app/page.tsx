@@ -13,17 +13,16 @@ import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import {
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-  DollarSign,
-  ArrowUpRight,
-  RefreshCw,
-  Pause,
-  Play,
-  OctagonAlert,
-  Zap
-} from 'lucide-react';
+  CiCircleCheck,
+  CiClock2,
+  CiCircleAlert,
+  CiDollar,
+  CiCirclePlus,
+  CiRedo,
+  CiPause1,
+  CiPlay1,
+  CiWarning
+} from 'react-icons/ci';
 import { AgentGraph, AgentNodeData } from '../components/agent-graph';
 import { atlasFetch } from '../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../lib/event-stream';
@@ -215,7 +214,7 @@ export default function CommandCenterPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiPlay1 size={24} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Command Center
             </Typography>
@@ -236,14 +235,14 @@ export default function CommandCenterPage() {
             }}
             aria-label="Refresh command center"
           >
-            <RefreshCw size={16} />
+            <CiRedo size={18} />
           </IconButton>
           <Button
             component={Link}
             href="/tasks"
             variant="contained"
             color="primary"
-            endIcon={<ArrowUpRight size={16} />}
+            endIcon={<CiCirclePlus size={18} />}
             sx={{ px: 2.5 }}
           >
             Create Zap Goal
@@ -302,7 +301,7 @@ export default function CommandCenterPage() {
                   variant="contained"
                   color="primary"
                   disabled={controlBusy}
-                  startIcon={<Play size={16} />}
+                  startIcon={<CiPlay1 size={18} />}
                   onClick={() => void invokeControl('resume')}
                 >
                   Resume Workflows
@@ -312,7 +311,7 @@ export default function CommandCenterPage() {
                   variant="outlined"
                   color="inherit"
                   disabled={controlBusy}
-                  startIcon={<Pause size={16} />}
+                  startIcon={<CiPause1 size={18} />}
                   onClick={() => void invokeControl('pause')}
                 >
                   Pause Workflows
@@ -323,7 +322,7 @@ export default function CommandCenterPage() {
                 variant="contained"
                 color="error"
                 disabled={controlBusy}
-                startIcon={<OctagonAlert size={16} />}
+                startIcon={<CiWarning size={18} />}
                 onClick={() => void invokeControl('emergency-stop')}
               >
                 Emergency Stop
@@ -334,7 +333,7 @@ export default function CommandCenterPage() {
                 variant="contained"
                 color="primary"
                 disabled={controlBusy}
-                startIcon={<Play size={16} />}
+                startIcon={<CiPlay1 size={18} />}
                 onClick={() => void invokeControl('resume')}
               >
                 Resume System
@@ -366,18 +365,18 @@ export default function CommandCenterPage() {
               gap: 2.25
             }}
           >
-            <VanillaMetricCard label="ACTIVE TASKS" value={String(activeCount)} icon={<Clock size={18} />} accent={activeCount > 0} />
-            <VanillaMetricCard label="COMPLETED" value={String(completedCount)} icon={<CheckCircle2 size={18} />} />
-            <VanillaMetricCard label="APPROVALS PENDING" value={String(pendingApprovals)} icon={<AlertCircle size={18} />} accent={pendingApprovals > 0} />
+            <VanillaMetricCard label="ACTIVE TASKS" value={String(activeCount)} icon={<CiClock2 size={20} />} accent={activeCount > 0} />
+            <VanillaMetricCard label="COMPLETED" value={String(completedCount)} icon={<CiCircleCheck size={20} />} />
+            <VanillaMetricCard label="APPROVALS PENDING" value={String(pendingApprovals)} icon={<CiCircleAlert size={20} />} accent={pendingApprovals > 0} />
             <VanillaMetricCard
               label="COST TODAY"
               value={costToday == null ? '$0.00' : `$${costToday.toFixed(2)}`}
-              icon={<DollarSign size={18} />}
+              icon={<CiDollar size={20} />}
             />
             <VanillaMetricCard
               label="DAILY BUDGET"
               value={budget ? `$${budget.usedUsd.toFixed(2)} / $${budget.limitUsd.toFixed(2)}` : '$0 / $10'}
-              icon={<DollarSign size={18} />}
+              icon={<CiDollar size={20} />}
             />
           </Box>
 
@@ -395,22 +394,22 @@ export default function CommandCenterPage() {
             <VanillaMetricCard
               label="ACTIVE LEASES"
               value={recoveryMetrics == null ? '0' : String(recoveryMetrics.activeLeaseCount)}
-              icon={<Clock size={16} />}
+              icon={<CiClock2 size={18} />}
             />
             <VanillaMetricCard
               label="EXPIRED LEASES"
               value={recoveryMetrics == null ? '0' : String(recoveryMetrics.expiredLeaseCount)}
-              icon={<AlertCircle size={16} />}
+              icon={<CiCircleAlert size={18} />}
             />
             <VanillaMetricCard
               label="UNLEASED RUNS"
               value={recoveryMetrics == null ? '0' : String(recoveryMetrics.unleasedExecutableRunCount)}
-              icon={<Clock size={16} />}
+              icon={<CiClock2 size={18} />}
             />
             <VanillaMetricCard
               label="CANCEL REQUESTS"
               value={recoveryMetrics == null ? '0' : String(recoveryMetrics.cancellationRequestedCount)}
-              icon={<RefreshCw size={16} />}
+              icon={<CiRedo size={18} />}
             />
           </Box>
 

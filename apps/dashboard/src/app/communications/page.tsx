@@ -11,7 +11,7 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
-import { MessageSquare, RefreshCw, Send, Wrench, Zap } from 'lucide-react';
+import { CiChat1, CiRedo, CiPaperplane, CiMicrochip, CiUser, CiPlay1, CiSettings } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../../lib/event-stream';
 import {
@@ -27,6 +27,8 @@ interface RecordListResponse<T> {
   durable: boolean;
 }
 
+import { FormattedMessage } from '../../components/formatted-message';
+
 type FeedFilter = 'all' | 'message' | 'tool';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -36,52 +38,136 @@ function formatTimestamp(timestamp: string): string {
   return Number.isNaN(date.getTime()) ? timestamp : date.toLocaleString();
 }
 
+const AGENT_CONFIGS: Record<string, { name: string; role: string; color: string; bg: string; border: string }> = {
+  chief: { name: 'Chief', role: 'Orchestrator', color: '#c2410c', bg: '#fff7ed', border: '#ffedd5' },
+  ned: { name: 'Ned', role: 'Research Specialist', color: '#2563eb', bg: '#eff6ff', border: '#dbeafe' },
+  layla: { name: 'Layla', role: 'Lead Scoring', color: '#16a34a', bg: '#f0fdf4', border: '#dcfce7' },
+  hermes: { name: 'Hermes', role: 'Content Specialist', color: '#7c3aed', bg: '#f5f3ff', border: '#ede9fe' },
+  argus: { name: 'Argus', role: 'QA & Risk Gate', color: '#d97706', bg: '#fffbeb', border: '#fef3c7' },
+  user: { name: 'Operator', role: 'Human Input', color: '#201515', bg: '#f5efe6', border: 'rgba(32, 21, 21, 0.12)' },
+  'api-owner': { name: 'Operator', role: 'API Command', color: '#201515', bg: '#f5efe6', border: 'rgba(32, 21, 21, 0.12)' }
+};
+
 function FeedCard({ item }: { item: CommunicationFeedItem }) {
   const isTool = item.kind === 'tool';
+  const senderKey = item.sender.toLowerCase();
+  const agentInfo = AGENT_CONFIGS[senderKey] || {
+    name: item.sender,
+    role: isTool ? 'Tool Exec' : 'Agent',
+    color: '#666155',
+    bg: '#fbf8f2',
+    border: 'rgba(32, 21, 21, 0.1)'
+  };
+
   return (
-    <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+    <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+      {/* Sender Avatar */}
       <Box
         sx={{
-          p: 1.25,
-          borderRadius: '10px',
-          bgcolor: isTool ? '#fff3eb' : '#f5efe6',
-          color: isTool ? '#ff4f00' : '#201515',
-          border: isTool ? '1px solid rgba(255, 79, 0, 0.25)' : '1px solid rgba(32, 21, 21, 0.08)',
-          flexShrink: 0
+          width: 38,
+          height: 38,
+          borderRadius: '12px',
+          bgcolor: isTool ? '#fff3eb' : agentInfo.bg,
+          color: isTool ? '#c2410c' : agentInfo.color,
+          border: `1px solid ${isTool ? 'rgba(194, 65, 12, 0.2)' : agentInfo.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+          boxShadow: '0 2px 6px rgba(32, 21, 21, 0.04)'
         }}
       >
-        {isTool ? <Wrench size={16} /> : <MessageSquare size={16} />}
+        {isTool ? <CiSettings size={20} /> : senderKey === 'user' || senderKey === 'api-owner' ? <CiUser size={20} /> : <CiMicrochip size={20} />}
       </Box>
+
+      {/* Card Content */}
       <Card
         sx={{
-          p: 2.25,
+          p: 2.75,
           bgcolor: '#ffffff',
-          borderRadius: '14px',
+          borderRadius: '16px',
           border: '1px solid rgba(32, 21, 21, 0.08)',
-          boxShadow: '0 2px 8px rgba(32, 21, 21, 0.04)',
+          boxShadow: '0 2px 10px rgba(32, 21, 21, 0.03)',
           flex: 1,
-          minWidth: 0
+          minWidth: 0,
+          transition: 'border-color 0.15s ease-in-out',
+          '&:hover': {
+            borderColor: 'rgba(194, 65, 12, 0.25)'
+          }
         }}
       >
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-          <Typography variant="caption" sx={{ fontWeight: 700, color: '#201515' }}>
-            {item.sender}
-          </Typography>
-          <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
+        {/* Header with Name, Role Tag, Task ID, and Timestamp */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.75, flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, flexWrap: 'wrap' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 800, color: '#201515', fontSize: '0.92rem' }}>
+              {agentInfo.name}
+            </Typography>
+            <Chip
+              label={agentInfo.role}
+              size="small"
+              sx={{
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                bgcolor: agentInfo.bg,
+                color: agentInfo.color,
+                border: `1px solid ${agentInfo.border}`,
+                height: 22
+              }}
+            />
+            {item.taskId && (
+              <Chip
+                label={`task:${item.taskId.slice(0, 8)}`}
+                size="small"
+                sx={{
+                  fontSize: '0.68rem',
+                  fontFamily: 'monospace',
+                  fontWeight: 600,
+                  bgcolor: '#fbf8f2',
+                  color: '#666155',
+                  border: '1px solid rgba(32, 21, 21, 0.08)',
+                  height: 22
+                }}
+              />
+            )}
+            {item.riskLevel && (
+              <Chip
+                label={`risk:${item.riskLevel}`}
+                size="small"
+                sx={{
+                  fontSize: '0.68rem',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  bgcolor: '#fff3eb',
+                  color: '#c2410c',
+                  border: '1px solid rgba(194, 65, 12, 0.2)',
+                  height: 22
+                }}
+              />
+            )}
+          </Box>
+          <Typography variant="caption" sx={{ color: '#71685f', fontFamily: 'monospace', fontSize: '0.72rem', fontWeight: 500 }}>
             {formatTimestamp(item.timestamp)}
           </Typography>
         </Box>
-        <Typography variant="body2" sx={{ color: '#666155', lineHeight: 1.5, wordBreak: 'break-word', fontSize: '0.82rem' }}>
-          {item.summary}
-        </Typography>
-        <Stack direction="row" spacing={1} sx={{ mt: 1.5, flexWrap: 'wrap' }}>
-          {item.taskId && (
-            <Chip label={`task:${item.taskId.slice(0, 8)}`} size="small" sx={{ fontSize: '0.65rem', fontFamily: 'monospace', bgcolor: '#fbf8f2' }} />
-          )}
-          {item.riskLevel && (
-            <Chip label={`risk:${item.riskLevel}`} size="small" sx={{ fontSize: '0.65rem', fontFamily: 'monospace', bgcolor: '#fff3eb', color: '#ff4f00' }} />
-          )}
-        </Stack>
+
+        {/* Formatted Content Body */}
+        {isTool ? (
+          <Box
+            sx={{
+              p: 1.5,
+              bgcolor: '#fbf8f2',
+              borderRadius: '8px',
+              border: '1px solid rgba(32, 21, 21, 0.06)',
+              fontFamily: 'monospace',
+              fontSize: '0.82rem',
+              color: '#201515'
+            }}
+          >
+            {item.summary}
+          </Box>
+        ) : (
+          <FormattedMessage content={item.summary} />
+        )}
       </Card>
     </Box>
   );
@@ -184,7 +270,7 @@ export default function CommunicationsPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiChat1 size={26} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Communications & Inter-Agent Bus
             </Typography>
@@ -221,7 +307,7 @@ export default function CommunicationsPage() {
           }}
           aria-label="Refresh communications feed"
         >
-          <RefreshCw size={16} />
+          <CiRedo size={18} />
         </IconButton>
       </Box>
 
@@ -282,7 +368,7 @@ export default function CommunicationsPage() {
           placeholder="Send operator broadcast or direct message to Chief…"
           disabled={submitting}
         />
-        <Button type="submit" variant="contained" color="primary" disabled={submitting || !inputMsg.trim()} startIcon={<Send size={16} />}>
+        <Button type="submit" variant="contained" color="primary" disabled={submitting || !inputMsg.trim()} startIcon={<CiPaperplane size={18} />}>
           Send
         </Button>
       </Card>

@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Valley+Sans:ital,wght@0,100..900;1,100..900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -13,17 +15,10 @@
   --coffee-muted: #666155;
 }
 
-*,
-*::before,
-*::after {
-  transform: none !important;
-  animation: none !important;
-}
-
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: 'Valley Sans', Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   overflow-x: hidden;
 }
 

@@ -15,7 +15,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
-import { Plus, ArrowRight, RefreshCw, Zap } from 'lucide-react';
+import { CiCirclePlus, CiLocationArrow1, CiRedo, CiPlay1 } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../../lib/event-stream';
 
@@ -116,7 +116,7 @@ export default function TasksPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiPlay1 size={24} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Automated Workflows
             </Typography>
@@ -152,12 +152,12 @@ export default function TasksPage() {
             }}
             aria-label="Refresh tasks"
           >
-            <RefreshCw size={16} />
+            <CiRedo size={18} />
           </IconButton>
           <Button
             variant="contained"
             color="primary"
-            startIcon={<Plus size={16} />}
+            startIcon={<CiCirclePlus size={18} />}
             onClick={() => setShowModal(true)}
             sx={{ px: 2.5 }}
           >
@@ -244,7 +244,7 @@ export default function TasksPage() {
                 </Box>
 
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.75rem', color: '#666155' }}>
-                  <ArrowRight size={14} color="#ff4f00" />
+                  <CiLocationArrow1 size={16} color="#c2410c" />
                   <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#d64200', fontWeight: 700 }}>
                     {task.assignedAgent.toUpperCase()}
                   </Typography>
@@ -279,7 +279,7 @@ export default function TasksPage() {
       >
         <form onSubmit={handleCreate}>
           <DialogTitle sx={{ color: '#201515', fontWeight: 700, pb: 1, display: 'flex', alignItems: 'center', gap: 1.25 }}>
-            <Zap size={20} color="#ff4f00" />
+            <CiPlay1 size={22} color="#c2410c" />
             Create Workflow for Chief Trigger
           </DialogTitle>
           <DialogContent sx={{ pt: 1.5 }}>
@@ -303,8 +303,8 @@ export default function TasksPage() {
                   borderRadius: '12px',
                   fontSize: '0.85rem',
                   '& fieldset': { borderColor: 'rgba(32, 21, 21, 0.15)' },
-                  '&:hover fieldset': { borderColor: 'rgba(255, 79, 0, 0.4)' },
-                  '&.Mui-focused fieldset': { borderColor: '#ff4f00' }
+                  '&:hover fieldset': { borderColor: 'rgba(194, 65, 12, 0.4)' },
+                  '&.Mui-focused fieldset': { borderColor: '#c2410c' }
                 }
               }}
             />
@@ -322,7 +322,7 @@ export default function TasksPage() {
               variant="contained"
               color="primary"
               disabled={submitting || !newGoal.trim()}
-              startIcon={<Plus size={16} />}
+              startIcon={<CiCirclePlus size={18} />}
             >
               {submitting ? 'Submitting…' : 'Trigger Workflow'}
             </Button>

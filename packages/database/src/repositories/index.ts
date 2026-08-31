@@ -10,3 +10,4 @@ export * from './tool-call.repository.js';
 export * from './budget.repository.js';
 export * from './rubric.repository.js';
 export * from './model-provider.repository.js';
+export * from './scheduled-job.repository.js';

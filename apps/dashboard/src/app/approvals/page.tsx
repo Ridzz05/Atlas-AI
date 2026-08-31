@@ -12,7 +12,7 @@ import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import Paper from '@mui/material/Paper';
-import { ShieldCheck, Check, X, Edit2, Zap, RefreshCw } from 'lucide-react';
+import { CiBookmarkCheck, CiCircleCheck, CiCircleRemove, CiEdit, CiPlay1, CiRedo } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface Approval {
@@ -74,7 +74,7 @@ export default function ApprovalsPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiBookmarkCheck size={28} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               Human Approval Control Room
             </Typography>
@@ -95,7 +95,7 @@ export default function ApprovalsPage() {
           }}
           aria-label="Refresh approvals"
         >
-          <RefreshCw size={16} />
+          <CiRedo size={18} />
         </IconButton>
       </Box>
 
@@ -114,7 +114,7 @@ export default function ApprovalsPage() {
         </Box>
       ) : approvals.length === 0 ? (
         <Card sx={{ p: 8, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '16px' }}>
-          <ShieldCheck size={48} color="#16a34a" style={{ margin: '0 auto 16px' }} />
+          <CiBookmarkCheck size={52} color="#16a34a" style={{ margin: '0 auto 16px', display: 'block' }} />
           <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515' }}>
             No Pending Approvals
           </Typography>
@@ -147,12 +147,12 @@ export default function ApprovalsPage() {
                         p: 1.25,
                         borderRadius: '8px',
                         bgcolor: '#fff3eb',
-                        color: '#ff4f00',
-                        border: '1px solid rgba(255, 79, 0, 0.25)',
+                        color: '#c2410c',
+                        border: '1px solid rgba(194, 65, 12, 0.25)',
                         display: 'flex'
                       }}
                     >
-                      <Zap size={18} />
+                      <CiPlay1 size={18} />
                     </Box>
                     <Box>
                       <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#201515' }}>
@@ -205,7 +205,7 @@ export default function ApprovalsPage() {
                     color="inherit"
                     size="small"
                     disabled={isActing}
-                    startIcon={<Edit2 size={14} />}
+                    startIcon={<CiEdit size={16} />}
                     onClick={() => void handleDecision(req.id, 'revision_requested')}
                   >
                     Request Revision
@@ -215,7 +215,7 @@ export default function ApprovalsPage() {
                     color="error"
                     size="small"
                     disabled={isActing}
-                    startIcon={<X size={14} />}
+                    startIcon={<CiCircleRemove size={16} />}
                     onClick={() => void handleDecision(req.id, 'rejected')}
                     sx={{
                       borderColor: 'rgba(220, 38, 38, 0.3)',
@@ -233,7 +233,7 @@ export default function ApprovalsPage() {
                     color="primary"
                     size="small"
                     disabled={isActing}
-                    startIcon={<Check size={14} />}
+                    startIcon={<CiCircleCheck size={16} />}
                     onClick={() => void handleDecision(req.id, 'approved')}
                   >
                     Approve Workflow

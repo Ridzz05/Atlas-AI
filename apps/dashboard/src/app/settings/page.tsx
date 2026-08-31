@@ -11,8 +11,7 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
-import Divider from '@mui/material/Divider';
-import { KeyRound, RefreshCw, Save, Settings, ShieldAlert, Trash2, Zap } from 'lucide-react';
+import { CiSettings, CiRedo, CiLock, CiFloppyDisk, CiTrash } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface RuntimeSettings {
@@ -107,7 +106,7 @@ export default function SettingsPage() {
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
         <Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Zap size={24} color="#ff4f00" />
+            <CiSettings size={26} color="#c2410c" />
             <Typography variant="h5" sx={{ fontWeight: 700, color: '#201515', letterSpacing: '-0.02em' }}>
               System Governance & Keys
             </Typography>
@@ -128,7 +127,7 @@ export default function SettingsPage() {
           }}
           aria-label="Refresh settings"
         >
-          <RefreshCw size={16} />
+          <CiRedo size={18} />
         </IconButton>
       </Box>
 
@@ -150,7 +149,7 @@ export default function SettingsPage() {
           {/* OpenRouter API Key Setup Card */}
           <Card sx={{ p: 3.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', boxShadow: '0 4px 16px rgba(32, 21, 21, 0.04)' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
-              <KeyRound size={20} color="#ff4f00" />
+              <CiLock size={22} color="#c2410c" />
               <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515' }}>
                 OpenRouter API Key Provisioning
               </Typography>
@@ -176,11 +175,11 @@ export default function SettingsPage() {
                 disabled={savingKey}
                 sx={{ flex: 1, minWidth: 260 }}
               />
-              <Button type="submit" variant="contained" color="primary" disabled={savingKey || !apiKey.trim()} startIcon={<Save size={16} />}>
+              <Button type="submit" variant="contained" color="primary" disabled={savingKey || !apiKey.trim()} startIcon={<CiFloppyDisk size={18} />}>
                 Save Key
               </Button>
               {settings?.modelConfigured && (
-                <Button variant="outlined" color="error" disabled={savingKey} onClick={() => void clearOpenRouterKey()} startIcon={<Trash2 size={16} />}>
+                <Button variant="outlined" color="error" disabled={savingKey} onClick={() => void clearOpenRouterKey()} startIcon={<CiTrash size={18} />}>
                   Remove
                 </Button>
               )}

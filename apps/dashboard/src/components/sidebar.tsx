@@ -12,28 +12,28 @@ import ListItemText from '@mui/material/ListItemText';
 import Chip from '@mui/material/Chip';
 import Avatar from '@mui/material/Avatar';
 import {
-  LayoutDashboard,
-  CheckSquare,
-  MessageSquare,
-  Users,
-  Brain,
-  ShieldCheck,
-  FileText,
-  Activity,
-  Settings,
-  Zap
-} from 'lucide-react';
+  CiGrid41,
+  CiSquareCheck,
+  CiChat1,
+  CiUser,
+  CiVault,
+  CiBookmarkCheck,
+  CiFileOn,
+  CiWavePulse1,
+  CiSettings,
+  CiPlay1
+} from 'react-icons/ci';
 
 const NAV_ITEMS = [
-  { name: 'Command Center', href: '/', icon: LayoutDashboard },
-  { name: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { name: 'Communications', href: '/communications', icon: MessageSquare },
-  { name: 'Agent Fleet', href: '/agents', icon: Users },
-  { name: 'Second Brain', href: '/brain', icon: Brain, badge: 'RAG' },
-  { name: 'Approvals', href: '/approvals', icon: ShieldCheck },
-  { name: 'Artifacts', href: '/artifacts', icon: FileText },
-  { name: 'Audit & Telemetry', href: '/audit', icon: Activity },
-  { name: 'Settings', href: '/settings', icon: Settings }
+  { name: 'Command Center', href: '/', icon: CiGrid41 },
+  { name: 'Tasks', href: '/tasks', icon: CiSquareCheck },
+  { name: 'Communications', href: '/communications', icon: CiChat1 },
+  { name: 'Agent Fleet', href: '/agents', icon: CiUser },
+  { name: 'Second Brain', href: '/brain', icon: CiVault, badge: 'RAG' },
+  { name: 'Approvals', href: '/approvals', icon: CiBookmarkCheck },
+  { name: 'Artifacts', href: '/artifacts', icon: CiFileOn },
+  { name: 'Audit & Telemetry', href: '/audit', icon: CiWavePulse1 },
+  { name: 'Settings', href: '/settings', icon: CiSettings }
 ];
 
 export function Sidebar() {
@@ -168,7 +168,7 @@ export function Sidebar() {
             color: '#201515'
           }}
         >
-          <Zap size={16} style={{ flexShrink: 0, marginTop: 2, color: '#ff4f00' }} />
+          <CiPlay1 size={18} style={{ flexShrink: 0, marginTop: 2, color: '#c2410c' }} />
           <Typography variant="caption" sx={{ fontSize: '0.72rem', lineHeight: 1.4, color: '#666155', fontWeight: 500 }}>
             Automated loop execution synced via durable workflow orchestrator.
           </Typography>
