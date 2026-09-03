@@ -96,4 +96,3 @@ export const SecondBrainStatsSchema = z.object({
   lastSyncAt: z.string().nullable()
 });
 export type SecondBrainStats = z.infer<typeof SecondBrainStatsSchema>;
-

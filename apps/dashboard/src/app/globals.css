@@ -18,7 +18,15 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Valley Sans', Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family:
+    'Valley Sans',
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
   overflow-x: hidden;
 }
 

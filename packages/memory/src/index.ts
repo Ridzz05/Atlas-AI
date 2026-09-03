@@ -9,4 +9,3 @@ export * from './second-brain/vector-embedding-service.js';
 export * from './second-brain/vault-ingestion-service.js';
 export * from './second-brain/second-brain-retriever.js';
 export * from './second-brain/second-brain-service.js';
-

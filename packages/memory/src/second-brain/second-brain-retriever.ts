@@ -32,9 +32,7 @@ export class SecondBrainRetriever {
     if (chunks.length === 0) return [];
 
     // Filter by tag if specified
-    const filteredChunks = tag
-      ? chunks.filter(c => c.tags.some(t => t.toLowerCase() === tag.toLowerCase()))
-      : chunks;
+    const filteredChunks = tag ? chunks.filter(c => c.tags.some(t => t.toLowerCase() === tag.toLowerCase())) : chunks;
 
     if (filteredChunks.length === 0) return [];
 

@@ -2,8 +2,14 @@ import { z } from 'zod';
 import { ToolRiskLevelSchema } from './tool.js';
 
 export const ToolCapabilitySchema = z.enum([
-  'research', 'memory', 'artifacts', 'policy',
-  'communication', 'lead_scoring', 'planning', 'qa',
+  'research',
+  'memory',
+  'artifacts',
+  'policy',
+  'communication',
+  'lead_scoring',
+  'planning',
+  'qa',
   'integration'
 ]);
 export type ToolCapability = z.infer<typeof ToolCapabilitySchema>;

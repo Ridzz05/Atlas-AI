@@ -40,7 +40,18 @@ export const WorkflowCheckpointSchema = z.object({
 export type WorkflowCheckpoint = z.infer<typeof WorkflowCheckpointSchema>;
 
 export const ALLOWED_WORKFLOW_TRANSITIONS: Record<WorkflowState, WorkflowState[]> = {
-  running: ['waiting_agent', 'waiting_tool', 'waiting_approval', 'waiting_external_event', 'scheduled', 'paused', 'failed', 'completed', 'cancelled', 'retrying'],
+  running: [
+    'waiting_agent',
+    'waiting_tool',
+    'waiting_approval',
+    'waiting_external_event',
+    'scheduled',
+    'paused',
+    'failed',
+    'completed',
+    'cancelled',
+    'retrying'
+  ],
   waiting_agent: ['running', 'paused', 'failed', 'cancelled'],
   waiting_tool: ['running', 'paused', 'failed', 'cancelled'],
   waiting_approval: ['running', 'cancelled'],

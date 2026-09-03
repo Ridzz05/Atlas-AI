@@ -1,11 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  MarkdownParser,
-  VectorEmbeddingService,
-  VaultIngestionService,
-  SecondBrainRetriever,
-  SecondBrainService
-} from '../src/index.js';
+import { MarkdownParser, VectorEmbeddingService, VaultIngestionService, SecondBrainRetriever, SecondBrainService } from '../src/index.js';
 
 describe('Second Brain Subsystem Tests', () => {
   describe('MarkdownParser', () => {

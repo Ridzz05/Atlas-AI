@@ -1,9 +1,4 @@
-import {
-  WorkflowCheckpoint,
-  WorkflowCheckpointSchema,
-  WorkflowState,
-  WorkflowTransition
-} from '@atlas/shared';
+import { WorkflowCheckpoint, WorkflowCheckpointSchema, WorkflowState, WorkflowTransition } from '@atlas/shared';
 import { DatabaseClient } from '../client.js';
 
 export interface WorkflowCheckpointUpsertInput {
@@ -32,25 +27,13 @@ export class WorkflowCheckpointRepository {
             updated_at = NOW()
       RETURNING *
     `,
-      [
-        input.runId,
-        input.taskId,
-        input.agentId,
-        input.stepId,
-        input.state,
-        input.resumeAfter ?? null,
-        JSON.stringify(input.payload ?? {})
-      ]
+      [input.runId, input.taskId, input.agentId, input.stepId, input.state, input.resumeAfter ?? null, JSON.stringify(input.payload ?? {})]
     );
 
     return this.mapRow(result.rows[0]);
   }
 
-  public async appendTransition(
-    runId: string,
-    stepId: string,
-    transition: WorkflowTransition
-  ): Promise<WorkflowCheckpoint | null> {
+  public async appendTransition(runId: string, stepId: string, transition: WorkflowTransition): Promise<WorkflowCheckpoint | null> {
     const result = await this.db.query(
       `
       UPDATE workflow_checkpoints
@@ -66,19 +49,13 @@ export class WorkflowCheckpointRepository {
   }
 
   public async findByRunAndStep(runId: string, stepId: string): Promise<WorkflowCheckpoint | null> {
-    const result = await this.db.query(
-      'SELECT * FROM workflow_checkpoints WHERE run_id = $1 AND step_id = $2',
-      [runId, stepId]
-    );
+    const result = await this.db.query('SELECT * FROM workflow_checkpoints WHERE run_id = $1 AND step_id = $2', [runId, stepId]);
     if (!result.rows[0]) return null;
     return this.mapRow(result.rows[0]);
   }
 
   public async listByRun(runId: string): Promise<WorkflowCheckpoint[]> {
-    const result = await this.db.query(
-      'SELECT * FROM workflow_checkpoints WHERE run_id = $1 ORDER BY created_at ASC',
-      [runId]
-    );
+    const result = await this.db.query('SELECT * FROM workflow_checkpoints WHERE run_id = $1 ORDER BY created_at ASC', [runId]);
     return result.rows.map(row => this.mapRow(row));
   }
 

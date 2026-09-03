@@ -1,20 +1,8 @@
 ﻿import { describe, it, expect, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import {
-  WorkflowCheckpoint,
-  WorkflowState,
-  WorkflowTransition
-} from '@atlas/shared';
-import {
-  WorkflowCheckpointRepository,
-  WorkflowCheckpointUpsertInput
-} from '@atlas/database';
-import {
-  WorkflowRuntime,
-  WorkflowEvent,
-  WorkflowEventBus,
-  ResumeDriver
-} from '../src/workflow/index.js';
+import { WorkflowCheckpoint, WorkflowState, WorkflowTransition } from '@atlas/shared';
+import { WorkflowCheckpointRepository, WorkflowCheckpointUpsertInput } from '@atlas/database';
+import { WorkflowRuntime, WorkflowEvent, WorkflowEventBus, ResumeDriver } from '../src/workflow/index.js';
 
 class InMemoryCheckpointRepo {
   private rows = new Map<string, WorkflowCheckpoint>();
@@ -44,11 +32,7 @@ class InMemoryCheckpointRepo {
     return cp;
   }
 
-  async appendTransition(
-    runId: string,
-    stepId: string,
-    transition: WorkflowTransition
-  ): Promise<WorkflowCheckpoint | null> {
+  async appendTransition(runId: string, stepId: string, transition: WorkflowTransition): Promise<WorkflowCheckpoint | null> {
     const key = this.key(runId, stepId);
     const existing = this.rows.get(key);
     if (!existing) return null;
@@ -73,9 +57,7 @@ class InMemoryCheckpointRepo {
     const due: WorkflowCheckpoint[] = [];
     for (const cp of this.rows.values()) {
       if (
-        (cp.state === 'scheduled' ||
-          cp.state === 'paused' ||
-          cp.state === 'waiting_external_event') &&
+        (cp.state === 'scheduled' || cp.state === 'paused' || cp.state === 'waiting_external_event') &&
         cp.resumeAfter !== null &&
         cp.resumeAfter <= now
       ) {
@@ -180,9 +162,9 @@ describe('WorkflowRuntime', () => {
       stepId: fx.stepId
     });
     await fx.runtime.complete(fx.runId, fx.stepId);
-    await expect(
-      fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to: 'running' })
-    ).rejects.toThrow(/Illegal workflow transition/);
+    await expect(fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to: 'running' })).rejects.toThrow(
+      /Illegal workflow transition/
+    );
   });
 
   it('completed is terminal - no transitions out', async () => {
@@ -193,16 +175,8 @@ describe('WorkflowRuntime', () => {
       stepId: fx.stepId
     });
     await fx.runtime.complete(fx.runId, fx.stepId);
-    for (const to of [
-      'running',
-      'paused',
-      'failed',
-      'cancelled',
-      'waiting_approval'
-    ] as WorkflowState[]) {
-      await expect(
-        fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to })
-      ).rejects.toThrow(/Illegal workflow transition/);
+    for (const to of ['running', 'paused', 'failed', 'cancelled', 'waiting_approval'] as WorkflowState[]) {
+      await expect(fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to })).rejects.toThrow(/Illegal workflow transition/);
     }
   });
 
@@ -216,9 +190,9 @@ describe('WorkflowRuntime', () => {
     await fx.runtime.cancel(fx.runId, fx.stepId, 'user cancelled');
     const cp = await fx.runtime.get(fx.runId, fx.stepId);
     expect(cp?.state).toBe('cancelled');
-    await expect(
-      fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to: 'running' })
-    ).rejects.toThrow(/Illegal workflow transition/);
+    await expect(fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to: 'running' })).rejects.toThrow(
+      /Illegal workflow transition/
+    );
   });
 
   it('failed is terminal', async () => {
@@ -231,9 +205,9 @@ describe('WorkflowRuntime', () => {
     await fx.runtime.fail(fx.runId, fx.stepId, 'oops');
     const cp = await fx.runtime.get(fx.runId, fx.stepId);
     expect(cp?.state).toBe('failed');
-    await expect(
-      fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to: 'running' })
-    ).rejects.toThrow(/Illegal workflow transition/);
+    await expect(fx.runtime.transition({ runId: fx.runId, stepId: fx.stepId, to: 'running' })).rejects.toThrow(
+      /Illegal workflow transition/
+    );
   });
 
   it('schedule + resumeAfter persists and listResumable returns it once the time has passed', async () => {
@@ -272,10 +246,7 @@ describe('WorkflowRuntime', () => {
 
     const cp = await fx.runtime.get(fx.runId, fx.stepId);
     expect(cp?.state).toBe('running');
-    expect(cp?.history.map(h => `${h.from}->${h.to}`)).toEqual([
-      'running->paused',
-      'paused->running'
-    ]);
+    expect(cp?.history.map(h => `${h.from}->${h.to}`)).toEqual(['running->paused', 'paused->running']);
   });
 
   it('appendTransition stores from/to/at/reason on the checkpoint history', async () => {
@@ -371,11 +342,7 @@ describe('ResumeDriver', () => {
       agentId: fx2.agentId,
       stepId: fx2.stepId
     });
-    await fx2.runtime.schedule(
-      fx2.runId,
-      fx2.stepId,
-      new Date('2026-01-01T00:00:05Z')
-    );
+    await fx2.runtime.schedule(fx2.runId, fx2.stepId, new Date('2026-01-01T00:00:05Z'));
 
     const driver = new ResumeDriver({
       runtime: fx2.runtime,
@@ -401,11 +368,7 @@ describe('ResumeDriver', () => {
       agentId: fx2.agentId,
       stepId: fx2.stepId
     });
-    await fx2.runtime.schedule(
-      fx2.runId,
-      fx2.stepId,
-      new Date('2026-01-01T00:00:05Z')
-    );
+    await fx2.runtime.schedule(fx2.runId, fx2.stepId, new Date('2026-01-01T00:00:05Z'));
 
     const driver = new ResumeDriver({
       runtime: fx2.runtime,

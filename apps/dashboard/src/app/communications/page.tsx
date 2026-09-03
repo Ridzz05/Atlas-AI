@@ -77,7 +77,13 @@ function FeedCard({ item }: { item: CommunicationFeedItem }) {
           boxShadow: '0 2px 6px rgba(32, 21, 21, 0.04)'
         }}
       >
-        {isTool ? <CiSettings size={20} /> : senderKey === 'user' || senderKey === 'api-owner' ? <CiUser size={20} /> : <CiMicrochip size={20} />}
+        {isTool ? (
+          <CiSettings size={20} />
+        ) : senderKey === 'user' || senderKey === 'api-owner' ? (
+          <CiUser size={20} />
+        ) : (
+          <CiMicrochip size={20} />
+        )}
       </Box>
 
       {/* Card Content */}
@@ -238,7 +244,7 @@ export default function CommunicationsPage() {
 
   const filteredFeed = useMemo(() => {
     if (feedFilter === 'all') return feed;
-    return feed.filter((item) => item.kind === feedFilter);
+    return feed.filter(item => item.kind === feedFilter);
   }, [feed, feedFilter]);
 
   const handleSend = async (e: React.FormEvent) => {
@@ -312,14 +318,17 @@ export default function CommunicationsPage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
 
       {/* Filter Tabs */}
       <Stack direction="row" spacing={1}>
-        {(['all', 'message', 'tool'] as FeedFilter[]).map((f) => (
+        {(['all', 'message', 'tool'] as FeedFilter[]).map(f => (
           <Chip
             key={f}
             label={f.toUpperCase()}
@@ -352,23 +361,33 @@ export default function CommunicationsPage() {
         </Card>
       ) : (
         <Stack spacing={2}>
-          {filteredFeed.map((item) => (
+          {filteredFeed.map(item => (
             <FeedCard key={item.id} item={item} />
           ))}
         </Stack>
       )}
 
       {/* Operator Broadcast Box */}
-      <Card component="form" onSubmit={handleSend} sx={{ p: 2.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', display: 'flex', gap: 1.5 }}>
+      <Card
+        component="form"
+        onSubmit={handleSend}
+        sx={{ p: 2.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', display: 'flex', gap: 1.5 }}
+      >
         <TextField
           fullWidth
           size="small"
           value={inputMsg}
-          onChange={(e) => setInputMsg(e.target.value)}
+          onChange={e => setInputMsg(e.target.value)}
           placeholder="Send operator broadcast or direct message to Chief…"
           disabled={submitting}
         />
-        <Button type="submit" variant="contained" color="primary" disabled={submitting || !inputMsg.trim()} startIcon={<CiPaperplane size={18} />}>
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          disabled={submitting || !inputMsg.trim()}
+          startIcon={<CiPaperplane size={18} />}
+        >
           Send
         </Button>
       </Card>

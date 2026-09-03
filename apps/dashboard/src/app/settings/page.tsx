@@ -132,7 +132,10 @@ export default function SettingsPage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
@@ -147,7 +150,15 @@ export default function SettingsPage() {
       ) : (
         <Stack spacing={3}>
           {/* OpenRouter API Key Setup Card */}
-          <Card sx={{ p: 3.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', boxShadow: '0 4px 16px rgba(32, 21, 21, 0.04)' }}>
+          <Card
+            sx={{
+              p: 3.5,
+              bgcolor: '#ffffff',
+              borderRadius: '16px',
+              border: '1px solid rgba(32, 21, 21, 0.08)',
+              boxShadow: '0 4px 16px rgba(32, 21, 21, 0.04)'
+            }}
+          >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2 }}>
               <CiLock size={22} color="#c2410c" />
               <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515' }}>
@@ -159,7 +170,10 @@ export default function SettingsPage() {
             </Typography>
 
             {keyMessage && (
-              <Alert severity="info" sx={{ mb: 2, bgcolor: '#fbf8f2', border: '1px solid rgba(255, 79, 0, 0.25)', color: '#201515', borderRadius: '10px' }}>
+              <Alert
+                severity="info"
+                sx={{ mb: 2, bgcolor: '#fbf8f2', border: '1px solid rgba(255, 79, 0, 0.25)', color: '#201515', borderRadius: '10px' }}
+              >
                 {keyMessage}
               </Alert>
             )}
@@ -170,16 +184,28 @@ export default function SettingsPage() {
                 size="small"
                 type="password"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={e => setApiKey(e.target.value)}
                 placeholder="sk-or-v1-..."
                 disabled={savingKey}
                 sx={{ flex: 1, minWidth: 260 }}
               />
-              <Button type="submit" variant="contained" color="primary" disabled={savingKey || !apiKey.trim()} startIcon={<CiFloppyDisk size={18} />}>
+              <Button
+                type="submit"
+                variant="contained"
+                color="primary"
+                disabled={savingKey || !apiKey.trim()}
+                startIcon={<CiFloppyDisk size={18} />}
+              >
                 Save Key
               </Button>
               {settings?.modelConfigured && (
-                <Button variant="outlined" color="error" disabled={savingKey} onClick={() => void clearOpenRouterKey()} startIcon={<CiTrash size={18} />}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  disabled={savingKey}
+                  onClick={() => void clearOpenRouterKey()}
+                  startIcon={<CiTrash size={18} />}
+                >
                   Remove
                 </Button>
               )}
@@ -188,25 +214,47 @@ export default function SettingsPage() {
 
           {/* Engine Parameters Card */}
           {settings && (
-            <Card sx={{ p: 3.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', boxShadow: '0 4px 16px rgba(32, 21, 21, 0.04)' }}>
+            <Card
+              sx={{
+                p: 3.5,
+                bgcolor: '#ffffff',
+                borderRadius: '16px',
+                border: '1px solid rgba(32, 21, 21, 0.08)',
+                boxShadow: '0 4px 16px rgba(32, 21, 21, 0.04)'
+              }}
+            >
               <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515', mb: 2.5 }}>
                 Engine Operational Guardrails
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' }, gap: 2 }}>
                 <Box sx={{ p: 2, borderRadius: '12px', bgcolor: '#fbf8f2', border: '1px solid rgba(32, 21, 21, 0.06)' }}>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>GLOBAL DAILY BUDGET</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>${settings.globalDailyBudgetUsd.toFixed(2)}</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>
+                    GLOBAL DAILY BUDGET
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>
+                    ${settings.globalDailyBudgetUsd.toFixed(2)}
+                  </Typography>
                 </Box>
                 <Box sx={{ p: 2, borderRadius: '12px', bgcolor: '#fbf8f2', border: '1px solid rgba(32, 21, 21, 0.06)' }}>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>MAX CONCURRENT RUNS</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>{settings.maxConcurrentAgentRuns}</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>
+                    MAX CONCURRENT RUNS
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>
+                    {settings.maxConcurrentAgentRuns}
+                  </Typography>
                 </Box>
                 <Box sx={{ p: 2, borderRadius: '12px', bgcolor: '#fbf8f2', border: '1px solid rgba(32, 21, 21, 0.06)' }}>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>MAX DELEGATION DEPTH</Typography>
-                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>{settings.maxDelegationDepth}</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>
+                    MAX DELEGATION DEPTH
+                  </Typography>
+                  <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>
+                    {settings.maxDelegationDepth}
+                  </Typography>
                 </Box>
                 <Box sx={{ p: 2, borderRadius: '12px', bgcolor: '#fbf8f2', border: '1px solid rgba(32, 21, 21, 0.06)' }}>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>EXTERNAL WRITES</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontWeight: 600 }}>
+                    EXTERNAL WRITES
+                  </Typography>
                   <Typography variant="h6" sx={{ fontWeight: 800, color: settings.externalWritesEnabled ? '#16a34a' : '#ff4f00', mt: 0.5 }}>
                     {settings.externalWritesEnabled ? 'ENABLED' : 'GATED'}
                   </Typography>

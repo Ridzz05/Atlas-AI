@@ -1,17 +1,7 @@
 ﻿import { describe, it, expect, vi } from 'vitest';
-import {
-  IdempotentSender,
-  IdempotencyStoreAdapter
-} from '../src/communication/idempotent-sender.js';
-import {
-  IdempotencyKey,
-  IdempotencyRecord
-} from '@atlas/shared/schemas/idempotency';
-import {
-  CommunicationSendInput,
-  CommunicationSendResult,
-  CommunicationSender
-} from '../src/types.js';
+import { IdempotentSender, IdempotencyStoreAdapter } from '../src/communication/idempotent-sender.js';
+import { IdempotencyKey, IdempotencyRecord } from '@atlas/shared/schemas/idempotency';
+import { CommunicationSendInput, CommunicationSendResult, CommunicationSender } from '../src/types.js';
 
 class InMemoryIdempotencyStore implements IdempotencyStoreAdapter {
   public records = new Map<string, IdempotencyRecord>();
@@ -149,14 +139,11 @@ describe('IdempotentSender', () => {
   it('after in-flight TTL expires on failed record: releases and retries', async () => {
     const store = new InMemoryIdempotencyStore();
     let nowMs = new Date('2026-09-02T00:00:00.000Z').getTime();
-    const inner = vi
-      .fn<CommunicationSender>()
-      .mockRejectedValueOnce(new Error('transient error'))
-      .mockResolvedValueOnce({
-        messageId: 'remote-4',
-        recipient: baseInput.recipient,
-        timestamp: '2026-09-02T00:05:00.000Z'
-      });
+    const inner = vi.fn<CommunicationSender>().mockRejectedValueOnce(new Error('transient error')).mockResolvedValueOnce({
+      messageId: 'remote-4',
+      recipient: baseInput.recipient,
+      timestamp: '2026-09-02T00:05:00.000Z'
+    });
     const sender = new IdempotentSender({
       inner,
       store,

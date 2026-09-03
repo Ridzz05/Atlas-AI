@@ -42,7 +42,7 @@ describe('@atlas/dashboard Integration Tests', () => {
 
   it('keeps Node-only shared modules out of the browser entrypoint', () => {
     const sharedEntry = readFileSync(resolve(process.cwd(), '../../packages/shared/src/index.ts'), 'utf8');
-    expect(sharedEntry).not.toContain("./schemas/idempotency.js");
+    expect(sharedEntry).not.toContain('./schemas/idempotency.js');
   });
 
   it('validates agent limits and security configurations', () => {

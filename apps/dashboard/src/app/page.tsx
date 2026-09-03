@@ -12,17 +12,7 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
-import {
-  CiCircleCheck,
-  CiClock2,
-  CiCircleAlert,
-  CiDollar,
-  CiCirclePlus,
-  CiRedo,
-  CiPause1,
-  CiPlay1,
-  CiWarning
-} from 'react-icons/ci';
+import { CiCircleCheck, CiClock2, CiCircleAlert, CiDollar, CiCirclePlus, CiRedo, CiPause1, CiPlay1, CiWarning } from 'react-icons/ci';
 import { AgentGraph, AgentNodeData } from '../components/agent-graph';
 import { atlasFetch } from '../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../lib/event-stream';
@@ -87,17 +77,15 @@ interface ControlResponse {
 type ControlAction = 'pause' | 'resume' | 'emergency-stop';
 
 const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status'] => {
-  const assigned = tasks.filter((task) => task.assignedAgent === agentId);
+  const assigned = tasks.filter(task => task.assignedAgent === agentId);
   if (assigned.length === 0) return 'IDLE';
 
   // 1. Is the agent actively executing, planning, or waiting for review right now?
-  const activeTask = assigned.find((task) =>
-    ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)
-  );
+  const activeTask = assigned.find(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status));
   if (activeTask) return 'WORKING';
 
   // 2. Is there a queued task waiting for this agent?
-  const queuedTask = assigned.find((task) => task.status === 'queued');
+  const queuedTask = assigned.find(task => task.status === 'queued');
   if (queuedTask) return 'QUEUED';
 
   // 3. Otherwise, check the most recent task: if the most recent task failed, report ERROR, else IDLE
@@ -194,14 +182,12 @@ export default function CommandCenterPage() {
     };
   }, []);
 
-  const activeCount = tasks.filter((task) =>
-    ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)
-  ).length;
-  const completedCount = tasks.filter((task) => task.status === 'completed').length;
+  const activeCount = tasks.filter(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)).length;
+  const completedCount = tasks.filter(task => task.status === 'completed').length;
   const costToday = costMetrics?.costs?.periodCostUsd;
   const budget = costMetrics?.budget;
   const agentIds = ['chief', 'ned', 'layla', 'hermes', 'argus'];
-  const graphAgents: AgentNodeData[] = agentIds.map((id) => ({
+  const graphAgents: AgentNodeData[] = agentIds.map(id => ({
     id,
     name: id[0]!.toUpperCase() + id.slice(1),
     role: id === 'chief' ? 'Orchestrator' : id === 'argus' ? 'QA & Risk Gate' : id,
@@ -237,28 +223,32 @@ export default function CommandCenterPage() {
           >
             <CiRedo size={18} />
           </IconButton>
-          <Button
-            component={Link}
-            href="/tasks"
-            variant="contained"
-            color="primary"
-            endIcon={<CiCirclePlus size={18} />}
-            sx={{ px: 2.5 }}
-          >
+          <Button component={Link} href="/tasks" variant="contained" color="primary" endIcon={<CiCirclePlus size={18} />} sx={{ px: 2.5 }}>
             Create Zap Goal
           </Button>
         </Stack>
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
 
       {/* Zapier Fleet Control Bar */}
       <Card sx={{ p: 3, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)' }}>
-        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { xs: 'flex-start', md: 'center' }, justifyContent: 'space-between', gap: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            alignItems: { xs: 'flex-start', md: 'center' },
+            justifyContent: 'space-between',
+            gap: 2
+          }}
+        >
           <Box>
             <Typography variant="caption" sx={{ color: '#d64200', fontFamily: 'monospace', fontWeight: 700, letterSpacing: '0.06em' }}>
               DURABLE WORKFLOW DISPATCH
@@ -269,23 +259,17 @@ export default function CommandCenterPage() {
                   width: 10,
                   height: 10,
                   borderRadius: '50%',
-                  bgcolor: controlState?.emergencyStop
-                    ? '#dc2626'
-                    : controlState?.paused
-                    ? '#ff4f00'
-                    : controlState
-                    ? '#16a34a'
-                    : '#a8a29e'
+                  bgcolor: controlState?.emergencyStop ? '#dc2626' : controlState?.paused ? '#ff4f00' : controlState ? '#16a34a' : '#a8a29e'
                 }}
               />
               <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#201515' }}>
                 {controlState?.emergencyStop
                   ? 'Emergency Stop Active'
                   : controlState?.paused
-                  ? 'Workflow Intake Paused'
-                  : controlState
-                  ? 'Workflow Engine Live & Active'
-                  : 'State Unavailable'}
+                    ? 'Workflow Intake Paused'
+                    : controlState
+                      ? 'Workflow Engine Live & Active'
+                      : 'State Unavailable'}
               </Typography>
             </Box>
             <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500 }}>
@@ -367,7 +351,12 @@ export default function CommandCenterPage() {
           >
             <VanillaMetricCard label="ACTIVE TASKS" value={String(activeCount)} icon={<CiClock2 size={20} />} accent={activeCount > 0} />
             <VanillaMetricCard label="COMPLETED" value={String(completedCount)} icon={<CiCircleCheck size={20} />} />
-            <VanillaMetricCard label="APPROVALS PENDING" value={String(pendingApprovals)} icon={<CiCircleAlert size={20} />} accent={pendingApprovals > 0} />
+            <VanillaMetricCard
+              label="APPROVALS PENDING"
+              value={String(pendingApprovals)}
+              icon={<CiCircleAlert size={20} />}
+              accent={pendingApprovals > 0}
+            />
             <VanillaMetricCard
               label="COST TODAY"
               value={costToday == null ? '$0.00' : `$${costToday.toFixed(2)}`}
@@ -429,10 +418,13 @@ export default function CommandCenterPage() {
               </Typography>
             ) : (
               <Stack divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.05)' }} />} spacing={1}>
-                {tasks.slice(0, 5).map((task) => (
+                {tasks.slice(0, 5).map(task => (
                   <Box key={task.id} sx={{ py: 1.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <Typography
+                        variant="body2"
+                        sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
                         {task.title}
                       </Typography>
                       <Typography variant="caption" sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 600 }}>
@@ -489,7 +481,10 @@ function VanillaMetricCard({
       }}
     >
       <Box>
-        <Typography variant="caption" sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.04em' }}>
+        <Typography
+          variant="caption"
+          sx={{ color: '#666155', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.68rem', letterSpacing: '0.04em' }}
+        >
           {label}
         </Typography>
         <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mt: 0.5 }}>

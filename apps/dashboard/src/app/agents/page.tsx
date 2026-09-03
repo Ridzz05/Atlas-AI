@@ -10,16 +10,7 @@ import Chip from '@mui/material/Chip';
 import Alert from '@mui/material/Alert';
 import CircularProgress from '@mui/material/CircularProgress';
 import Avatar from '@mui/material/Avatar';
-import {
-  CiLock,
-  CiSearch,
-  CiBadgeDollar,
-  CiEdit,
-  CiCircleCheck,
-  CiMicrochip,
-  CiUser,
-  CiRedo
-} from 'react-icons/ci';
+import { CiLock, CiSearch, CiBadgeDollar, CiEdit, CiCircleCheck, CiMicrochip, CiUser, CiRedo } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 
 interface ApiAgent {
@@ -106,7 +97,10 @@ export default function AgentsPage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
@@ -132,7 +126,7 @@ export default function AgentsPage() {
             gap: 3
           }}
         >
-          {agents.map((agent) => (
+          {agents.map(agent => (
             <Card
               key={agent.id}
               sx={{
@@ -148,7 +142,15 @@ export default function AgentsPage() {
                 }
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 2, borderBottom: '1px solid rgba(32, 21, 21, 0.06)' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  pb: 2,
+                  borderBottom: '1px solid rgba(32, 21, 21, 0.06)'
+                }}
+              >
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                   <Avatar
                     variant="rounded"
@@ -202,26 +204,41 @@ export default function AgentsPage() {
                 }}
               >
                 <Box>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontSize: '0.68rem', fontWeight: 600 }}>MAX TURNS</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#201515' }}>{agent.limits.maxTurns}</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontSize: '0.68rem', fontWeight: 600 }}>
+                    MAX TURNS
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#201515' }}>
+                    {agent.limits.maxTurns}
+                  </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontSize: '0.68rem', fontWeight: 600 }}>MAX DEPTH</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#201515' }}>{agent.limits.maxDelegationDepth}</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontSize: '0.68rem', fontWeight: 600 }}>
+                    MAX DEPTH
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#201515' }}>
+                    {agent.limits.maxDelegationDepth}
+                  </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="caption" sx={{ color: '#8c827a', fontSize: '0.68rem', fontWeight: 600 }}>COST LIMIT</Typography>
-                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#201515' }}>${agent.limits.maxCostUsd}</Typography>
+                  <Typography variant="caption" sx={{ color: '#8c827a', fontSize: '0.68rem', fontWeight: 600 }}>
+                    COST LIMIT
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontWeight: 800, color: '#201515' }}>
+                    ${agent.limits.maxCostUsd}
+                  </Typography>
                 </Box>
               </Box>
 
               {/* Allowed Tools */}
               <Box>
-                <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.68rem', mb: 1, display: 'block' }}>
+                <Typography
+                  variant="caption"
+                  sx={{ color: '#8c827a', fontFamily: 'monospace', fontWeight: 700, fontSize: '0.68rem', mb: 1, display: 'block' }}
+                >
                   PERMITTED CAPABILITY TOOLS:
                 </Typography>
                 <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 0.75 }}>
-                  {agent.permissions.tools.map((tool) => (
+                  {agent.permissions.tools.map(tool => (
                     <Chip
                       key={tool}
                       label={tool}

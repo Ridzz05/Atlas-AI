@@ -1166,11 +1166,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       }
     });
 
-    const result = await registry.execute(
-      'integration.event_traced',
-      {},
-      { taskId: 't-1', runId: 'r-1', agentId: 'argus' }
-    );
+    const result = await registry.execute('integration.event_traced', {}, { taskId: 't-1', runId: 'r-1', agentId: 'argus' });
 
     expect(result.success).toBe(true);
     const types = events.map(e => e.type);
@@ -1214,11 +1210,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       }
     });
 
-    const result = await registry.execute(
-      'integration.event_failing',
-      {},
-      { taskId: 't-1', runId: 'r-1', agentId: 'argus' }
-    );
+    const result = await registry.execute('integration.event_failing', {}, { taskId: 't-1', runId: 'r-1', agentId: 'argus' });
 
     expect(result.success).toBe(false);
     const types = events.map(e => e.type);

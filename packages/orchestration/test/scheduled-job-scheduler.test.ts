@@ -2,22 +2,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScheduledJobScheduler, ScheduledJobTriggerContext } from '../src/scheduler/scheduled-job-scheduler.js';
 import { AgentDefinition } from '@atlas/shared';
 
-function makeJob(overrides: Partial<{
-  id: string;
-  name: string;
-  jobType: 'daily_briefing';
-  cronPattern: string;
-  timezone: string;
-  payload: Record<string, unknown>;
-  assignedAgent: string;
-  enabled: boolean;
-  lastRunAt: string | null;
-  nextRunAt: string | null;
-  lastError: string | null;
-  createdBy: string;
-  createdAt: string;
-  updatedAt: string;
-}> = {}) {
+function makeJob(
+  overrides: Partial<{
+    id: string;
+    name: string;
+    jobType: 'daily_briefing';
+    cronPattern: string;
+    timezone: string;
+    payload: Record<string, unknown>;
+    assignedAgent: string;
+    enabled: boolean;
+    lastRunAt: string | null;
+    nextRunAt: string | null;
+    lastError: string | null;
+    createdBy: string;
+    createdAt: string;
+    updatedAt: string;
+  }> = {}
+) {
   const now = new Date('2026-08-31T00:00:00Z').toISOString();
   return {
     id: 'sj_morning',
@@ -159,11 +161,7 @@ describe('ScheduledJobScheduler', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     const handlerArg = handler.mock.calls[0][0] as ScheduledJobTriggerContext;
     expect(handlerArg.job.id).toBe('sj_morning');
-    expect(repos.scheduledJobRepo.recordRun).toHaveBeenCalledWith(
-      'sj_morning',
-      new Date('2026-09-01T00:00:00Z'),
-      undefined
-    );
+    expect(repos.scheduledJobRepo.recordRun).toHaveBeenCalledWith('sj_morning', new Date('2026-09-01T00:00:00Z'), undefined);
   });
 
   it('records error and skips handler when assigned agent is missing', async () => {
@@ -183,11 +181,7 @@ describe('ScheduledJobScheduler', () => {
     expect(result).toEqual({ executed: true });
     expect(repos.taskRepo.create).not.toHaveBeenCalled();
     expect(handler).not.toHaveBeenCalled();
-    expect(repos.scheduledJobRepo.recordRun).toHaveBeenCalledWith(
-      'sj_morning',
-      null,
-      'Assigned agent not found: unknown-agent'
-    );
+    expect(repos.scheduledJobRepo.recordRun).toHaveBeenCalledWith('sj_morning', null, 'Assigned agent not found: unknown-agent');
   });
 
   it('refuses to execute disabled jobs through runJobNow', async () => {

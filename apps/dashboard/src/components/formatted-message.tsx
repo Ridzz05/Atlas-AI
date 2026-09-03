@@ -369,7 +369,16 @@ export function FormattedMessage({ content, maxInitialHeight = 360 }: FormattedM
       </Box>
 
       {/* Action Footer: Expand/Collapse & Copy Button */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mt: 1.5, pt: 1, borderTop: '1px solid rgba(32,21,21,0.06)' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mt: 1.5,
+          pt: 1,
+          borderTop: '1px solid rgba(32,21,21,0.06)'
+        }}
+      >
         {isLongContent ? (
           <Button
             size="small"

@@ -8,17 +8,7 @@ import Chip from '@mui/material/Chip';
 import Avatar from '@mui/material/Avatar';
 import Stack from '@mui/material/Stack';
 import Divider from '@mui/material/Divider';
-import {
-  CiLock,
-  CiSearch,
-  CiBadgeDollar,
-  CiEdit,
-  CiCircleCheck,
-  CiPlay1,
-  CiClock2,
-  CiCircleAlert,
-  CiCircleMinus
-} from 'react-icons/ci';
+import { CiLock, CiSearch, CiBadgeDollar, CiEdit, CiCircleCheck, CiPlay1, CiClock2, CiCircleAlert, CiCircleMinus } from 'react-icons/ci';
 
 export type AgentNodeStatus = 'IDLE' | 'QUEUED' | 'WORKING' | 'ERROR';
 
@@ -133,9 +123,9 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
     }
   };
 
-  const chief = agents.find((a) => a.id === 'chief') || DEFAULT_AGENTS[0]!;
-  const specialists = agents.filter((a) => a.id !== 'chief' && a.id !== 'argus');
-  const argus = agents.find((a) => a.id === 'argus') || DEFAULT_AGENTS[4]!;
+  const chief = agents.find(a => a.id === 'chief') || DEFAULT_AGENTS[0]!;
+  const specialists = agents.filter(a => a.id !== 'chief' && a.id !== 'argus');
+  const argus = agents.find(a => a.id === 'argus') || DEFAULT_AGENTS[4]!;
 
   return (
     <Card
@@ -147,7 +137,16 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
       }}
     >
       {/* Header */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, pb: 2, borderBottom: '1px solid rgba(32, 21, 21, 0.06)' }}>
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          mb: 3,
+          pb: 2,
+          borderBottom: '1px solid rgba(32, 21, 21, 0.06)'
+        }}
+      >
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
           <CiPlay1 size={22} color="#c2410c" />
           <Box>
@@ -162,10 +161,16 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
         <Stack direction="row" spacing={2} sx={{ fontSize: '0.75rem', fontFamily: 'monospace', color: '#666155' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
             <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#ff4f00' }} />
-            <Typography variant="caption" sx={{ color: '#201515', fontWeight: 700 }}>Active Fleet</Typography>
+            <Typography variant="caption" sx={{ color: '#201515', fontWeight: 700 }}>
+              Active Fleet
+            </Typography>
           </Box>
-          <Typography variant="caption" sx={{ color: '#8c827a' }}>Max Concurrency: 3</Typography>
-          <Typography variant="caption" sx={{ color: '#8c827a' }}>Max Depth: 2</Typography>
+          <Typography variant="caption" sx={{ color: '#8c827a' }}>
+            Max Concurrency: 3
+          </Typography>
+          <Typography variant="caption" sx={{ color: '#8c827a' }}>
+            Max Depth: 2
+          </Typography>
         </Stack>
       </Box>
 
@@ -222,7 +227,7 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
             maxWidth: 860
           }}
         >
-          {specialists.map((agent) => (
+          {specialists.map(agent => (
             <Card
               key={agent.id}
               sx={{
@@ -267,7 +272,16 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
 
               <Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />
 
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#8c827a', fontFamily: 'monospace', fontWeight: 600 }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  fontSize: '0.7rem',
+                  color: '#8c827a',
+                  fontFamily: 'monospace',
+                  fontWeight: 600
+                }}
+              >
                 <span>Depth: 1</span>
                 <span>Max Turns: 10</span>
               </Box>

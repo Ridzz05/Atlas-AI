@@ -42,11 +42,7 @@ Gym membership rates in Jakarta and Palembang average $30-$60 per month.
 Celebrity Fitness and Fitness First are leading chains.`
     });
 
-    const execRes = await registry.execute(
-      'second_brain.search',
-      { query: 'Jakarta gym membership rates', limit: 3 },
-      mockContext
-    );
+    const execRes = await registry.execute('second_brain.search', { query: 'Jakarta gym membership rates', limit: 3 }, mockContext);
 
     expect(execRes.success).toBe(true);
     const output = execRes.output as { results: any[] };
@@ -56,11 +52,7 @@ Celebrity Fitness and Fitness First are leading chains.`
   });
 
   it('reads note content and metadata via second_brain.read_note', async () => {
-    const execRes = await registry.execute(
-      'second_brain.read_note',
-      { title: 'Indonesian Gym Market' },
-      mockContext
-    );
+    const execRes = await registry.execute('second_brain.read_note', { title: 'Indonesian Gym Market' }, mockContext);
 
     expect(execRes.success).toBe(true);
     const output = execRes.output as { note: any };
@@ -79,11 +71,7 @@ Celebrity Fitness and Fitness First are leading chains.`
   });
 
   it('synthesizes grounded response via second_brain.query', async () => {
-    const execRes = await registry.execute(
-      'second_brain.query',
-      { query: 'How much are gym memberships in Jakarta?' },
-      mockContext
-    );
+    const execRes = await registry.execute('second_brain.query', { query: 'How much are gym memberships in Jakarta?' }, mockContext);
 
     expect(execRes.success).toBe(true);
     const output = execRes.output as { answer: string; citations: any[]; sources: any[] };

@@ -29,24 +29,13 @@ function stableStringify(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return '[' + value.map((item) => stableStringify(item)).join(',') + ']';
+    return '[' + value.map(item => stableStringify(item)).join(',') + ']';
   }
-  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0
-  );
-  return (
-    '{' +
-    entries.map(([k, v]) => JSON.stringify(k) + ':' + stableStringify(v)).join(',') +
-    '}'
-  );
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + stableStringify(v)).join(',') + '}';
 }
 
-export function computeIdempotencyKey(input: {
-  taskId: string;
-  runId?: string;
-  actionName: string;
-  payload: unknown;
-}): string {
+export function computeIdempotencyKey(input: { taskId: string; runId?: string; actionName: string; payload: unknown }): string {
   const hash = createHash('sha256').update(stableStringify(input.payload)).digest('hex');
   return `${input.taskId}:${input.runId ?? 'norun'}:${input.actionName}:${hash}`;
 }

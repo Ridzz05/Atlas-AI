@@ -30,14 +30,7 @@ import {
   createMemoryTools
 } from '@atlas/tools';
 import type { ResearchProvider } from '@atlas/tools';
-import {
-  AgentRunner,
-  TaskDelegator,
-  TaskQueue,
-  InMemoryTaskQueue,
-  ToolGatewayExecutor,
-  ScheduledJobScheduler
-} from '@atlas/orchestration';
+import { AgentRunner, TaskDelegator, TaskQueue, InMemoryTaskQueue, ToolGatewayExecutor, ScheduledJobScheduler } from '@atlas/orchestration';
 import { ScheduledJobRepository } from '@atlas/database';
 
 export interface WorkerRunnerOptions {

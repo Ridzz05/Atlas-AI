@@ -1,9 +1,4 @@
-import {
-  SecondBrainDocument,
-  SecondBrainSearchResult,
-  SecondBrainCitation,
-  SecondBrainStats
-} from '@atlas/shared';
+import { SecondBrainDocument, SecondBrainSearchResult, SecondBrainCitation, SecondBrainStats } from '@atlas/shared';
 import { VaultIngestionService, IngestDocumentInput, IngestVaultResult } from './vault-ingestion-service.js';
 import { SecondBrainRetriever, SecondBrainQueryOptions } from './second-brain-retriever.js';
 import { VectorEmbeddingService, EmbeddingConfig } from './vector-embedding-service.js';
@@ -74,10 +69,7 @@ export class SecondBrainService {
   /**
    * Grounded RAG Query: searches the vault, synthesizes context, and formats traceable wiki-link citations.
    */
-  public async query(
-    query: string,
-    options: { scope?: string; limit?: number; minScore?: number } = {}
-  ): Promise<GroundedRAGResponse> {
+  public async query(query: string, options: { scope?: string; limit?: number; minScore?: number } = {}): Promise<GroundedRAGResponse> {
     return this.queryGrounded(query, options);
   }
 

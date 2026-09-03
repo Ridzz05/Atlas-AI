@@ -156,10 +156,7 @@ export interface IdempotencyStore {
     remoteId?: string | null;
     provider?: string | null;
   } | null>;
-  recordSuccess(
-    key: string,
-    fields: { provider?: string; remoteId?: string; result?: Record<string, unknown> }
-  ): Promise<unknown>;
+  recordSuccess(key: string, fields: { provider?: string; remoteId?: string; result?: Record<string, unknown> }): Promise<unknown>;
   recordFailure(key: string, error: string): Promise<unknown>;
   release(key: string): Promise<boolean>;
 }

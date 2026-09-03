@@ -52,7 +52,9 @@ let theme = createTheme({
     divider: 'rgba(32, 21, 21, 0.08)'
   },
   typography: {
-    fontFamily: ['"Valley Sans"', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'].join(','),
+    fontFamily: ['"Valley Sans"', 'Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'].join(
+      ','
+    ),
     h1: { fontWeight: 700, letterSpacing: '-0.025em', color: '#201515' },
     h2: { fontWeight: 700, letterSpacing: '-0.02em', color: '#201515' },
     h3: { fontWeight: 700, letterSpacing: '-0.015em', color: '#201515' },

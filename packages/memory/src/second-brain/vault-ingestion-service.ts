@@ -205,10 +205,12 @@ export class VaultIngestionService {
   }
 
   private generateDocumentId(filePath: string): string {
-    return filePath
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '') || crypto.randomUUID();
+    return (
+      filePath
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || crypto.randomUUID()
+    );
   }
 
   private async findFilesRecursively(dir: string, extensions: string[], excludes: string[]): Promise<string[]> {

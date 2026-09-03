@@ -60,7 +60,7 @@ export default function ApprovalsPage() {
         method: 'POST',
         body: JSON.stringify({ status })
       });
-      setApprovals((current) => current.filter((approval) => approval.id !== id));
+      setApprovals(current => current.filter(approval => approval.id !== id));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to record approval decision.');
     } finally {
@@ -100,7 +100,10 @@ export default function ApprovalsPage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
@@ -124,7 +127,7 @@ export default function ApprovalsPage() {
         </Card>
       ) : (
         <Stack spacing={2.5}>
-          {approvals.map((req) => {
+          {approvals.map(req => {
             const isActing = actingId === req.id;
             return (
               <Card
@@ -140,7 +143,17 @@ export default function ApprovalsPage() {
                   boxShadow: '0 4px 16px rgba(32, 21, 21, 0.05)'
                 }}
               >
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, pb: 2, borderBottom: '1px solid rgba(32, 21, 21, 0.06)' }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    flexWrap: 'wrap',
+                    gap: 2,
+                    pb: 2,
+                    borderBottom: '1px solid rgba(32, 21, 21, 0.06)'
+                  }}
+                >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                     <Box
                       sx={{

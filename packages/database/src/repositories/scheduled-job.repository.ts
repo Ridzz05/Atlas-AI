@@ -87,10 +87,7 @@ export class ScheduledJobRepository {
     }
     fields.push('updated_at = NOW()');
     params.push(id);
-    const res = await this.db.query(
-      `UPDATE scheduled_jobs SET ${fields.join(', ')} WHERE id = $${params.length} RETURNING *`,
-      params
-    );
+    const res = await this.db.query(`UPDATE scheduled_jobs SET ${fields.join(', ')} WHERE id = $${params.length} RETURNING *`, params);
     if (!res.rows[0]) throw new Error(`Scheduled job not found: ${id}`);
     return this.mapRow(res.rows[0]);
   }

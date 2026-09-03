@@ -34,7 +34,6 @@ import { registerModelProviderRoutes } from './routes/model-provider.js';
 import { registerSecondBrainRoutes } from './routes/second-brain.js';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
-
 export interface ServerOptions {
   config: EnvConfig;
   db?: DatabaseClient;
@@ -337,7 +336,6 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   });
 
   app.get('/api/v1/settings', async (_req, reply) => {
-
     let persistedModelSettings = null;
     if (options.modelProviderSettingsRepo) {
       try {

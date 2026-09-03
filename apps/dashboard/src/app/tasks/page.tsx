@@ -167,7 +167,10 @@ export default function TasksPage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
@@ -187,7 +190,7 @@ export default function TasksPage() {
         </Card>
       ) : (
         <Stack spacing={2}>
-          {tasks.map((task) => {
+          {tasks.map(task => {
             const cost = typeof task.result?.totalCostUsd === 'number' ? task.result.totalCostUsd : 0;
             const statusStyle = getStatusColor(task.status);
             return (
@@ -292,7 +295,7 @@ export default function TasksPage() {
               multiline
               rows={4}
               value={newGoal}
-              onChange={(e) => setNewGoal(e.target.value)}
+              onChange={e => setNewGoal(e.target.value)}
               placeholder="e.g. Susun agenda rapat marketing untuk besok pukul 10:00 WIB"
               variant="outlined"
               required
@@ -310,11 +313,7 @@ export default function TasksPage() {
             />
           </DialogContent>
           <DialogActions sx={{ p: 2.5, pt: 1, borderTop: '1px solid rgba(32, 21, 21, 0.06)' }}>
-            <Button
-              onClick={() => setShowModal(false)}
-              disabled={submitting}
-              sx={{ color: '#666155' }}
-            >
+            <Button onClick={() => setShowModal(false)} disabled={submitting} sx={{ color: '#666155' }}>
               Cancel
             </Button>
             <Button

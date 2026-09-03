@@ -168,8 +168,7 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
 
   const queryRAG: ToolDefinition = {
     name: 'second_brain.query',
-    description:
-      'Ask a question to the Second Brain knowledge base and get a grounded answer with traceable note citations.',
+    description: 'Ask a question to the Second Brain knowledge base and get a grounded answer with traceable note citations.',
     inputSchema: z.object({
       query: z.string().min(1),
       scope: z.string().optional(),

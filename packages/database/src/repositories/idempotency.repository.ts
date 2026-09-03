@@ -1,8 +1,4 @@
-import {
-  IdempotencyRecord,
-  IdempotencyRecordSchema,
-  IdempotencyKey
-} from '@atlas/shared/schemas/idempotency';
+import { IdempotencyRecord, IdempotencyRecordSchema, IdempotencyKey } from '@atlas/shared/schemas/idempotency';
 import { DatabaseClient } from '../client.js';
 
 export class IdempotencyRepository {
@@ -17,13 +13,7 @@ export class IdempotencyRepository {
       ON CONFLICT (key) DO NOTHING
       RETURNING *
     `,
-      [
-        input.key,
-        input.taskId,
-        input.runId ?? null,
-        input.actionName,
-        input.payloadHash
-      ]
+      [input.key, input.taskId, input.runId ?? null, input.actionName, input.payloadHash]
     );
 
     if (!result.rows[0]) return null;
@@ -31,10 +21,7 @@ export class IdempotencyRepository {
   }
 
   public async findByKey(key: string): Promise<IdempotencyRecord | null> {
-    const result = await this.db.query(
-      'SELECT * FROM idempotency_keys WHERE key = $1',
-      [key]
-    );
+    const result = await this.db.query('SELECT * FROM idempotency_keys WHERE key = $1', [key]);
     if (!result.rows[0]) return null;
     return this.mapRow(result.rows[0]);
   }
@@ -54,12 +41,7 @@ export class IdempotencyRepository {
       WHERE key = $4
       RETURNING *
     `,
-      [
-        fields.provider ?? null,
-        fields.remoteId ?? null,
-        fields.result ? JSON.stringify(fields.result) : null,
-        key
-      ]
+      [fields.provider ?? null, fields.remoteId ?? null, fields.result ? JSON.stringify(fields.result) : null, key]
     );
     if (!result.rows[0]) return null;
     return this.mapRow(result.rows[0]);
@@ -82,10 +64,7 @@ export class IdempotencyRepository {
   }
 
   public async release(key: string): Promise<boolean> {
-    const result = await this.db.query(
-      'DELETE FROM idempotency_keys WHERE key = $1',
-      [key]
-    );
+    const result = await this.db.query('DELETE FROM idempotency_keys WHERE key = $1', [key]);
     return (result.rowCount || 0) > 0;
   }
 

@@ -93,7 +93,7 @@ export function Sidebar() {
 
         {/* Navigation List */}
         <List sx={{ px: 1.5, py: 2 }} component="nav" aria-label="Primary navigation">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.map(item => {
             const Icon = item.icon;
             const isActive = pathname === item.href;
             return (

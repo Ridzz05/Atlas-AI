@@ -58,10 +58,7 @@ export class ApprovalMatrix {
 
   private static readonly KNOWN_ACTIONS = new Set<string>();
 
-  public static evaluate(
-    action: string,
-    options?: { externalWritesEnabled?: boolean; knownActions?: ReadonlySet<string> }
-  ): ActionPolicy {
+  public static evaluate(action: string, options?: { externalWritesEnabled?: boolean; knownActions?: ReadonlySet<string> }): ActionPolicy {
     if (this.BLOCKED_ACTIONS.has(action)) {
       return {
         requiresApproval: true,

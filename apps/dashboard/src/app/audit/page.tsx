@@ -82,7 +82,10 @@ export default function AuditPage() {
       </Box>
 
       {error && (
-        <Alert severity="error" sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}>
+        <Alert
+          severity="error"
+          sx={{ bgcolor: '#fee2e2', border: '1px solid rgba(220, 38, 38, 0.3)', color: '#991b1b', borderRadius: '12px' }}
+        >
           {error}
         </Alert>
       )}
@@ -107,10 +110,13 @@ export default function AuditPage() {
           </Box>
         ) : (
           <Stack divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />}>
-            {records.map((record) => (
+            {records.map(record => (
               <Box key={record.id} sx={{ p: 2.5, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
                 <Box sx={{ minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ fontWeight: 700, color: '#201515', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                  >
                     {record.action}
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#8c827a', fontFamily: 'monospace' }}>
