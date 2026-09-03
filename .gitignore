@@ -40,6 +40,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Kilo / agent scaffolding (local only, not tracked)
+.kilo/
+
 # Data & Storage
 /data/
 /data/artifacts/

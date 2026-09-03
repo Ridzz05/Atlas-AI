@@ -36,6 +36,13 @@ jobs:
       - name: Dependency signature audit
         run: pnpm audit signatures
 
+      - name: Secret scan (gitleaks-style grep)
+        run: |
+          echo "Scanning for accidental secret commits..."
+          ! git grep -I -E "gsk_[A-Za-z0-9]{20,}|8669353401|sk-[A-Za-z0-9]{20,}" -- ':!.env' ':!pnpm-lock.yaml' || (echo "❌ Potential secret found in tracked files!" && exit 1)
+          ! grep -R "TELEGRAM_BOT_TOKEN=.*[0-9]:AA" --include="*.md" --include="*.ts" --include="*.js" . 2>/dev/null | grep -v ".env.example" | grep -q . && echo "No bot token in docs" || (echo "Bot token pattern in docs" && exit 1)
+          echo "Secret scan passed"
+
       - name: Lint source files
         run: pnpm lint
 
