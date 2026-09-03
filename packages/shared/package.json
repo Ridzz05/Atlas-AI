@@ -7,6 +7,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
+    },
+    "./schemas/idempotency": {
+      "types": "./dist/schemas/idempotency.d.ts",
+      "default": "./dist/schemas/idempotency.js"
     }
   },
   "scripts": {

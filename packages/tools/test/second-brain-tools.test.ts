@@ -10,7 +10,7 @@ describe('Second Brain Tools Tests', () => {
   const registry = new ToolRegistry();
 
   for (const tool of tools) {
-    registry.register(tool);
+    registry.registerLegacy(tool);
   }
 
   const mockContext: ToolContext = {

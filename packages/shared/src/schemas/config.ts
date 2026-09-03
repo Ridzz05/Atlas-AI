@@ -3,6 +3,7 @@ import { z } from 'zod';
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'openrouter', 'groq', 'ollama', 'deepseek']);
 const ResearchProviderSchema = z.enum(['none', 'brave']);
+const EmptyStringAsUndefined = z.preprocess(value => (typeof value === 'string' && value.trim() === '' ? undefined : value), z.unknown());
 const StrictBooleanFromEnvSchema = z.preprocess(value => {
   if (typeof value !== 'string') return value;
 
@@ -20,7 +21,7 @@ export const EnvConfigSchema = z
     WORKER_HEALTH_PORT: z.coerce.number().int().positive().default(8081),
     TELEGRAM_HEALTH_PORT: z.coerce.number().int().positive().default(8082),
     APP_BASE_URL: z.string().url().default('http://localhost:3000'),
-    API_AUTH_TOKEN: z.string().min(32).optional(),
+    API_AUTH_TOKEN: EmptyStringAsUndefined.pipe(z.string().min(32).optional()),
     API_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
     API_RATE_LIMIT_MAX_REQUESTS: z.coerce.number().int().positive().default(120),
     CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
@@ -49,7 +50,7 @@ export const EnvConfigSchema = z
         .regex(/^[a-z]{2,12}(?:-[a-z]{2,8})?$/)
         .default('id')
     ),
-    ENCRYPTION_KEY: z.string().min(32).default(DEFAULT_ENCRYPTION_KEY),
+    ENCRYPTION_KEY: EmptyStringAsUndefined.pipe(z.string().min(32).default(DEFAULT_ENCRYPTION_KEY)),
     ARTIFACT_STORAGE_PATH: z.string().default('./data/artifacts'),
     MEMORY_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(3600),
     QUEUE_RECOVERY_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),

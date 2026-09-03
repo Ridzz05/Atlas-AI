@@ -151,7 +151,7 @@ export default function SecondBrainPage() {
       const [statsRes, docsRes, memoryRes] = await Promise.all([
         atlasFetch<{ data: SecondBrainStats }>('/brain/stats'),
         atlasFetch<{ data: SecondBrainDocument[]; count: number }>('/brain/notes?limit=100'),
-        atlasFetch<{ data: RawMemoryItem[]; count: number }>('/brain/memory?limit=50')
+        atlasFetch<{ data: RawMemoryItem[]; count: number }>('/memory?limit=50')
       ]);
       setStats(statsRes.data);
       setDocuments(docsRes.data);
@@ -795,9 +795,7 @@ export default function SecondBrainPage() {
         }}
       >
         <form onSubmit={handleIngestNote} aria-busy={ingestPending}>
-          <DialogTitle sx={{ color: '#201515', fontWeight: 700, px: 3, pt: 3, pb: 1 }}>
-            Add note to Second Brain
-          </DialogTitle>
+          <DialogTitle sx={{ color: '#201515', fontWeight: 700, px: 3, pt: 3, pb: 1 }}>Add note to Second Brain</DialogTitle>
           <DialogContent sx={{ px: 3, pt: '16px !important', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
             {ingestError && (
               <Alert severity="error" role="alert" sx={{ borderRadius: '10px' }}>

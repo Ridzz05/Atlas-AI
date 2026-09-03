@@ -133,10 +133,22 @@ function packageManagerCommand() {
   return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 }
 
-export function spawnCommand(command, args, options) {
+export function spawnCommand(command, args, options = {}) {
   if (process.platform !== 'win32') return spawn(command, args, options);
 
-  return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', [command, ...args].join(' ')], options);
+  const env = options.env || process.env;
+  let pathEnv = env.PATH || env.Path || process.env.PATH || '';
+  if (process.env.APPDATA) {
+    const npmPath = path.join(process.env.APPDATA, 'npm');
+    if (!pathEnv.toLowerCase().includes(npmPath.toLowerCase())) {
+      pathEnv = `${npmPath};${pathEnv}`;
+    }
+  }
+
+  return spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', [command, ...args].join(' ')], {
+    ...options,
+    env: { ...env, PATH: pathEnv }
+  });
 }
 
 function runProcess(command, args, environment) {

@@ -7,6 +7,29 @@ export interface ActionPolicy {
   reason?: string;
 }
 
+/**
+ * ApprovalMatrix evaluates tool actions against an explicit allow/deny model.
+ *
+ * Fail-closed semantics (P0.1):
+ * - Actions in `BLOCKED_ACTIONS` are always denied (critical risk).
+ * - Actions in `HUMAN_APPROVAL_REQUIRED_ACTIONS` require human approval and
+ *   are blocked when external writes are disabled by configuration.
+ * - Actions not in either set fall through to one of two paths:
+ *   - If `options.knownActions` is provided and the action is NOT a member,
+ *     the action is treated as unknown and blocked at high risk.
+ *   - If the action IS a known action but not covered by any explicit rule
+ *     and not a safe-prefix match, the matrix returns
+ *     `requiresApproval: true, blocked: false, riskLevel: 'medium'`
+ *     so that unknown-but-registered actions still demand human approval.
+ *   - If `options.knownActions` is NOT provided, the matrix defaults to
+ *     fail-closed for any unrecognized action (blocked: true, high risk).
+ * - A small set of read/draft prefixes (`memory.search`, `artifacts.read`,
+ *   `tasks.get`, `communication.create_draft`, `artifacts.write`) is allowed
+ *   without approval because they are internal, non-side-effecting actions.
+ *
+ * In short: an unknown action NEVER silently executes. Either the registry
+ * declares it known and the operator is asked for approval, or it is denied.
+ */
 export class ApprovalMatrix {
   private static readonly BLOCKED_ACTIONS = new Set([
     'shell.execute',
@@ -33,7 +56,12 @@ export class ApprovalMatrix {
     'system.deploy'
   ]);
 
-  public static evaluate(action: string, options?: { externalWritesEnabled?: boolean }): ActionPolicy {
+  private static readonly KNOWN_ACTIONS = new Set<string>();
+
+  public static evaluate(
+    action: string,
+    options?: { externalWritesEnabled?: boolean; knownActions?: ReadonlySet<string> }
+  ): ActionPolicy {
     if (this.BLOCKED_ACTIONS.has(action)) {
       return {
         requiresApproval: true,
@@ -61,7 +89,6 @@ export class ApprovalMatrix {
       };
     }
 
-    // Default safe actions: reading memory, drafting artifacts, internal computation
     if (action.startsWith('memory.search') || action.startsWith('artifacts.read') || action.startsWith('tasks.get')) {
       return {
         requiresApproval: false,
@@ -78,10 +105,29 @@ export class ApprovalMatrix {
       };
     }
 
+    const known = options?.knownActions ?? this.KNOWN_ACTIONS;
+    if (!known.has(action)) {
+      return {
+        requiresApproval: true,
+        blocked: true,
+        riskLevel: 'high',
+        reason: 'Unknown action; registration required.'
+      };
+    }
+
     return {
-      requiresApproval: false,
+      requiresApproval: true,
       blocked: false,
-      riskLevel: 'low'
+      riskLevel: 'medium',
+      reason: 'Action not covered by an explicit policy rule; defaulting to human approval.'
     };
+  }
+
+  public static registerKnownAction(action: string): void {
+    this.KNOWN_ACTIONS.add(action);
+  }
+
+  public static getKnownActions(): ReadonlySet<string> {
+    return this.KNOWN_ACTIONS;
   }
 }

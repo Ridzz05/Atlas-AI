@@ -111,6 +111,13 @@ describe('@atlas/shared schema tests', () => {
     expect(env.MEMORY_DELETION_GRACE_DAYS).toBe(7);
   });
 
+  it('treats blank optional secrets as unset values', () => {
+    const env = EnvConfigSchema.parse({ API_AUTH_TOKEN: '', ENCRYPTION_KEY: '' });
+
+    expect(env.API_AUTH_TOKEN).toBeUndefined();
+    expect(env.ENCRYPTION_KEY).toHaveLength(64);
+  });
+
   it('parses separate native health ports for worker and Telegram', () => {
     expect(
       EnvConfigSchema.parse({

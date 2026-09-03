@@ -111,4 +111,53 @@ describe('@atlas/policy tests', () => {
       expect(result.reason).toContain('Cyclic delegation detected');
     });
   });
+
+  describe('ApprovalMatrix fail-closed semantics (P0.1)', () => {
+    it('fails closed for completely unknown actions', () => {
+      const evaluation = ApprovalMatrix.evaluate('integration.unknown_action');
+      expect(evaluation.blocked).toBe(true);
+      expect(evaluation.riskLevel).toBe('high');
+      expect(evaluation.reason).toContain('Unknown action');
+    });
+
+    it('fails closed for unknown actions even when knownActions is provided', () => {
+      const known = new Set<string>(['integration.known_action']);
+      const evaluation = ApprovalMatrix.evaluate('integration.different_unknown', {
+        knownActions: known
+      });
+      expect(evaluation.blocked).toBe(true);
+      expect(evaluation.riskLevel).toBe('high');
+      expect(evaluation.reason).toContain('Unknown action');
+    });
+
+    it('treats known actions not covered by any rule as human-approval required', () => {
+      const known = new Set<string>(['integration.known_but_unruled']);
+      const evaluation = ApprovalMatrix.evaluate('integration.known_but_unruled', {
+        knownActions: known
+      });
+      expect(evaluation.requiresApproval).toBe(true);
+      expect(evaluation.blocked).toBe(false);
+      expect(evaluation.riskLevel).toBe('medium');
+    });
+
+    it('preserves existing safe-prefix defaults', () => {
+      const evaluation = ApprovalMatrix.evaluate('memory.search');
+      expect(evaluation.requiresApproval).toBe(false);
+      expect(evaluation.blocked).toBe(false);
+    });
+
+    it('preserves existing blocked actions', () => {
+      const evaluation = ApprovalMatrix.evaluate('shell.execute');
+      expect(evaluation.blocked).toBe(true);
+      expect(evaluation.riskLevel).toBe('critical');
+    });
+
+    it('registerKnownAction makes subsequent evaluations fail open to human approval', () => {
+      ApprovalMatrix.registerKnownAction('integration.registered_action');
+      const evaluation = ApprovalMatrix.evaluate('integration.registered_action');
+      expect(evaluation.requiresApproval).toBe(true);
+      expect(evaluation.blocked).toBe(false);
+      expect(evaluation.riskLevel).toBe('medium');
+    });
+  });
 });

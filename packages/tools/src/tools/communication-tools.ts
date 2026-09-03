@@ -1,5 +1,36 @@
-import { z } from 'zod';
+﻿import { z } from 'zod';
+import { ToolManifest } from '@atlas/shared';
 import { ToolDefinition } from '../types.js';
+
+const createDraftManifest: ToolManifest = {
+  name: 'communication.create_draft',
+  version: 1,
+  capability: 'communication',
+  description: 'Create an outbound draft (no side effect).',
+  sideEffects: ['none'],
+  riskLevel: 'low',
+  idempotency: 'none',
+  requiredConnectionScopes: [],
+  scopes: ['communication:write'],
+  isIdempotentByDefault: true,
+  approval: 'auto',
+  timeoutMs: 3000
+};
+
+const sendApprovedManifest: ToolManifest = {
+  name: 'communication.send_approved',
+  version: 1,
+  capability: 'communication',
+  description: 'Send an approved message. External side effect; deduped by idempotency key.',
+  sideEffects: ['send_message', 'write_external', 'network'],
+  riskLevel: 'high',
+  idempotency: 'required',
+  requiredConnectionScopes: ['communication.send'],
+  scopes: ['communication:send'],
+  isIdempotentByDefault: false,
+  approval: 'human',
+  timeoutMs: 10_000
+};
 
 export const CreateDraftTool: ToolDefinition = {
   name: 'communication.create_draft',
@@ -22,6 +53,7 @@ export const CreateDraftTool: ToolDefinition = {
   riskLevel: 'low',
   requiresApproval: false,
   timeoutMs: 3000,
+  manifest: createDraftManifest,
   async execute(_ctx, input) {
     return {
       draftId: crypto.randomUUID(),
@@ -50,6 +82,7 @@ export const SendApprovedCommunicationTool: ToolDefinition = {
   riskLevel: 'high',
   requiresApproval: true,
   timeoutMs: 10000,
+  manifest: sendApprovedManifest,
   async execute(ctx, input) {
     if (!ctx.communicationSender) {
       throw new Error('No outbound communication connector configured.');
@@ -64,3 +97,4 @@ export const SendApprovedCommunicationTool: ToolDefinition = {
     };
   }
 };
+

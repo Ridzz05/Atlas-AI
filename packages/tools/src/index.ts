@@ -14,3 +14,4 @@ export * from './research/brave-provider.js';
 export * from './research/url-safety.js';
 export * from './research/factory.js';
 export * from './research/safe-web-fetcher.js';
+export * from './communication/index.js';

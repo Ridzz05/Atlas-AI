@@ -7,4 +7,6 @@ export * from './schemas/memory.js';
 export * from './schemas/event.js';
 export * from './schemas/config.js';
 export * from './schemas/scheduled-job.js';
+export * from './schemas/tool-manifest.js';
+export * from './schemas/workflow.js';
 export * from './model.js';

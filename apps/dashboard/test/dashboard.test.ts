@@ -40,6 +40,11 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(ids).toContain('argus');
   });
 
+  it('keeps Node-only shared modules out of the browser entrypoint', () => {
+    const sharedEntry = readFileSync(resolve(process.cwd(), '../../packages/shared/src/index.ts'), 'utf8');
+    expect(sharedEntry).not.toContain("./schemas/idempotency.js");
+  });
+
   it('validates agent limits and security configurations', () => {
     const chief = defaultAgentRegistry.getOrThrow('chief');
     expect(chief.limits.maxDelegationDepth).toBe(2);

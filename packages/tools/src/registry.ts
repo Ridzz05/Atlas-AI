@@ -1,13 +1,112 @@
+import { randomUUID } from 'node:crypto';
 import { ToolDefinition, ToolContext, ToolExecutionResponse } from './types.js';
 import { ApprovalMatrix, TokenVerifier } from '@atlas/policy';
 import { rootLogger, AuditService } from '@atlas/observability';
 
+/**
+ * Minimal local EventBus contract.
+ *
+ * The `@atlas/events` package provides the production implementation, but to
+ * avoid circular package dependencies between `@atlas/tools` and
+ * `@atlas/events`, the registry only relies on this structural type. Any
+ * compatible publish surface can be injected via the constructor.
+ */
+type EventBus = {
+  publish(event: {
+    id: string;
+    type: string;
+    taskId?: string;
+    runId?: string;
+    agentId?: string;
+    payload?: Record<string, unknown>;
+    timestamp: string;
+  }): Promise<void>;
+};
+
+export interface ToolRegistryOptions {
+  eventBus?: EventBus;
+  idempotencyStore?: import('./types.js').IdempotencyStore;
+}
+
+function extractRemoteId(output: unknown): string | undefined {
+  if (!output || typeof output !== 'object') return undefined;
+  const record = output as Record<string, unknown>;
+  for (const key of ['messageId', 'remoteId', 'id']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.length > 0) return value;
+  }
+  return undefined;
+}
+
 export class ToolRegistry {
   private tools = new Map<string, ToolDefinition>();
   private consumedApprovalTokens = new Set<string>();
+  private readonly eventBus?: EventBus;
+  private readonly idempotencyStore?: import('./types.js').IdempotencyStore;
+  private readonly loggedRegistration = new Set<string>();
 
+  constructor(opts?: ToolRegistryOptions) {
+    this.eventBus = opts?.eventBus;
+    this.idempotencyStore = opts?.idempotencyStore;
+  }
+
+  /**
+   * Register a tool. The tool MUST carry a `manifest` describing its
+   * capability, side effects, risk level, approval mode, idempotency
+   * requirement, and scopes. This is the contract that powers the
+   * fail-closed policy engine.
+   */
   public register(tool: ToolDefinition): void {
+    if (!tool.manifest) {
+      throw new Error('Tool must carry a ToolManifest');
+    }
+    if (tool.name !== tool.manifest.name) {
+      throw new Error(`Tool manifest name '${tool.manifest.name}' does not match tool name '${tool.name}'`);
+    }
+    if (!this.loggedRegistration.has(tool.name)) {
+      rootLogger.info(`Tool registered: ${tool.name}`, {
+        capability: tool.manifest.capability,
+        riskLevel: tool.manifest.riskLevel,
+        approval: tool.manifest.approval,
+        idempotency: tool.manifest.idempotency
+      });
+      this.loggedRegistration.add(tool.name);
+    }
     this.tools.set(tool.name, tool);
+    ApprovalMatrix.registerKnownAction(tool.name);
+  }
+
+  /**
+   * Register a legacy tool that does not carry a manifest. The registry
+   * synthesises a conservative default manifest so the policy engine can
+   * still evaluate it. The default defaults `approval: 'human'` so the
+   * tool cannot silently execute without operator consent. This is a
+   * transitional escape hatch; new tools must use `register()`.
+   */
+  public registerLegacy(tool: ToolDefinition): void {
+    const existing = tool as ToolDefinition & { manifest?: any };
+    if (existing.manifest) {
+      this.register(tool);
+      return;
+    }
+    const synthetic: ToolDefinition = {
+      ...tool,
+      manifest: {
+        name: tool.name,
+        version: 1,
+        capability: 'integration',
+        description: tool.description,
+        sideEffects: ['none'],
+        riskLevel: tool.riskLevel,
+        idempotency: 'none',
+        requiredConnectionScopes: [],
+        scopes: [],
+        isIdempotentByDefault: false,
+        approval: tool.requiresApproval ? 'human' : 'auto',
+        timeoutMs: tool.timeoutMs
+      }
+    };
+    this.register(synthetic);
   }
 
   public get(name: string): ToolDefinition | undefined {
@@ -16,6 +115,28 @@ export class ToolRegistry {
 
   public list(): ToolDefinition[] {
     return Array.from(this.tools.values());
+  }
+
+  private async publishEvent(
+    type: string,
+    context: ToolContext,
+    payload: Record<string, unknown>
+  ): Promise<void> {
+    if (!this.eventBus) return;
+    const event = {
+      id: randomUUID(),
+      type,
+      taskId: context.taskId,
+      runId: context.runId,
+      agentId: context.agentId,
+      payload,
+      timestamp: new Date().toISOString()
+    };
+    try {
+      await this.eventBus.publish(event);
+    } catch (err) {
+      rootLogger.error(`Failed to publish '${type}' event`, { error: String((err as Error)?.message || err) });
+    }
   }
 
   public async execute(name: string, input: unknown, context: ToolContext): Promise<ToolExecutionResponse> {
@@ -40,7 +161,6 @@ export class ToolRegistry {
       };
     }
 
-    // 1. Policy evaluation check
     const policy = ApprovalMatrix.evaluate(name, {
       externalWritesEnabled: context.externalWritesEnabled
     });
@@ -55,7 +175,6 @@ export class ToolRegistry {
       };
     }
 
-    // 2. Validate input schema
     const parseResult = tool.inputSchema.safeParse(input);
     if (!parseResult.success) {
       return {
@@ -66,9 +185,18 @@ export class ToolRegistry {
       };
     }
 
-    // 3. Verify approval against the exact validated payload before execution.
+    const manifestApproval = tool.manifest?.approval;
+    const effectivePolicy = {
+      requiresApproval:
+        manifestApproval === 'auto'
+          ? false
+          : manifestApproval === 'human'
+            ? true
+            : policy.requiresApproval
+    };
+
     let durableApprovalId: string | undefined;
-    if (policy.requiresApproval) {
+    if (effectivePolicy.requiresApproval) {
       const token = context.approvalToken;
       if (!token || !context.approvalSecretKey) {
         if (context.approvalRequestStore) {
@@ -144,13 +272,70 @@ export class ToolRegistry {
             riskLevel: policy.riskLevel
           };
         }
-
-        // Consume before awaiting the external side effect to prevent concurrent replay.
         this.consumedApprovalTokens.add(token.signature);
       }
     }
 
-    // 4. Execute with timeout and cancellation propagation
+    // tool.requested: policy has passed, before any side effect.
+    await this.publishEvent('tool.requested', context, {
+      toolName: name,
+      riskLevel: tool.riskLevel,
+      capability: tool.manifest?.capability
+    });
+
+    // Idempotency claim (P0 idempotency / side-effect safety)
+    const idempotencyKey = context.idempotencyKey;
+    const store = context.idempotencyStore ?? this.idempotencyStore;
+    let idempotencyClaimed = false;
+    if (tool.manifest?.idempotency && tool.manifest.idempotency !== 'none' && store && idempotencyKey) {
+      try {
+        const claim = await store.claim({
+          key: idempotencyKey.key,
+          taskId: idempotencyKey.taskId,
+          runId: idempotencyKey.runId,
+          actionName: idempotencyKey.actionName,
+          payloadHash: idempotencyKey.payloadHash
+        });
+        if (claim.existing && claim.record) {
+          const record = claim.record as {
+            outcome?: 'in_flight' | 'succeeded' | 'failed' | 'expired';
+            result?: unknown;
+            error?: string;
+          };
+          if (record.outcome === 'succeeded') {
+            return {
+              success: true,
+              output: record.result,
+              durationMs: 0,
+              riskLevel: tool.riskLevel,
+              idempotentReplay: true
+            };
+          }
+          if (record.outcome === 'in_flight') {
+            return {
+              success: false,
+              error: 'Idempotent action is still in flight.',
+              durationMs: 0,
+              riskLevel: tool.riskLevel
+            };
+          }
+          if (record.outcome === 'failed') {
+            return {
+              success: false,
+              error: record.error || 'Previous attempt failed',
+              durationMs: 0,
+              riskLevel: tool.riskLevel
+            };
+          }
+          // 'expired' or any other outcome: release and proceed.
+          await store.release(idempotencyKey.key);
+        }
+        idempotencyClaimed = true;
+      } catch (err) {
+        rootLogger.error('Idempotency claim failed', { error: String((err as Error)?.message || err) });
+      }
+    }
+
     const executionController = new AbortController();
     const forwardAbort = () => executionController.abort(context.signal?.reason);
     if (context.signal) {
@@ -170,6 +355,11 @@ export class ToolRegistry {
     });
 
     try {
+      await this.publishEvent('tool.started', context, {
+        toolName: name,
+        riskLevel: tool.riskLevel
+      });
+
       const rawOutput = await Promise.race([
         tool.execute({ ...context, signal: executionController.signal }, parseResult.data),
         timeoutPromise
@@ -193,9 +383,20 @@ export class ToolRegistry {
         }
       }
 
+      if (idempotencyClaimed && store && idempotencyKey) {
+        try {
+          await store.recordSuccess(idempotencyKey.key, {
+            provider: tool.manifest?.name ?? tool.name,
+            remoteId: extractRemoteId(output),
+            result: output && typeof output === 'object' ? (output as Record<string, unknown>) : undefined
+          });
+        } catch (err) {
+          rootLogger.error('Failed to record idempotency success', { error: String((err as Error)?.message || err) });
+        }
+      }
+
       const durationMs = Date.now() - startTime;
 
-      // 4. Audit execution
       const auditRecord = AuditService.format({
         actor: context.agentId,
         action: `tool.${name}`,
@@ -206,6 +407,13 @@ export class ToolRegistry {
       if (context.auditSink) {
         await context.auditSink.record(auditRecord);
       }
+
+      await this.publishEvent('tool.completed', context, {
+        toolName: name,
+        riskLevel: tool.riskLevel,
+        durationMs,
+        output
+      });
 
       return {
         success: true,
@@ -225,7 +433,20 @@ export class ToolRegistry {
           rootLogger.error('Failed to finalize durable approval execution', { error: String(finalizationError) });
         }
       }
+      if (idempotencyClaimed && store && idempotencyKey) {
+        try {
+          await store.recordFailure(idempotencyKey.key, String(err?.message || 'Tool execution failed'));
+        } catch (recErr) {
+          rootLogger.error('Failed to record idempotency failure', { error: String((recErr as Error)?.message || recErr) });
+        }
+      }
       rootLogger.error(`Error executing tool '${name}'`, { error: String(err?.message || err) });
+      await this.publishEvent('tool.failed', context, {
+        toolName: name,
+        riskLevel: tool.riskLevel,
+        durationMs,
+        error: String(err?.message || 'Tool execution failed')
+      });
       return {
         success: false,
         error: String(err?.message || 'Tool execution failed'),
@@ -238,3 +459,6 @@ export class ToolRegistry {
     }
   }
 }
+
+
+

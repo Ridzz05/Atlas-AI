@@ -91,13 +91,13 @@ export class AgentWorkerRunner {
         model: options.config.MODEL_NAME
       });
     const toolRegistry = new ToolRegistry();
-    toolRegistry.register(WebSearchTool);
-    toolRegistry.register(CompanyLookupTool);
-    toolRegistry.register(LeadEnrichmentTool);
-    toolRegistry.register(LeadScoringTool);
-    toolRegistry.register(PolicyVerifyTool);
-    toolRegistry.register(CreateDraftTool);
-    toolRegistry.register(SendApprovedCommunicationTool);
+    toolRegistry.registerLegacy(WebSearchTool);
+    toolRegistry.registerLegacy(CompanyLookupTool);
+    toolRegistry.registerLegacy(LeadEnrichmentTool);
+    toolRegistry.registerLegacy(LeadScoringTool);
+    toolRegistry.registerLegacy(PolicyVerifyTool);
+    toolRegistry.registerLegacy(CreateDraftTool);
+    toolRegistry.registerLegacy(SendApprovedCommunicationTool);
     const memoryAuditSink: MemoryAuditSink | undefined = options.auditRepo
       ? { record: event => options.auditRepo!.create(event) }
       : undefined;
@@ -109,7 +109,7 @@ export class AgentWorkerRunner {
         options.memoryStore
       );
       for (const tool of createMemoryTools(memoryTools)) {
-        toolRegistry.register(tool);
+        toolRegistry.registerLegacy(tool);
       }
     }
     const artifactService = new ArtifactService(
@@ -117,7 +117,7 @@ export class AgentWorkerRunner {
       options.artifactRepo ? { record: input => options.artifactRepo!.create(input) } : undefined
     );
     for (const tool of createArtifactTools(artifactService)) {
-      toolRegistry.register(tool);
+      toolRegistry.registerLegacy(tool);
     }
     const toolExecutor = new ToolGatewayExecutor({
       registry: toolRegistry,

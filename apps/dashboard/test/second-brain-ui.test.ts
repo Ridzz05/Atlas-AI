@@ -35,6 +35,11 @@ describe('Second Brain UI quality gates', () => {
     expect(brainPage).toContain('Loading Second Brain data');
   });
 
+  it('uses the canonical durable memory API for learned memory items', () => {
+    expect(brainPage).toContain("atlasFetch<{ data: RawMemoryItem[]; count: number }>('/memory?limit=50')");
+    expect(brainPage).not.toContain("'/brain/memory?limit=50'");
+  });
+
   it('keeps note submission state and errors inside the dialog', () => {
     expect(brainPage).toContain('const [ingestPending, setIngestPending]');
     expect(brainPage).toContain('const [ingestError, setIngestError]');

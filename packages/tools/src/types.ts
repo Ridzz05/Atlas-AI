@@ -1,5 +1,5 @@
 import { z, ZodSchema } from 'zod';
-import { ApprovalToken, ToolRiskLevel } from '@atlas/shared';
+import { ApprovalToken, ToolRiskLevel, ToolManifest } from '@atlas/shared';
 import type { AuditRecord } from '@atlas/observability';
 
 export interface CommunicationSendInput {
@@ -125,6 +125,45 @@ export interface ApprovalRequestStore {
   }): Promise<{ id: string } | null>;
 }
 
+/**
+ * Minimal idempotency contract shared by the Tool Gateway and connectors.
+ *
+ * These types are declared locally until they are exported from
+ * `@atlas/shared`; once the shared package exposes them, prefer the
+ * shared module to keep a single source of truth.
+ */
+export interface IdempotencyKey {
+  key: string;
+  taskId: string;
+  runId?: string;
+  actionName: string;
+  payloadHash: string;
+  createdAt: string;
+}
+
+export interface IdempotencyStore {
+  claim(input: {
+    key: string;
+    taskId: string;
+    runId?: string;
+    actionName: string;
+    payloadHash: string;
+  }): Promise<{ existing: boolean; record?: unknown }>;
+  findByKey(key: string): Promise<{
+    outcome: 'in_flight' | 'succeeded' | 'failed' | 'expired';
+    result?: unknown;
+    error?: string;
+    remoteId?: string | null;
+    provider?: string | null;
+  } | null>;
+  recordSuccess(
+    key: string,
+    fields: { provider?: string; remoteId?: string; result?: Record<string, unknown> }
+  ): Promise<unknown>;
+  recordFailure(key: string, error: string): Promise<unknown>;
+  release(key: string): Promise<boolean>;
+}
+
 export interface ToolContext {
   taskId: string;
   runId: string;
@@ -140,8 +179,28 @@ export interface ToolContext {
   auditSink?: AuditSink;
   researchProvider?: ResearchProvider;
   signal?: AbortSignal;
+  idempotencyStore?: IdempotencyStore;
+  idempotencyKey?: IdempotencyKey;
 }
 
+/**
+ * ToolDefinition describes an executable tool the gateway can route to.
+ *
+ * `manifest` is REQUIRED for any tool registered via `ToolRegistry.register`
+ * and the registry throws if it is missing. The manifest is the contract
+ * that lets the policy engine answer the question: "what is this tool
+ * allowed to do, what kind of side effects does it have, and how should
+ * the human in the loop be involved?". Without a manifest, the registry
+ * refuses to register a tool (it throws), because silent low-risk defaults
+ * for unknown actions were the original P0.1 fail-open vulnerability.
+ *
+ * Legacy tools that pre-date the manifest contract remain allowed on the
+ * interface as `manifest?: ToolManifest` for type compatibility with the
+ * existing tool definitions in this repo, but `ToolRegistry.register()`
+ * enforces presence at runtime. Legacy tools that genuinely lack a manifest
+ * MUST be registered via `ToolRegistry.registerLegacy()`, which synthesises
+ * a conservative default manifest marked `approval: 'human'`.
+ */
 export interface ToolDefinition<TInput = any, TOutput = any> {
   name: string;
   description: string;
@@ -150,6 +209,7 @@ export interface ToolDefinition<TInput = any, TOutput = any> {
   riskLevel: ToolRiskLevel;
   requiresApproval: boolean;
   timeoutMs: number;
+  manifest?: ToolManifest;
   execute(context: ToolContext, input: TInput): Promise<TOutput>;
 }
 
@@ -161,4 +221,5 @@ export interface ToolExecutionResponse {
   approvalPending?: boolean;
   durationMs: number;
   riskLevel: ToolRiskLevel;
+  idempotentReplay?: boolean;
 }

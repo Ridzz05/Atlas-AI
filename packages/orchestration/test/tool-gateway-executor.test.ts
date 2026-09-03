@@ -5,7 +5,7 @@ import { ToolGatewayExecutor } from '../src/index.js';
 describe('ToolGatewayExecutor', () => {
   it('routes model tool calls through the policy-enforcing registry', async () => {
     const registry = new ToolRegistry();
-    registry.register(CreateDraftTool);
+    registry.registerLegacy(CreateDraftTool);
     const executor = new ToolGatewayExecutor({ registry });
 
     const result = await executor.execute(

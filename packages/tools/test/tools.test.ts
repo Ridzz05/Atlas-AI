@@ -28,7 +28,7 @@ const completeLeadEvidence = Object.fromEntries(LEAD_DIMENSIONS.map(dimension =>
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('rejects malformed tool output before returning it to orchestration', async () => {
     const registry = new ToolRegistry();
-    registry.register({
+    registry.registerLegacy({
       name: 'test.malformed_output',
       description: 'Test-only tool with a strict output contract.',
       inputSchema: z.object({}),
@@ -58,7 +58,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('aborts a running tool when the gateway timeout expires', async () => {
     const registry = new ToolRegistry();
     let aborted = false;
-    registry.register({
+    registry.registerLegacy({
       name: 'test.timeout_abort',
       description: 'Test-only tool that waits for cancellation.',
       inputSchema: z.object({}),
@@ -97,8 +97,8 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('registers and executes read research tools safely', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebSearchTool);
-    registry.register(CompanyLookupTool);
+    registry.registerLegacy(WebSearchTool);
+    registry.registerLegacy(CompanyLookupTool);
 
     const searchRes = await registry.execute(
       'web.search',
@@ -131,7 +131,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('returns no fetched facts when the safe web provider is unavailable', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebFetchTool);
+    registry.registerLegacy(WebFetchTool);
 
     const result = await registry.execute(
       'web.fetch_safe',
@@ -154,7 +154,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('accepts safe web content only with evidence and an untrusted-content marker', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebFetchTool);
+    registry.registerLegacy(WebFetchTool);
 
     const result = await registry.execute(
       'web.fetch_safe',
@@ -213,8 +213,8 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       now: () => new Date('2026-08-26T00:00:00.000Z')
     });
     const registry = new ToolRegistry();
-    registry.register(WebSearchTool);
-    registry.register(WebFetchTool);
+    registry.registerLegacy(WebSearchTool);
+    registry.registerLegacy(WebFetchTool);
 
     const search = await registry.execute(
       'web.search',
@@ -246,7 +246,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('rejects unsafe web URL schemes and credential-bearing URLs before provider access', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebFetchTool);
+    registry.registerLegacy(WebFetchTool);
     const fetchSafe = vi.fn();
     const context = {
       taskId: 'task-1',
@@ -266,7 +266,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('rejects localhost and literal IP web targets before provider access', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebFetchTool);
+    registry.registerLegacy(WebFetchTool);
     const fetchSafe = vi.fn();
     const context = {
       taskId: 'task-1',
@@ -314,7 +314,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('lets Argus inspect policy without bypassing the runtime write flag', async () => {
     const registry = new ToolRegistry();
-    registry.register(PolicyVerifyTool);
+    registry.registerLegacy(PolicyVerifyTool);
 
     const result = await registry.execute(
       'policy.verify',
@@ -337,7 +337,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('exposes lead enrichment as an honest unavailable result without a provider', async () => {
     const registry = new ToolRegistry();
-    registry.register(LeadEnrichmentTool);
+    registry.registerLegacy(LeadEnrichmentTool);
 
     const result = await registry.execute(
       'lead.enrich',
@@ -361,7 +361,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('accepts provider-backed lead enrichment only with complete evidence', async () => {
     const registry = new ToolRegistry();
-    registry.register(LeadEnrichmentTool);
+    registry.registerLegacy(LeadEnrichmentTool);
 
     const result = await registry.execute(
       'lead.enrich',
@@ -400,7 +400,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('routes lead scoring through the deterministic rubric tool', async () => {
     const registry = new ToolRegistry();
-    registry.register(LeadScoringTool);
+    registry.registerLegacy(LeadScoringTool);
 
     const result = await registry.execute(
       'lead.score',
@@ -439,7 +439,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('rejects lead enrichment output without research evidence metadata', async () => {
     const registry = new ToolRegistry();
-    registry.register(LeadEnrichmentTool);
+    registry.registerLegacy(LeadEnrichmentTool);
 
     const result = await registry.execute(
       'lead.enrich',
@@ -470,7 +470,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('rejects research provider results that omit evidence metadata', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebSearchTool);
+    registry.registerLegacy(WebSearchTool);
 
     const result = await registry.execute(
       'web.search',
@@ -499,8 +499,8 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('accepts research results only when evidence metadata is complete', async () => {
     const registry = new ToolRegistry();
-    registry.register(WebSearchTool);
-    registry.register(CompanyLookupTool);
+    registry.registerLegacy(WebSearchTool);
+    registry.registerLegacy(CompanyLookupTool);
     const evidence = {
       extractedAt: '2026-08-26T00:00:00.000Z',
       freshness: 'fresh' as const,
@@ -557,7 +557,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('blocks communication.send_approved if approval token is missing', async () => {
     const registry = new ToolRegistry();
-    registry.register(SendApprovedCommunicationTool);
+    registry.registerLegacy(SendApprovedCommunicationTool);
 
     const sendRes = await registry.execute(
       'communication.send_approved',
@@ -581,7 +581,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('allows communication.send_approved when valid approvalToken is supplied', async () => {
     const registry = new ToolRegistry();
-    registry.register(SendApprovedCommunicationTool);
+    registry.registerLegacy(SendApprovedCommunicationTool);
     const secret = 'test-secret-key-32-chars-length!!';
     const payload = {
       recipient: '+62812345678',
@@ -632,7 +632,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('rejects an approval token when the signed payload or action does not match', async () => {
     const registry = new ToolRegistry();
-    registry.register(SendApprovedCommunicationTool);
+    registry.registerLegacy(SendApprovedCommunicationTool);
     const secret = 'test-secret-key-32-chars-length!!';
     const approvalToken = TokenVerifier.generateToken(
       randomUUID(),
@@ -669,7 +669,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('rejects outbound execution when no connector is configured', async () => {
     const registry = new ToolRegistry();
-    registry.register(SendApprovedCommunicationTool);
+    registry.registerLegacy(SendApprovedCommunicationTool);
     const secret = 'test-secret-key-32-chars-length!!';
     const payload = {
       recipient: '+62812345678',
@@ -694,8 +694,8 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('uses a durable approval store to prevent replay across registry instances', async () => {
     const registryOne = new ToolRegistry();
     const registryTwo = new ToolRegistry();
-    registryOne.register(SendApprovedCommunicationTool);
-    registryTwo.register(SendApprovedCommunicationTool);
+    registryOne.registerLegacy(SendApprovedCommunicationTool);
+    registryTwo.registerLegacy(SendApprovedCommunicationTool);
 
     const secret = 'test-secret-key-32-chars-length!!';
     const payload = {
@@ -753,7 +753,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
   it('creates a durable approval request when a protected tool has no token', async () => {
     const registry = new ToolRegistry();
-    registry.register(SendApprovedCommunicationTool);
+    registry.registerLegacy(SendApprovedCommunicationTool);
     const approvalRequestStore = {
       requestApproval: vi.fn().mockResolvedValue({ id: '123e4567-e89b-12d3-a456-426614174003' })
     };
@@ -1048,8 +1048,8 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
 
     const memoryTools = new MemoryTools(new MemoryRetriever(store), new MemoryProposalService(store), store);
     const registry = new ToolRegistry();
-    for (const tool of createMemoryTools(memoryTools)) registry.register(tool);
-    registry.register(CreateDraftTool);
+    for (const tool of createMemoryTools(memoryTools)) registry.registerLegacy(tool);
+    registry.registerLegacy(CreateDraftTool);
     const context = {
       taskId: 'task-1',
       runId: 'run-1',
@@ -1086,5 +1086,144 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const denied = await registry.execute('communication.create_draft', {}, context);
     expect(denied.success).toBe(false);
     expect(denied.error).toContain('not permitted');
+  });
+  it('rejects registration when manifest is missing', () => {
+    const registry = new ToolRegistry();
+    expect(() =>
+      registry.register({
+        name: 'integration.no_manifest',
+        description: 'Tool without manifest',
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        riskLevel: 'read',
+        requiresApproval: false,
+        timeoutMs: 1000,
+        async execute() {
+          return { ok: true };
+        }
+      } as any)
+    ).toThrow('Tool must carry a ToolManifest');
+  });
+
+  it('accepts legacy tools via registerLegacy and assigns a safe default manifest', async () => {
+    const registry = new ToolRegistry();
+    const legacyTool: import('../src/types.js').ToolDefinition = {
+      name: 'integration.legacy_tool',
+      description: 'Legacy tool without manifest',
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      riskLevel: 'read',
+      requiresApproval: false,
+      timeoutMs: 1000,
+      async execute() {
+        return { ok: true };
+      }
+    };
+    expect(() => registry.registerLegacy(legacyTool)).not.toThrow();
+
+    const stored = registry.get('integration.legacy_tool');
+    expect(stored).toBeDefined();
+    expect(stored?.manifest).toBeDefined();
+    expect(stored?.manifest?.capability).toBe('integration');
+    expect(stored?.manifest?.approval).toBe('auto');
+
+    const knownActions = (await import('@atlas/policy')).ApprovalMatrix.getKnownActions();
+    expect(knownActions.has('integration.legacy_tool')).toBe(true);
+  });
+
+  it('publishes tool.requested, tool.started, and tool.completed events when an eventBus is provided', async () => {
+    const events: Array<{ type: string; payload: any }> = [];
+    const eventBus = {
+      publish: vi.fn(async (event: any) => {
+        events.push({ type: event.type, payload: event.payload });
+      })
+    };
+    const registry = new ToolRegistry({ eventBus });
+    registry.register({
+      name: 'integration.event_traced',
+      description: 'Tool that emits events',
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      riskLevel: 'read',
+      requiresApproval: false,
+      timeoutMs: 1000,
+      manifest: {
+        name: 'integration.event_traced',
+        version: 1,
+        capability: 'integration',
+        description: 'Tool that emits events',
+        sideEffects: ['none'],
+        riskLevel: 'read',
+        idempotency: 'none',
+        requiredConnectionScopes: [],
+        scopes: [],
+        isIdempotentByDefault: false,
+        approval: 'auto',
+        timeoutMs: 1000
+      },
+      async execute() {
+        return { ok: true };
+      }
+    });
+
+    const result = await registry.execute(
+      'integration.event_traced',
+      {},
+      { taskId: 't-1', runId: 'r-1', agentId: 'argus' }
+    );
+
+    expect(result.success).toBe(true);
+    const types = events.map(e => e.type);
+    expect(types).toContain('tool.requested');
+    expect(types).toContain('tool.started');
+    expect(types).toContain('tool.completed');
+  });
+
+  it('publishes tool.failed event when tool execution throws', async () => {
+    const events: Array<{ type: string; payload: any }> = [];
+    const eventBus = {
+      publish: vi.fn(async (event: any) => {
+        events.push({ type: event.type, payload: event.payload });
+      })
+    };
+    const registry = new ToolRegistry({ eventBus });
+    registry.register({
+      name: 'integration.event_failing',
+      description: 'Tool that fails',
+      inputSchema: z.object({}),
+      outputSchema: z.object({ ok: z.boolean() }),
+      riskLevel: 'read',
+      requiresApproval: false,
+      timeoutMs: 1000,
+      manifest: {
+        name: 'integration.event_failing',
+        version: 1,
+        capability: 'integration',
+        description: 'Tool that fails',
+        sideEffects: ['none'],
+        riskLevel: 'read',
+        idempotency: 'none',
+        requiredConnectionScopes: [],
+        scopes: [],
+        isIdempotentByDefault: false,
+        approval: 'auto',
+        timeoutMs: 1000
+      },
+      async execute() {
+        throw new Error('boom');
+      }
+    });
+
+    const result = await registry.execute(
+      'integration.event_failing',
+      {},
+      { taskId: 't-1', runId: 'r-1', agentId: 'argus' }
+    );
+
+    expect(result.success).toBe(false);
+    const types = events.map(e => e.type);
+    expect(types).toContain('tool.requested');
+    expect(types).toContain('tool.started');
+    expect(types).toContain('tool.failed');
   });
 });
