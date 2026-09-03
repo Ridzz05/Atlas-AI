@@ -1,8 +1,11 @@
 -- 014_workflow_checkpoints.sql
 -- Durable workflow checkpoints and transition history.
 
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 CREATE TABLE IF NOT EXISTS workflow_checkpoints (
-    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id              UUID PRIMARY KEY DEFAULT COALESCE(uuid_generate_v4(), gen_random_uuid()),
     run_id          UUID NOT NULL,
     task_id         UUID NOT NULL,
     agent_id        TEXT NOT NULL,

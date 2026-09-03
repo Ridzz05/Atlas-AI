@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     error            TEXT,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    expires_at       TIMESTAMPTZ
+    expires_at       TIMESTAMPTZ NOT NULL DEFAULT NOW() + INTERVAL '1 hour'
 );
 
 CREATE INDEX IF NOT EXISTS idx_idempotency_keys_task ON idempotency_keys(task_id);

@@ -1,14 +1,6 @@
 ﻿import { randomUUID } from 'node:crypto';
-import {
-  WorkflowCheckpoint,
-  WorkflowState,
-  WorkflowTransition,
-  canTransition
-} from '@atlas/shared';
-import {
-  WorkflowCheckpointRepository,
-  WorkflowCheckpointUpsertInput
-} from '@atlas/database';
+import { WorkflowCheckpoint, WorkflowState, WorkflowTransition, canTransition } from '@atlas/shared';
+import { WorkflowCheckpointRepository, WorkflowCheckpointUpsertInput } from '@atlas/database';
 import { rootLogger } from '@atlas/observability';
 
 export type WorkflowEvent = {
@@ -82,7 +74,7 @@ export class WorkflowRuntime {
       throw new Error(`Illegal workflow transition: ${current.state} -> ${input.to}`);
     }
 
-    const updated = await this.checkpointRepo.upsert({
+    await this.checkpointRepo.upsert({
       runId: current.runId,
       taskId: current.taskId,
       agentId: current.agentId,
@@ -99,7 +91,8 @@ export class WorkflowRuntime {
       reason: input.reason,
       payload: input.payload ?? {}
     };
-    await this.checkpointRepo.appendTransition(input.runId, input.stepId, transitionRecord);
+    const updated = await this.checkpointRepo.appendTransition(input.runId, input.stepId, transitionRecord);
+    if (!updated) throw new Error('Failed to append workflow transition');
 
     if (this.eventBus) {
       const event: WorkflowEvent = {
@@ -131,11 +124,7 @@ export class WorkflowRuntime {
     return updated;
   }
 
-  public async waitForApproval(
-    runId: string,
-    stepId: string,
-    approvalId: string
-  ): Promise<WorkflowCheckpoint> {
+  public async waitForApproval(runId: string, stepId: string, approvalId: string): Promise<WorkflowCheckpoint> {
     return this.transition({
       runId,
       stepId,
@@ -145,11 +134,7 @@ export class WorkflowRuntime {
     });
   }
 
-  public async waitForExternalEvent(
-    runId: string,
-    stepId: string,
-    resumeAfter?: Date
-  ): Promise<WorkflowCheckpoint> {
+  public async waitForExternalEvent(runId: string, stepId: string, resumeAfter?: Date): Promise<WorkflowCheckpoint> {
     return this.transition({
       runId,
       stepId,
@@ -159,11 +144,7 @@ export class WorkflowRuntime {
     });
   }
 
-  public async schedule(
-    runId: string,
-    stepId: string,
-    resumeAfter: Date
-  ): Promise<WorkflowCheckpoint> {
+  public async schedule(runId: string, stepId: string, resumeAfter: Date): Promise<WorkflowCheckpoint> {
     return this.transition({
       runId,
       stepId,
@@ -189,11 +170,7 @@ export class WorkflowRuntime {
     return this.transition({ runId, stepId, to: 'failed', reason });
   }
 
-  public async complete(
-    runId: string,
-    stepId: string,
-    payload?: Record<string, unknown>
-  ): Promise<WorkflowCheckpoint> {
+  public async complete(runId: string, stepId: string, payload?: Record<string, unknown>): Promise<WorkflowCheckpoint> {
     return this.transition({ runId, stepId, to: 'completed', reason: 'Completed', payload });
   }
 

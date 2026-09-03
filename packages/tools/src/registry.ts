@@ -117,11 +117,7 @@ export class ToolRegistry {
     return Array.from(this.tools.values());
   }
 
-  private async publishEvent(
-    type: string,
-    context: ToolContext,
-    payload: Record<string, unknown>
-  ): Promise<void> {
+  private async publishEvent(type: string, context: ToolContext, payload: Record<string, unknown>): Promise<void> {
     if (!this.eventBus) return;
     const event = {
       id: randomUUID(),
@@ -187,12 +183,7 @@ export class ToolRegistry {
 
     const manifestApproval = tool.manifest?.approval;
     const effectivePolicy = {
-      requiresApproval:
-        manifestApproval === 'auto'
-          ? false
-          : manifestApproval === 'human'
-            ? true
-            : policy.requiresApproval
+      requiresApproval: manifestApproval === 'auto' ? false : manifestApproval === 'human' ? true : policy.requiresApproval
     };
 
     let durableApprovalId: string | undefined;
@@ -303,6 +294,13 @@ export class ToolRegistry {
             error?: string;
           };
           if (record.outcome === 'succeeded') {
+            await this.publishEvent('tool.completed', context, {
+              toolName: name,
+              riskLevel: tool.riskLevel,
+              durationMs: 0,
+              output: record.result,
+              idempotentReplay: true
+            });
             return {
               success: true,
               output: record.result,
@@ -459,6 +457,3 @@ export class ToolRegistry {
     }
   }
 }
-
-
-

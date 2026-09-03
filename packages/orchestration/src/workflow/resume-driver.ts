@@ -10,11 +10,7 @@ export interface ResumeDriverOptions {
   batchSize?: number;
 }
 
-const RESUMABLE_STATES = new Set<WorkflowCheckpoint['state']>([
-  'scheduled',
-  'paused',
-  'waiting_external_event'
-]);
+const RESUMABLE_STATES = new Set<WorkflowCheckpoint['state']>(['scheduled', 'paused', 'waiting_external_event']);
 
 export class ResumeDriver {
   private timer: NodeJS.Timeout | null = null;
@@ -38,6 +34,8 @@ export class ResumeDriver {
           });
         }
       } catch (err) {
+        const reason = `Resume handler error: ${String(err)}`;
+        // Ensure checkpoint is in a state that can transition to failed (running) before failing
         if (RESUMABLE_STATES.has(cp.state)) {
           try {
             await this.opts.runtime.transition({
@@ -51,17 +49,23 @@ export class ResumeDriver {
               from: cp.state,
               to: cp.state,
               at: new Date(),
-              reason: `Resume handler error (could not normalize state): ${String(err)}; ${String(transitionErr)}`,
+              reason: `${reason}; normalize failed: ${String(transitionErr)}`,
               payload: {}
             });
             continue;
           }
         }
-        await this.opts.runtime.fail(
-          cp.runId,
-          cp.stepId,
-          `Resume handler error: ${String(err)}`
-        );
+        try {
+          await this.opts.runtime.fail(cp.runId, cp.stepId, reason);
+        } catch (failErr) {
+          await this.opts.checkpointRepo.appendTransition(cp.runId, cp.stepId, {
+            from: cp.state,
+            to: cp.state,
+            at: new Date(),
+            reason: `${reason}; fail transition also failed: ${String(failErr)}`,
+            payload: {}
+          });
+        }
       }
     }
     return due.length;

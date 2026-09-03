@@ -1,24 +1,12 @@
 ﻿import { createHash } from 'node:crypto';
-import {
-  CommunicationSendInput,
-  CommunicationSendResult,
-  CommunicationSender,
-  ToolContext
-} from '../types.js';
-import {
-  computeIdempotencyKey,
-  IdempotencyKey,
-  IdempotencyRecord
-} from '@atlas/shared/schemas/idempotency';
+import { CommunicationSendInput, CommunicationSendResult, CommunicationSender, ToolContext } from '../types.js';
+import { computeIdempotencyKey, IdempotencyKey, IdempotencyRecord } from '@atlas/shared/schemas/idempotency';
 import { rootLogger } from '@atlas/observability';
 
 export interface IdempotencyStoreAdapter {
   claim(input: IdempotencyKey): Promise<{ existing: boolean; record?: IdempotencyRecord }>;
   findByKey(key: string): Promise<IdempotencyRecord | null>;
-  recordSuccess(
-    key: string,
-    fields: { provider?: string; remoteId?: string; result?: Record<string, unknown> }
-  ): Promise<unknown>;
+  recordSuccess(key: string, fields: { provider?: string; remoteId?: string; result?: Record<string, unknown> }): Promise<unknown>;
   recordFailure(key: string, error: string): Promise<unknown>;
   release(key: string): Promise<boolean>;
 }
@@ -48,16 +36,10 @@ function stableStringify(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return '[' + value.map((item) => stableStringify(item)).join(',') + ']';
+    return '[' + value.map(item => stableStringify(item)).join(',') + ']';
   }
-  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0
-  );
-  return (
-    '{' +
-    entries.map(([k, v]) => JSON.stringify(k) + ':' + stableStringify(v)).join(',') +
-    '}'
-  );
+  const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + stableStringify(v)).join(',') + '}';
 }
 
 function hashInput(input: CommunicationSendInput): string {
@@ -70,10 +52,7 @@ function hashInput(input: CommunicationSendInput): string {
   return createHash('sha256').update(stableStringify(canonical)).digest('hex');
 }
 
-function buildToolContext(
-  base: SendContext,
-  idempotencyKey: IdempotencyKey
-): ToolContext {
+function buildToolContext(base: SendContext, idempotencyKey: IdempotencyKey): ToolContext {
   return {
     taskId: base.taskId,
     runId: base.runId ?? '',
@@ -98,10 +77,7 @@ export class IdempotentSender {
     this.now = opts.now ?? (() => new Date());
   }
 
-  public async send(
-    input: CommunicationSendInput,
-    context: SendContext
-  ): Promise<CommunicationSendResult> {
+  public async send(input: CommunicationSendInput, context: SendContext): Promise<CommunicationSendResult> {
     const payloadHash = hashInput(input);
     const payload = {
       recipient: input.recipient,
@@ -175,21 +151,135 @@ export class IdempotentSender {
         const ageMs = this.now().getTime() - new Date(toIsoString(record.createdAt)).getTime();
         if (ageMs >= this.ttlMs) {
           await this.store.release(key);
-          return this.send(input, context);
+          // Single retry after TTL expiry — avoid unbounded recursion
+          const payloadHash = hashInput(input);
+          const payload = {
+            recipient: input.recipient,
+            channel: input.channel,
+            subject: input.subject ?? null,
+            content: input.content
+          };
+          const retryKey = computeIdempotencyKey({
+            taskId: context.taskId,
+            runId: context.runId,
+            actionName: ACTION_NAME,
+            payload
+          });
+          const retryIdempotencyKey: IdempotencyKey = {
+            key: retryKey,
+            taskId: context.taskId,
+            runId: context.runId,
+            actionName: ACTION_NAME,
+            payloadHash,
+            createdAt: this.now().toISOString()
+          };
+          const claim = await this.store.claim(retryIdempotencyKey);
+          if (claim.existing && claim.record) {
+            const replayed = await this.replayOrFail(claim.record as IdempotencyRecord, retryKey, input, context);
+            if (replayed) return replayed;
+            // Not replayable — fall through to inner send below
+          }
+          try {
+            const result = await this.inner(input, buildToolContext(context, retryIdempotencyKey));
+            await this.store.recordSuccess(retryKey, {
+              provider: this.provider,
+              remoteId: result.messageId,
+              result: result as unknown as Record<string, unknown>
+            });
+            return result;
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err ?? 'Sender failed');
+            await this.store.recordFailure(retryKey, message);
+            throw err;
+          }
         }
         throw new Error(`Previous send failed: ${record.error ?? 'unknown error'}`);
       }
       case 'expired': {
         await this.store.release(key);
-        return this.send(input, context);
+        const payloadHash = hashInput(input);
+        const payload = {
+          recipient: input.recipient,
+          channel: input.channel,
+          subject: input.subject ?? null,
+          content: input.content
+        };
+        const retryKey = computeIdempotencyKey({
+          taskId: context.taskId,
+          runId: context.runId,
+          actionName: ACTION_NAME,
+          payload
+        });
+        const retryIdempotencyKey: IdempotencyKey = {
+          key: retryKey,
+          taskId: context.taskId,
+          runId: context.runId,
+          actionName: ACTION_NAME,
+          payloadHash,
+          createdAt: this.now().toISOString()
+        };
+        const claim = await this.store.claim(retryIdempotencyKey);
+        if (claim.existing && claim.record) {
+          const replayed = await this.replayOrFail(claim.record as IdempotencyRecord, retryKey, input, context);
+          if (replayed) return replayed;
+        }
+        try {
+          const result = await this.inner(input, buildToolContext(context, retryIdempotencyKey));
+          await this.store.recordSuccess(retryKey, {
+            provider: this.provider,
+            remoteId: result.messageId,
+            result: result as unknown as Record<string, unknown>
+          });
+          return result;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err ?? 'Sender failed');
+          await this.store.recordFailure(retryKey, message);
+          throw err;
+        }
       }
       default: {
         rootLogger.warn('Unknown idempotency outcome, releasing and retrying', { key });
         await this.store.release(key);
-        return this.send(input, context);
+        const payloadHash = hashInput(input);
+        const payload = {
+          recipient: input.recipient,
+          channel: input.channel,
+          subject: input.subject ?? null,
+          content: input.content
+        };
+        const retryKey = computeIdempotencyKey({
+          taskId: context.taskId,
+          runId: context.runId,
+          actionName: ACTION_NAME,
+          payload
+        });
+        const retryIdempotencyKey: IdempotencyKey = {
+          key: retryKey,
+          taskId: context.taskId,
+          runId: context.runId,
+          actionName: ACTION_NAME,
+          payloadHash,
+          createdAt: this.now().toISOString()
+        };
+        const claim = await this.store.claim(retryIdempotencyKey);
+        if (claim.existing && claim.record) {
+          const replayed = await this.replayOrFail(claim.record as IdempotencyRecord, retryKey, input, context);
+          if (replayed) return replayed;
+        }
+        try {
+          const result = await this.inner(input, buildToolContext(context, retryIdempotencyKey));
+          await this.store.recordSuccess(retryKey, {
+            provider: this.provider,
+            remoteId: result.messageId,
+            result: result as unknown as Record<string, unknown>
+          });
+          return result;
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : String(err ?? 'Sender failed');
+          await this.store.recordFailure(retryKey, message);
+          throw err;
+        }
       }
     }
   }
 }
-
-
