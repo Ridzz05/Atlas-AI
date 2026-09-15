@@ -1,0 +1,207 @@
+{
+  "main": {
+    "id": "d5f773e81fe83b48",
+    "type": "split",
+    "children": [
+      {
+        "id": "74124620297ee490",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c9fca2b1832d9b6e",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "1dc9872945cfa9e5",
+    "type": "split",
+    "children": [
+      {
+        "id": "50c5d756a5e671ab",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "f439785f486960a5",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "2277acf7aaae75ec",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "e00ee820ceaeb88a",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "0c920d52a9132224",
+    "type": "split",
+    "children": [
+      {
+        "id": "9636f3749594ec8a",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "5fe8b5c8d15d6099",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "6c906ca87496ae20",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links"
+            }
+          },
+          {
+            "id": "88fc1a54d7abe207",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "c632e4dca1f2dc66",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "9180495917f69e9f",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "c9fca2b1832d9b6e",
+  "lastOpenFiles": [
+    "03 - Operations & Runbooks/Database Migrations & pgvector Setup.md",
+    "05 - Workflows & Automations/Telegram Bot Command Reference.md",
+    "05 - Workflows & Automations/Scheduled Jobs & Cron Automations.md",
+    "03 - Operations & Runbooks/Local Development Setup.md",
+    "02 - Agent Fleet/Chief - System Orchestrator.md",
+    "Untitled 1.md",
+    "Untitled.md",
+    "00 - Index & Maps of Content (MOC)/030 - Operations & Runbooks MOC.md",
+    "Untitled",
+    "Untitled.base",
+    "02 - Agent Fleet/Luna - Data & Market Analyst Specialist.md",
+    "01 - System Architecture/Policy, Security & Approval Gates.md",
+    "00 - Index & Maps of Content (MOC)/040 - Knowledge Base & Rubrics MOC.md",
+    "00 - Index & Maps of Content (MOC)/050 - Automations & Workflows MOC.md",
+    "02 - Agent Fleet/Argus - QA & Risk Gate Specialist.md",
+    "04 - Knowledge & Rubrics/Personal Knowledge & Memory Protocol.md",
+    "04 - Knowledge & Rubrics/Lead Qualification Rubric v1.md",
+    "00 - Index & Maps of Content (MOC)/000 - Home MOC.md",
+    "00 - Index & Maps of Content (MOC)/020 - Agent Fleet MOC.md",
+    "Untitled.canvas"
+  ]
+}

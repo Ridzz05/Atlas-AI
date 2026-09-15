@@ -16,15 +16,44 @@ interface FormattedMessageProps {
   content: string;
   defaultExpanded?: boolean;
   maxInitialHeight?: number;
+  collapsible?: boolean;
 }
 
-// Inline formatting helper: handles **bold**, *italic*, and `code`
+// Inline formatting helper: handles **bold**, *italic*, `code`, and [[wiki-link]]
 function renderInline(text: string): React.ReactNode[] {
-  // Regex to match **bold**, `code`, and *italic*
-  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g;
+  // Regex to match **bold**, `code`, *italic*, and [[wiki-link]]
+  const regex = /(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*|\[\[[^\]]+\]\])/g;
   const parts = text.split(regex);
 
   return parts.map((part, index) => {
+    if (part.startsWith('[[') && part.endsWith(']]') && part.length >= 4) {
+      const inner = part.slice(2, -2);
+      const pipeIdx = inner.indexOf('|');
+      const hashIdx = inner.indexOf('#');
+      const display = pipeIdx > -1 ? inner.slice(pipeIdx + 1) : hashIdx > -1 ? inner.slice(0, hashIdx) : inner;
+      return (
+        <Box
+          component="span"
+          key={index}
+          sx={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            fontSize: '0.85em',
+            bgcolor: 'rgba(194, 65, 12, 0.08)',
+            color: '#c2410c',
+            border: '1px solid rgba(194, 65, 12, 0.2)',
+            px: 0.75,
+            py: 0.1,
+            borderRadius: '6px',
+            fontWeight: 600,
+            mx: 0.25,
+            verticalAlign: 'baseline'
+          }}
+        >
+          📎 {display}
+        </Box>
+      );
+    }
     if (part.startsWith('**') && part.endsWith('**') && part.length >= 4) {
       return (
         <strong key={index} style={{ fontWeight: 700, color: '#201515' }}>
@@ -82,8 +111,13 @@ function parseTableCells(line: string): string[] {
     .map(cell => cell.trim());
 }
 
-export function FormattedMessage({ content, maxInitialHeight = 360 }: FormattedMessageProps) {
-  const [expanded, setExpanded] = useState(false);
+export function FormattedMessage({
+  content,
+  defaultExpanded = false,
+  maxInitialHeight = 360,
+  collapsible = true
+}: FormattedMessageProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
 
   if (!content) return null;
@@ -338,7 +372,7 @@ export function FormattedMessage({ content, maxInitialHeight = 360 }: FormattedM
     i++;
   }
 
-  const isLongContent = content.length > 800 || lines.length > 15;
+  const isLongContent = collapsible && (content.length > 800 || lines.length > 15);
 
   return (
     <Box sx={{ position: 'relative' }}>

@@ -23,6 +23,8 @@ async function main() {
     budgetRepo: runtime.budgetRepo,
     rubricRepo: runtime.rubricRepo,
     modelProviderSettingsRepo: runtime.modelProviderSettingsRepo,
+    scheduledJobRepo: runtime.scheduledJobRepo,
+    workflowCheckpointRepo: runtime.workflowCheckpointRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

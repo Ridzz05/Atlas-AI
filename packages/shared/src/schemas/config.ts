@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
 const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'openrouter', 'groq', 'ollama', 'deepseek']);
-const ResearchProviderSchema = z.enum(['none', 'brave']);
+const ResearchProviderSchema = z.enum(['none', 'brave', 'chromium']);
 const EmptyStringAsUndefined = z.preprocess(value => (typeof value === 'string' && value.trim() === '' ? undefined : value), z.unknown());
 const StrictBooleanFromEnvSchema = z.preprocess(value => {
   if (typeof value !== 'string') return value;
@@ -55,6 +55,10 @@ export const EnvConfigSchema = z
     MEMORY_MAINTENANCE_INTERVAL_SECONDS: z.coerce.number().int().positive().default(3600),
     QUEUE_RECOVERY_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
     SCHEDULED_JOB_SYNC_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
+    SCHEDULED_JOB_TICK_INTERVAL_SECONDS: z.coerce.number().int().positive().default(60),
+    WORKFLOW_RESUME_INTERVAL_SECONDS: z.coerce.number().int().positive().default(30),
+    AUTOMATION_ENABLED: StrictBooleanFromEnvSchema.default(true),
+    WORKFLOW_AUTOMATION_ENABLED: StrictBooleanFromEnvSchema.default(true),
     MEMORY_DELETION_GRACE_DAYS: z.coerce.number().int().nonnegative().default(7),
     GLOBAL_DAILY_BUDGET_USD: z.coerce.number().positive().default(5.0),
     MAX_CONCURRENT_AGENT_RUNS: z.coerce.number().int().positive().default(3),

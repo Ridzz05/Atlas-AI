@@ -9,3 +9,4 @@ export * from './synthesizer/task-synthesizer.js';
 export * from './qa/qa-gate.js';
 export * from './scheduler/scheduled-job-scheduler.js';
 export * from './workflow/index.js';
+export * from './automation/index.js';

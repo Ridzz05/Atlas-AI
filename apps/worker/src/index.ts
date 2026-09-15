@@ -20,6 +20,7 @@ async function main() {
     toolCallRepo: runtime.toolCallRepo,
     budgetRepo: runtime.budgetRepo,
     scheduledJobRepo: runtime.scheduledJobRepo,
+    workflowCheckpointRepo: runtime.workflowCheckpointRepo,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     researchProvider: runtime.researchProvider,

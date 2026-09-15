@@ -130,7 +130,13 @@ export async function assertNativeDependencies(environment) {
 }
 
 function packageManagerCommand() {
-  return process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+  if (process.platform !== 'win32') return 'pnpm';
+  // Windows: use absolute path to avoid 'pnpm.cmd not recognized' when spawned via cmd.exe /d /s /c
+  try {
+    const candidate = path.join(process.env.APPDATA || '', 'npm', 'pnpm.cmd');
+    if (candidate && existsSync(candidate)) return candidate;
+  } catch {}
+  return 'pnpm.cmd';
 }
 
 export function spawnCommand(command, args, options = {}) {
@@ -181,14 +187,47 @@ async function runDevelopment(environment) {
     stdio: 'inherit',
     windowsHide: false
   });
-  const turboFilters = developmentFilters(environment).map(filter => `--filter=${filter}`);
-  const services = spawnCommand(packageManager, ['exec', 'turbo', 'run', 'dev', ...turboFilters], {
-    cwd: rootDir,
-    env: environment,
-    stdio: 'inherit',
-    windowsHide: false
-  });
-  const children = [compiler, services];
+
+  let services;
+  let extraChildren = [];
+  // Windows: turbo fails to locate pnpm binary (cannot find binary path) due to shim resolution.
+  // Fallback: spawn each workspace dev directly via pnpm --filter, bypassing turbo.
+  if (process.platform === 'win32') {
+    const filters = developmentFilters(environment);
+    const filterToPkg = {
+      '@atlas/dashboard': { dir: 'apps/dashboard', cmd: packageManager, args: ['exec', 'next', 'dev', '-p', '3000'] },
+      '@atlas/agent-service': { dir: 'apps/agent-service', cmd: packageManager, args: ['exec', 'node', '--watch', 'dist/index.js'] },
+      '@atlas/worker': { dir: 'apps/worker', cmd: packageManager, args: ['exec', 'node', '--watch', 'dist/index.js'] },
+      '@atlas/telegram-bot': { dir: 'apps/telegram-bot', cmd: packageManager, args: ['exec', 'node', '--watch', 'dist/index.js'] }
+    };
+    const devProcesses = filters
+      .map(f => filterToPkg[f])
+      .filter(Boolean)
+      .map(cfg =>
+        spawnCommand(cfg.cmd, cfg.args, {
+          cwd: path.join(rootDir, cfg.dir),
+          env: environment,
+          stdio: 'inherit',
+          windowsHide: false
+        })
+      );
+    // Use first as primary `services`, rest as extraChildren so signal handling covers all
+    services = devProcesses[0];
+    extraChildren = devProcesses.slice(1);
+    // Dashboard needs its own .next cleanup already done; ensure Next can start without turbo
+    if (!services) {
+      throw new Error('No development filters matched for Windows fallback');
+    }
+  } else {
+    const turboFilters = developmentFilters(environment).map(filter => `--filter=${filter}`);
+    services = spawnCommand(packageManager, ['exec', 'turbo', 'run', 'dev', ...turboFilters], {
+      cwd: rootDir,
+      env: environment,
+      stdio: 'inherit',
+      windowsHide: false
+    });
+  }
+  const children = [compiler, services, ...extraChildren];
   let stopping = false;
 
   const stopChildren = () => {

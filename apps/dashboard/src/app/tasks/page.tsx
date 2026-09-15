@@ -15,9 +15,11 @@ import DialogTitle from '@mui/material/DialogTitle';
 import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import TextField from '@mui/material/TextField';
-import { CiCirclePlus, CiLocationArrow1, CiRedo, CiPlay1 } from 'react-icons/ci';
+import Collapse from '@mui/material/Collapse';
+import { CiCirclePlus, CiLocationArrow1, CiRedo, CiPlay1, CiChat1 } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../../lib/event-stream';
+import { WorkflowLiveStream } from '../../components/workflow-live-stream';
 
 interface ApiTask {
   id: string;
@@ -41,6 +43,7 @@ export default function TasksPage() {
   const [submitting, setSubmitting] = useState(false);
   const [realtime, setRealtime] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedTaskIds, setExpandedTaskIds] = useState<Record<string, boolean>>({});
 
   const loadTasks = useCallback(async () => {
     setLoading(true);
@@ -246,17 +249,44 @@ export default function TasksPage() {
                   </Stack>
                 </Box>
 
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.75rem', color: '#666155' }}>
-                  <CiLocationArrow1 size={16} color="#c2410c" />
-                  <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#d64200', fontWeight: 700 }}>
-                    {task.assignedAgent.toUpperCase()}
-                  </Typography>
-                  {task.error && (
-                    <Typography variant="caption" sx={{ color: '#dc2626', ml: 1, wordBreak: 'break-word', fontWeight: 500 }}>
-                      {task.error}
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, fontSize: '0.75rem', color: '#666155' }}>
+                    <CiLocationArrow1 size={16} color="#c2410c" />
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', color: '#d64200', fontWeight: 700 }}>
+                      TRIGGER: {task.assignedAgent.toUpperCase()}
                     </Typography>
-                  )}
+                    {task.error && (
+                      <Typography variant="caption" sx={{ color: '#dc2626', ml: 1, wordBreak: 'break-word', fontWeight: 500 }}>
+                        {task.error}
+                      </Typography>
+                    )}
+                  </Box>
+
+                  <Button
+                    size="small"
+                    startIcon={<CiChat1 size={16} />}
+                    onClick={() => setExpandedTaskIds(prev => ({ ...prev, [task.id]: !prev[task.id] }))}
+                    sx={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: expandedTaskIds[task.id] ? '#201515' : '#c2410c',
+                      bgcolor: expandedTaskIds[task.id] ? '#f5efe6' : 'transparent',
+                      '&:hover': { bgcolor: '#fff3eb' }
+                    }}
+                  >
+                    {expandedTaskIds[task.id] ? 'Tutup Percakapan ▲' : 'Lihat Percakapan & Deliberasi ▼'}
+                  </Button>
                 </Box>
+
+                <Collapse in={Boolean(expandedTaskIds[task.id])}>
+                  <Box sx={{ mt: 1.5 }}>
+                    <WorkflowLiveStream
+                      selectedTaskId={task.id}
+                      activeTaskTitle={task.title}
+                      isTaskRunning={['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)}
+                    />
+                  </Box>
+                </Collapse>
               </Card>
             );
           })}

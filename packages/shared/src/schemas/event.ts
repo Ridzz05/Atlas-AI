@@ -18,6 +18,7 @@ export const EventTypeSchema = z.enum([
   'approval.decided',
   'memory.created',
   'artifact.created',
+  'message.created',
   'system.emergency_stop'
 ]);
 export type EventType = z.infer<typeof EventTypeSchema>;

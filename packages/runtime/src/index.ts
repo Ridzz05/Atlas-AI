@@ -16,6 +16,7 @@ import {
   LeadRubricRepository,
   ModelProviderSettingsRepository,
   ScheduledJobRepository,
+  WorkflowCheckpointRepository,
   seedAgents,
   TaskRepository
 } from '@atlas/database';
@@ -44,6 +45,7 @@ export interface AtlasRuntime {
   rubricRepo: LeadRubricRepository;
   modelProviderSettingsRepo: ModelProviderSettingsRepository;
   scheduledJobRepo: ScheduledJobRepository;
+  workflowCheckpointRepo: WorkflowCheckpointRepository;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -113,6 +115,7 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
   const budgetRepo = new BudgetRepository(db);
   const rubricRepo = new LeadRubricRepository(db);
   const scheduledJobRepo = new ScheduledJobRepository(db);
+  const workflowCheckpointRepo = new WorkflowCheckpointRepository(db);
 
   if (typeof (db as any).query === 'function') {
     await budgetRepo.recoverStaleReservations();
@@ -148,6 +151,7 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
     rubricRepo,
     modelProviderSettingsRepo,
     scheduledJobRepo,
+    workflowCheckpointRepo,
     taskQueue,
     eventBus,
     provider,

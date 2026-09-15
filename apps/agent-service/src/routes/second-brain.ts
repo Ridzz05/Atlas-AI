@@ -1,6 +1,20 @@
 import { FastifyInstance } from 'fastify';
 import { SecondBrainService } from '@atlas/memory';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { z } from 'zod';
+
+export function findVaultPath(): string | null {
+  const candidates = [
+    path.resolve(process.cwd(), 'vault'),
+    path.resolve(process.cwd(), '../../vault'),
+    path.resolve(process.cwd(), '../vault')
+  ];
+  for (const c of candidates) {
+    if (fs.existsSync(c)) return c;
+  }
+  return null;
+}
 
 const IngestBodySchema = z.object({
   title: z.string().optional(),
@@ -84,12 +98,15 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
 
     const { title, filePath, content, vaultPath, scope } = parse.data;
 
-    if (vaultPath) {
+    const targetVaultPath = (vaultPath && vaultPath.trim()) ? vaultPath.trim() : (!content ? findVaultPath() : undefined);
+
+    if (targetVaultPath) {
       try {
-        const result = await service.ingestVaultDirectory(vaultPath, { scope });
+        const result = await service.ingestVaultDirectory(targetVaultPath, { scope });
         return reply.status(200).send({
           type: 'vault_sync',
           status: 'success',
+          vaultPath: targetVaultPath,
           ...result
         });
       } catch (err) {
@@ -100,7 +117,7 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
     }
 
     if (!content) {
-      return reply.status(400).send({ error: "Either 'content' or 'vaultPath' must be provided." });
+      return reply.status(400).send({ error: "Either 'content' or 'vaultPath' must be provided, or vault directory must exist." });
     }
 
     try {

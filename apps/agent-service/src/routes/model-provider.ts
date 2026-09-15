@@ -6,7 +6,9 @@ import { z } from 'zod';
 
 const OpenRouterSettingsMutationSchema = z
   .object({
-    apiKey: z.string().trim().min(20).max(512).optional(),
+    provider: z.string().trim().default('openrouter'),
+    modelName: z.string().trim().optional(),
+    apiKey: z.string().trim().min(10).max(512).optional(),
     clearApiKey: z.boolean().default(false)
   })
   .strict()
@@ -43,9 +45,11 @@ export function registerModelProviderRoutes(app: FastifyInstance, options: Model
     }
 
     try {
+      const targetProvider = parsed.data.provider || 'openrouter';
+      const targetModel = parsed.data.modelName || OPENROUTER_DEFAULT_MODEL;
       const data = await options.modelProviderSettingsRepo.save({
-        provider: 'openrouter',
-        modelName: OPENROUTER_DEFAULT_MODEL,
+        provider: targetProvider,
+        modelName: targetModel,
         apiKey: parsed.data.apiKey,
         clearApiKey: parsed.data.clearApiKey,
         updatedBy: 'owner-api'

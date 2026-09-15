@@ -10,7 +10,8 @@ import {
   TelegramStateRepository,
   MessageRepository,
   ToolCallRepository,
-  BudgetRepository
+  BudgetRepository,
+  WorkflowCheckpointRepository
 } from '@atlas/database';
 import { MemoryAuditSink, MemoryMaintenanceService, MemoryProposalService, MemoryRetriever, MemoryStore, MemoryTools } from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
@@ -26,11 +27,21 @@ import {
   SendApprovedCommunicationTool,
   ToolRegistry,
   WebSearchTool,
+  WebFetchTool,
   createArtifactTools,
   createMemoryTools
 } from '@atlas/tools';
 import type { ResearchProvider } from '@atlas/tools';
-import { AgentRunner, TaskDelegator, TaskQueue, InMemoryTaskQueue, ToolGatewayExecutor, ScheduledJobScheduler } from '@atlas/orchestration';
+import {
+  AgentRunner,
+  TaskDelegator,
+  TaskQueue,
+  InMemoryTaskQueue,
+  ToolGatewayExecutor,
+  ScheduledJobScheduler,
+  WorkflowAutomationService,
+  AutomationEngine
+} from '@atlas/orchestration';
 import { ScheduledJobRepository } from '@atlas/database';
 
 export interface WorkerRunnerOptions {
@@ -51,6 +62,7 @@ export interface WorkerRunnerOptions {
   toolCallRepo?: ToolCallRepository;
   budgetRepo?: BudgetRepository;
   scheduledJobRepo?: ScheduledJobRepository;
+  workflowCheckpointRepo?: WorkflowCheckpointRepository;
   researchProvider?: ResearchProvider;
   workerId?: string;
   leaseSeconds?: number;
@@ -64,6 +76,8 @@ export class AgentWorkerRunner {
   private queueRecoveryInFlight = false;
   private memoryMaintenance?: MemoryMaintenanceService;
   private scheduledJobScheduler?: ScheduledJobScheduler;
+  private workflowAutomation?: WorkflowAutomationService;
+  private automationEngine?: AutomationEngine;
   private runner: AgentRunner;
   private delegator: TaskDelegator;
   private taskQueue: TaskQueue;
@@ -85,6 +99,7 @@ export class AgentWorkerRunner {
       });
     const toolRegistry = new ToolRegistry();
     toolRegistry.registerLegacy(WebSearchTool);
+    toolRegistry.registerLegacy(WebFetchTool);
     toolRegistry.registerLegacy(CompanyLookupTool);
     toolRegistry.registerLegacy(LeadEnrichmentTool);
     toolRegistry.registerLegacy(LeadScoringTool);
@@ -160,6 +175,17 @@ export class AgentWorkerRunner {
     });
 
     this.taskQueue = options.taskQueue || new InMemoryTaskQueue();
+
+    // AutomationEngine facade — follows same TaskRepository -> TaskQueue pattern as manual task creation
+    if (options.taskRepo) {
+      this.automationEngine = new AutomationEngine({
+        taskRepo: options.taskRepo,
+        taskQueue: this.taskQueue,
+        registry: this.registry,
+        checkpointRepo: options.workflowCheckpointRepo,
+        eventBus
+      });
+    }
   }
 
   public async start(): Promise<void> {
@@ -183,20 +209,54 @@ export class AgentWorkerRunner {
       this.memoryMaintenanceTimer.unref?.();
     }
 
+    // --- Full AI Automation: Scheduled Jobs (cron-driven) ---
     if (this.options.scheduledJobRepo && this.options.taskRepo) {
+      const automationEnabled = (this.options.config as any).AUTOMATION_ENABLED ?? true;
       this.scheduledJobScheduler = new ScheduledJobScheduler({
         scheduledJobRepo: this.options.scheduledJobRepo,
         taskRepo: this.options.taskRepo,
         registry: this.registry,
+        taskQueue: this.taskQueue,
         triggerHandler: async ({ job }) => {
           rootLogger.info('Scheduled job tick processed', {
             scheduledJobId: job.id,
             jobType: job.jobType
           });
         },
-        syncIntervalSeconds: this.options.config.SCHEDULED_JOB_SYNC_INTERVAL_SECONDS || 30
+        syncIntervalSeconds: this.options.config.SCHEDULED_JOB_SYNC_INTERVAL_SECONDS || 30,
+        tickIntervalSeconds: (this.options.config as any).SCHEDULED_JOB_TICK_INTERVAL_SECONDS || 60,
+        automationEnabled
       });
       await this.scheduledJobScheduler.start();
+      rootLogger.info('Automation scheduler active', {
+        automationEnabled,
+        syncInterval: this.options.config.SCHEDULED_JOB_SYNC_INTERVAL_SECONDS || 30,
+        tickInterval: (this.options.config as any).SCHEDULED_JOB_TICK_INTERVAL_SECONDS || 60
+      });
+    }
+
+    // --- Full AI Automation: Durable Workflow Resume (scheduled / waiting_external_event / paused) ---
+    const workflowEnabled = (this.options.config as any).WORKFLOW_AUTOMATION_ENABLED ?? true;
+    const workflowCheckpointRepo =
+      this.options.workflowCheckpointRepo ||
+      (this.options.db ? new WorkflowCheckpointRepository(this.options.db) : undefined);
+    if (workflowCheckpointRepo && this.options.taskRepo && workflowEnabled) {
+      this.workflowAutomation = new WorkflowAutomationService({
+        checkpointRepo: workflowCheckpointRepo,
+        taskRepo: this.options.taskRepo,
+        registry: this.registry,
+        taskQueue: this.taskQueue,
+        resumeIntervalSeconds: (this.options.config as any).WORKFLOW_RESUME_INTERVAL_SECONDS || 30,
+        batchSize: 25,
+        enabled: workflowEnabled
+      });
+      await this.workflowAutomation.start();
+      rootLogger.info('Workflow automation active', {
+        workflowEnabled,
+        resumeInterval: (this.options.config as any).WORKFLOW_RESUME_INTERVAL_SECONDS || 30
+      });
+    } else if (!workflowEnabled) {
+      rootLogger.info('Workflow automation disabled via config');
     }
 
     this.isRunning = true;
@@ -283,6 +343,10 @@ export class AgentWorkerRunner {
       this.scheduledJobScheduler.stop();
       this.scheduledJobScheduler = undefined;
     }
+    if (this.workflowAutomation) {
+      this.workflowAutomation.stop();
+      this.workflowAutomation = undefined;
+    }
     await this.taskQueue.close();
     rootLogger.info('ATLAS Agent Worker gracefully stopped');
   }
@@ -305,6 +369,35 @@ export class AgentWorkerRunner {
 
   public getScheduledJobScheduler(): ScheduledJobScheduler | undefined {
     return this.scheduledJobScheduler;
+  }
+
+  public getWorkflowAutomation(): WorkflowAutomationService | undefined {
+    return this.workflowAutomation;
+  }
+
+  public getAutomationEngine(): AutomationEngine | undefined {
+    return this.automationEngine;
+  }
+
+  /**
+   * Manual trigger for full AI Automation — executes an automation trigger
+   * following the same workflow as scheduled jobs (TaskRepository -> Queue -> Chief/Delegator).
+   * Useful for webhook/event-driven automation or dashboard manual fire.
+   */
+  public async triggerAutomation(input: {
+    type: 'cron' | 'event' | 'webhook' | 'manual';
+    jobType: string;
+    payload?: Record<string, unknown>;
+    id?: string;
+  }): Promise<{ taskId: string; status: string }> {
+    if (!this.automationEngine) throw new Error('AutomationEngine not initialized (missing taskRepo/taskQueue)');
+    const result = await this.automationEngine.execute({
+      id: input.id || `auto_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      type: input.type,
+      jobType: input.jobType as any,
+      payload: input.payload
+    });
+    return { taskId: result.taskId, status: result.status };
   }
 
   private async runMemoryMaintenance(): Promise<void> {

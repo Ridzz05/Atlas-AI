@@ -18,6 +18,11 @@ export interface ToolExecutor {
       signal?: AbortSignal;
     }
   ): Promise<Record<string, unknown>>;
+  getToolDefinitions?(allowedTools?: string[]): Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
 }
 
 export interface AgentRunnerOptions {
@@ -164,11 +169,26 @@ export class AgentRunner {
       content: string;
       metadata?: Record<string, unknown>;
     }): Promise<void> => {
-      if (!this.options.messageRepo) return;
-      await this.options.messageRepo.create({
+      if (this.options.messageRepo) {
+        await this.options.messageRepo.create({
+          taskId,
+          runId,
+          ...message
+        });
+      }
+      await this.publishEvent({
+        id: crypto.randomUUID(),
+        type: 'message.created',
         taskId,
         runId,
-        ...message
+        agentId: message.senderId,
+        payload: {
+          senderType: message.senderType,
+          senderId: message.senderId,
+          content: message.content,
+          metadata: message.metadata || {}
+        },
+        timestamp: new Date().toISOString()
       });
     };
 
@@ -284,12 +304,16 @@ export class AgentRunner {
         turnsCount++;
         rootLogger.debug(`Executing turn ${turnsCount}/${maxTurns} for agent ${agentId} on task ${taskId}`);
 
+        // Extract available tool definitions matching agent permissions
+        const availableTools = this.options.toolExecutor?.getToolDefinitions?.(input.agent.permissions.tools);
+
         // Model call
         const modelResult = await this.options.provider.run({
           runId,
           agentId,
           messages,
           systemPrompt: input.agent.systemPrompt,
+          tools: availableTools && availableTools.length > 0 ? availableTools : undefined,
           signal: controller.signal
         });
 

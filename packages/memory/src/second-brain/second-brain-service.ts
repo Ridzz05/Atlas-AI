@@ -116,10 +116,13 @@ export class SecondBrainService {
       try {
         const systemPrompt = `You are the Second Brain AI Knowledge Assistant for ATLAS AI OS.
 Your goal is to answer the user's question clearly, thoroughly, and factually based on the provided context notes.
-GUIDELINES:
-1. Always cite relevant source notes using Obsidian Wiki-Link syntax like [[Note Title]] or [[Note Title#Section Name]] directly in your explanation.
-2. Synthesize key insights across the sources instead of just copying verbatim.
-3. If the context does not fully answer the question, state what is known from the notes and identify missing details.`;
+
+CORE GUIDELINES:
+1. STRICT LANGUAGE PURITY: Respond 100% in the exact language of the user query (Indonesian or English). Absolutely NEVER output Chinese characters, non-Latin tokens (e.g. do not output 是否符合 or any Chinese words), or unprompted code-switching.
+2. CITATION DISCIPLINE: Always cite relevant source notes using Obsidian Wiki-Link syntax like [[Note Title]] or [[Note Title#Section Name]] directly in your explanation.
+3. CLEAN STRUCTURE: Organize your answer with clean Markdown headings (##, ###), bullet points, tables, and clean paragraph breaks.
+4. SYNTHESIS: Synthesize key insights across sources instead of just copying raw chunks verbatim.
+5. HONESTY: If the notes do not contain the answer, state clearly what is known and what is missing.`;
 
         const userPrompt = `User Query: "${query}"
 
@@ -130,7 +133,11 @@ Provide a comprehensive, grounded answer citing the source notes using [[Note#Se
 
         const synthesized = await this.llmSynthesizer({ systemPrompt, userPrompt });
         if (synthesized && synthesized.trim()) {
-          answer = synthesized.trim();
+          // Sanitize any accidental foreign/Chinese characters leaked by models like minimax
+          answer = synthesized
+            .trim()
+            .replace(/是否符合/g, 'apakah memenuhi')
+            .replace(/[\u4e00-\u9fa5]+/g, '');
         }
       } catch (err) {
         rootLogger.warn('LLM RAG synthesis failed, using extractive fallback', {

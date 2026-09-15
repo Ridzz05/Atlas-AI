@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "node scripts/lint.mjs",
+    "brain:sync": "node scripts/sync-vault.mjs",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test && node --test scripts/native-dev.test.mjs",
     "clean": "turbo run clean && rimraf node_modules"

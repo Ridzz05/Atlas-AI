@@ -71,18 +71,13 @@ INSTRUCTIONS:
     onCost?.(costUsd);
 
     if (this.options.messageRepo) {
-      await this.options.messageRepo.create({
-        taskId: parentTask.id,
-        senderType: 'user',
-        senderId: 'system.synthesis',
-        content: prompt,
-        metadata: { stage: 'synthesis' }
-      });
+      const executiveDialogue = `[Chief ➔ Operator]: Seluruh workflow spesialis dan audit Argus telah tuntas dievaluasi. Berikut laporan hasil eksekutif:\n\n${resultContent}`;
       await this.options.messageRepo.create({
         taskId: parentTask.id,
         senderType: 'agent',
         senderId: 'chief',
-        content: resultContent,
+        recipientId: 'user',
+        content: executiveDialogue,
         metadata: { stage: 'synthesis' }
       });
     }

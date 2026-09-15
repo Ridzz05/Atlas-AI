@@ -28,13 +28,14 @@ class FakeEventSource {
 }
 
 describe('@atlas/dashboard Integration Tests', () => {
-  it('loads the core agent roster with all 5 specialist definitions', () => {
+  it('loads the core agent roster with all 6 specialist definitions', () => {
     const agents = defaultAgentRegistry.list();
-    expect(agents.length).toBe(5);
+    expect(agents.length).toBe(6);
 
     const ids = agents.map(a => a.id);
     expect(ids).toContain('chief');
     expect(ids).toContain('ned');
+    expect(ids).toContain('luna');
     expect(ids).toContain('layla');
     expect(ids).toContain('hermes');
     expect(ids).toContain('argus');

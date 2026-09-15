@@ -4,6 +4,7 @@ import { NED_AGENT } from './definitions/ned.js';
 import { LAYLA_AGENT } from './definitions/layla.js';
 import { HERMES_AGENT } from './definitions/hermes.js';
 import { ARGUS_AGENT } from './definitions/argus.js';
+import { LUNA_AGENT } from './definitions/luna.js';
 
 export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
@@ -11,6 +12,7 @@ export class AgentRegistry {
   constructor() {
     this.register(CHIEF_AGENT);
     this.register(NED_AGENT);
+    this.register(LUNA_AGENT);
     this.register(LAYLA_AGENT);
     this.register(HERMES_AGENT);
     this.register(ARGUS_AGENT);

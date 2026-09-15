@@ -83,23 +83,6 @@ RULES:
     }
     onCost?.(costUsd);
 
-    if (this.options.messageRepo) {
-      await this.options.messageRepo.create({
-        taskId: parentTask.id,
-        senderType: 'user',
-        senderId: 'system.qa',
-        content: prompt,
-        metadata: { stage: 'qa' }
-      });
-      await this.options.messageRepo.create({
-        taskId: parentTask.id,
-        senderType: 'agent',
-        senderId: 'argus',
-        content: modelContent,
-        metadata: { stage: 'qa' }
-      });
-    }
-
     try {
       const cleaned = modelContent
         .replace(/```json\s*/g, '')
@@ -114,30 +97,37 @@ RULES:
       if (!allowedVerdicts.includes(parsed.verdict as QAVerdict)) {
         return {
           verdict: 'BLOCKED',
-          findings: ['Argus returned an unknown QA verdict.'],
-          recommendations: ['Review the QA provider response before finalizing this task.'],
+          findings: [`Argus returned invalid verdict: ${String(parsed.verdict)}`],
+          recommendations: ['Rerun QA evaluation.'],
           passed: false
         };
       }
 
-      if (!Array.isArray(parsed.findings) || !Array.isArray(parsed.recommendations)) {
-        return {
-          verdict: 'BLOCKED',
-          findings: ['Argus response did not include valid findings and recommendations arrays.'],
-          recommendations: ['Review the QA provider response before finalizing this task.'],
-          passed: false
-        };
-      }
-
+      const findings = Array.isArray(parsed.findings) ? (parsed.findings as string[]) : [];
+      const recommendations = Array.isArray(parsed.recommendations) ? (parsed.recommendations as string[]) : [];
       const verdict = parsed.verdict as QAVerdict;
-      const findings = parsed.findings.filter((item): item is string => typeof item === 'string');
-      const recommendations = parsed.recommendations.filter((item): item is string => typeof item === 'string');
+      const passed = verdict === 'PASS' || verdict === 'PASS_WITH_WARNINGS';
+
+      if (this.options.messageRepo) {
+        const findingsList = findings.length > 0 ? findings.map(f => `• ${f}`).join('\n') : 'Semua komponen memenuhi standar kualifikasi.';
+        const recommendationsList = recommendations.length > 0 ? recommendations.map(r => `• ${r}`).join('\n') : 'Tidak ada catatan koreksi.';
+        const qaDialogue = `[Argus ➔ Chief]: Audit Kualitas & Gerbang Risiko Selesai.\n\nVerdict: ${verdict}\nStatus: ${passed ? 'PASSED ✅' : 'REJECTED/BLOCKED ❌'}\n\nTemuan:\n${findingsList}\n\nRekomendasi:\n${recommendationsList}`;
+
+        await this.options.messageRepo.create({
+          taskId: parentTask.id,
+          senderType: 'agent',
+          senderId: 'argus',
+          recipientId: 'chief',
+          content: qaDialogue,
+          metadata: { stage: 'qa', verdict }
+        });
+      }
 
       return {
         verdict,
         findings,
         recommendations,
-        passed: verdict === 'PASS' || verdict === 'PASS_WITH_WARNINGS'
+        passed
       };
     } catch {
       return {

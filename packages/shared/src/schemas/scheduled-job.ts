@@ -1,6 +1,13 @@
 import { z } from 'zod';
 
-export const ScheduledJobTypeSchema = z.enum(['daily_briefing']);
+export const ScheduledJobTypeSchema = z.enum([
+  'daily_briefing',
+  'lead_discovery',
+  'memory_consolidation',
+  'research_sync',
+  'workflow_resume',
+  'custom_automation'
+]);
 export type ScheduledJobType = z.infer<typeof ScheduledJobTypeSchema>;
 
 export const ScheduledJobSchema = z.object({

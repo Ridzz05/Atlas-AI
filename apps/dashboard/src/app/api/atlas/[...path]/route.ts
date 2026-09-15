@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 type RouteContext = { params: Promise<{ path: string[] }> };
-const proxyTimeoutMs = 5_000;
+const defaultProxyTimeoutMs = 60_000;
+const configuredTimeout = Number(process.env.ATLAS_PROXY_TIMEOUT_MS);
+const proxyTimeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : defaultProxyTimeoutMs;
 
 async function proxy(request: NextRequest, context: RouteContext): Promise<NextResponse> {
   const { path } = await context.params;

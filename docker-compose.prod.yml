@@ -126,6 +126,11 @@ services:
       ARTIFACT_STORAGE_PATH: /app/data/artifacts
       MEMORY_MAINTENANCE_INTERVAL_SECONDS: ${MEMORY_MAINTENANCE_INTERVAL_SECONDS:-3600}
       QUEUE_RECOVERY_INTERVAL_SECONDS: ${QUEUE_RECOVERY_INTERVAL_SECONDS:-30}
+      SCHEDULED_JOB_SYNC_INTERVAL_SECONDS: ${SCHEDULED_JOB_SYNC_INTERVAL_SECONDS:-30}
+      SCHEDULED_JOB_TICK_INTERVAL_SECONDS: ${SCHEDULED_JOB_TICK_INTERVAL_SECONDS:-60}
+      WORKFLOW_RESUME_INTERVAL_SECONDS: ${WORKFLOW_RESUME_INTERVAL_SECONDS:-30}
+      AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-true}
+      WORKFLOW_AUTOMATION_ENABLED: ${WORKFLOW_AUTOMATION_ENABLED:-true}
       MEMORY_DELETION_GRACE_DAYS: ${MEMORY_DELETION_GRACE_DAYS:-7}
       GLOBAL_DAILY_BUDGET_USD: ${GLOBAL_DAILY_BUDGET_USD:-5}
       MAX_CONCURRENT_AGENT_RUNS: ${MAX_CONCURRENT_AGENT_RUNS:-3}
@@ -160,6 +165,74 @@ services:
       options:
         max-size: '10m'
         max-file: '5'
+
+  # Full AI Automation dedicated worker — scales horizontally with `worker` (same image, distinct lease).
+  # Follows identical workflow (TaskRepo -> Queue -> Delegator -> Specialists -> QA) but can be scaled
+  # independently via ATLAS_AUTOMATION_REPLICAS for high-volume cron/workflow automation.
+  worker-automation:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    container_name: ${ATLAS_CONTAINER_PREFIX:-atlas}_worker_automation_prod
+    restart: always
+    environment:
+      NODE_ENV: production
+      API_AUTH_TOKEN: ${API_AUTH_TOKEN:?API_AUTH_TOKEN must be set}
+      WORKER_HEALTH_PORT: 8081
+      DATABASE_URL: postgresql://${POSTGRES_USER:-atlas_admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}@postgres:5432/${POSTGRES_DB:-atlas_os}
+      REDIS_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD must be set}@redis:6379
+      MODEL_PROVIDER: ${MODEL_PROVIDER:?MODEL_PROVIDER must be set}
+      MODEL_API_KEY: ${MODEL_API_KEY:-}
+      MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+      MODEL_NAME: ${MODEL_NAME:-}
+      RESEARCH_PROVIDER: ${RESEARCH_PROVIDER:-none}
+      RESEARCH_API_KEY: ${RESEARCH_API_KEY:-}
+      RESEARCH_COUNTRY: ${RESEARCH_COUNTRY:-ID}
+      RESEARCH_SEARCH_LANG: ${RESEARCH_SEARCH_LANG:-id}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY must be set}
+      ARTIFACT_STORAGE_PATH: /app/data/artifacts
+      MEMORY_MAINTENANCE_INTERVAL_SECONDS: ${MEMORY_MAINTENANCE_INTERVAL_SECONDS:-3600}
+      QUEUE_RECOVERY_INTERVAL_SECONDS: ${QUEUE_RECOVERY_INTERVAL_SECONDS:-30}
+      SCHEDULED_JOB_SYNC_INTERVAL_SECONDS: ${SCHEDULED_JOB_SYNC_INTERVAL_SECONDS:-30}
+      SCHEDULED_JOB_TICK_INTERVAL_SECONDS: ${SCHEDULED_JOB_TICK_INTERVAL_SECONDS:-60}
+      WORKFLOW_RESUME_INTERVAL_SECONDS: ${WORKFLOW_RESUME_INTERVAL_SECONDS:-30}
+      AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-true}
+      WORKFLOW_AUTOMATION_ENABLED: ${WORKFLOW_AUTOMATION_ENABLED:-true}
+      MEMORY_DELETION_GRACE_DAYS: ${MEMORY_DELETION_GRACE_DAYS:-7}
+      GLOBAL_DAILY_BUDGET_USD: ${GLOBAL_DAILY_BUDGET_USD:-5}
+      MAX_CONCURRENT_AGENT_RUNS: ${MAX_CONCURRENT_AGENT_RUNS:-3}
+      MAX_DELEGATION_DEPTH: ${MAX_DELEGATION_DEPTH:-2}
+      EXTERNAL_WRITES_ENABLED: ${EXTERNAL_WRITES_ENABLED:-false}
+    volumes:
+      - artifacts_prod_data:/app/data/artifacts
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8081/ready').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '1.5'
+          memory: 2G
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '5'
+    profiles: ['automation']
 
   telegram-bot:
     build:

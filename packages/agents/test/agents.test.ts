@@ -2,13 +2,14 @@ import { describe, it, expect } from 'vitest';
 import { defaultAgentRegistry, CHIEF_AGENT, NED_AGENT, LAYLA_AGENT, HERMES_AGENT, ARGUS_AGENT } from '../src/index.js';
 
 describe('@atlas/agents Registry & Definitions', () => {
-  it('loads all 5 core MVP agents by default', () => {
+  it('loads all core MVP and specialist agents by default', () => {
     const agents = defaultAgentRegistry.list();
-    expect(agents.length).toBe(5);
+    expect(agents.length).toBe(6);
 
     const ids = agents.map(a => a.id);
     expect(ids).toContain('chief');
     expect(ids).toContain('ned');
+    expect(ids).toContain('luna');
     expect(ids).toContain('layla');
     expect(ids).toContain('hermes');
     expect(ids).toContain('argus');

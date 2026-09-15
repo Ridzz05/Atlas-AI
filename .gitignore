@@ -49,4 +49,5 @@ coverage/
 /data/artifacts/
 /data/postgres/
 /data/redis/
+apps/*/data/
 packages/tools/data/test-artifacts-persistence/

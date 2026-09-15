@@ -119,10 +119,11 @@ describe('agent-service Task and Multi-Agent APIs', () => {
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
-    expect(body.data.length).toBe(5);
+    expect(body.data.length).toBe(6);
     const ids = body.data.map((a: any) => a.id);
     expect(ids).toContain('chief');
     expect(ids).toContain('ned');
+    expect(ids).toContain('luna');
     expect(ids).toContain('layla');
     expect(ids).toContain('hermes');
     expect(ids).toContain('argus');

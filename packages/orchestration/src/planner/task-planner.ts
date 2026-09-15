@@ -53,7 +53,7 @@ You must return a valid JSON object strictly matching this schema:
 }
 
 RULES:
-1. Steps must use only available agent IDs (ned, layla, hermes, argus).
+1. Steps must use only available agent IDs (ned, luna, layla, hermes, argus).
 2. Max steps is 8.
 3. Steps with no dependencies can run in parallel.
 4. If outreach or external mutation is needed, add it to approval_points.
@@ -77,23 +77,6 @@ RULES:
     }
     onCost?.(costUsd);
 
-    if (this.options.messageRepo) {
-      await this.options.messageRepo.create({
-        taskId: task.id,
-        senderType: 'user',
-        senderId: 'user',
-        content: prompt,
-        metadata: { stage: 'planning' }
-      });
-      await this.options.messageRepo.create({
-        taskId: task.id,
-        senderType: 'agent',
-        senderId: 'chief',
-        content: resultContent,
-        metadata: { stage: 'planning' }
-      });
-    }
-
     try {
       const cleaned = resultContent
         .replace(/```json\s*/g, '')
@@ -101,10 +84,50 @@ RULES:
         .trim();
       const parsed = JSON.parse(cleaned);
       const plan = TaskPlanSchema.parse(parsed);
-      return PlanValidator.assertValid(plan, { registry: this.options.registry });
+      const validatedPlan = PlanValidator.assertValid(plan, { registry: this.options.registry });
+
+      if (this.options.messageRepo) {
+        await this.options.messageRepo.create({
+          taskId: task.id,
+          senderType: 'user',
+          senderId: 'user',
+          content: task.goal,
+          metadata: { stage: 'intake' }
+        });
+
+        const stepSummary = validatedPlan.steps.map((s, idx) => `${idx + 1}. [${s.agent.toUpperCase()}]: ${s.objective}`).join('\n');
+        const planOverview = `Menerima instruksi dari Operator: "${task.goal}"\n\nMenyusun rencana kerja ${validatedPlan.steps.length} langkah:\n${stepSummary}\n\nMemulai delegasi ke armada spesialis...`;
+
+        await this.options.messageRepo.create({
+          taskId: task.id,
+          senderType: 'agent',
+          senderId: 'chief',
+          content: planOverview,
+          metadata: { stage: 'planning', stepsCount: validatedPlan.steps.length }
+        });
+      }
+
+      return validatedPlan;
     } catch (err) {
       rootLogger.warn(`Failed to parse LLM plan output for task ${task.id}, using fallback plan`, { error: String(err) });
-      return this.generateFallbackPlan(task);
+      const fallbackPlan = this.generateFallbackPlan(task);
+      if (this.options.messageRepo) {
+        await this.options.messageRepo.create({
+          taskId: task.id,
+          senderType: 'user',
+          senderId: 'user',
+          content: task.goal,
+          metadata: { stage: 'intake' }
+        });
+        await this.options.messageRepo.create({
+          taskId: task.id,
+          senderType: 'agent',
+          senderId: 'chief',
+          content: `Menerima instruksi: "${task.goal}". Menjalankan rencana kerja default.`,
+          metadata: { stage: 'planning' }
+        });
+      }
+      return fallbackPlan;
     }
   }
 

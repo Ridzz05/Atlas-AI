@@ -25,7 +25,8 @@
     "@atlas/agents": "workspace:*",
     "@atlas/memory": "workspace:*",
     "@atlas/tools": "workspace:*",
-    "bullmq": "^5.41.6"
+    "bullmq": "^5.41.6",
+    "cron-parser": "^4.9.0"
   },
   "devDependencies": {
     "@types/node": "^22.13.9",

@@ -1,7 +1,10 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import * as crypto from 'node:crypto';
-import { rootLogger } from '@atlas/observability';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { z } from 'zod';
+import { rootLogger, AuditService } from '@atlas/observability';
 import { EnvConfig } from '@atlas/shared';
 import {
   ApprovalRepository,
@@ -31,7 +34,8 @@ import { registerMetadataRoutes } from './routes/metadata.js';
 import { registerControlRoutes } from './routes/control.js';
 import { registerRubricRoutes } from './routes/rubrics.js';
 import { registerModelProviderRoutes } from './routes/model-provider.js';
-import { registerSecondBrainRoutes } from './routes/second-brain.js';
+import { registerSecondBrainRoutes, findVaultPath } from './routes/second-brain.js';
+import { registerAutomationRoutes } from './routes/automations.js';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
 export interface ServerOptions {
@@ -52,6 +56,8 @@ export interface ServerOptions {
   budgetRepo?: BudgetRepository;
   rubricRepo?: LeadRubricRepository;
   modelProviderSettingsRepo?: ModelProviderSettingsRepository;
+  scheduledJobRepo?: import('@atlas/database').ScheduledJobRepository;
+  workflowCheckpointRepo?: import('@atlas/database').WorkflowCheckpointRepository;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -335,6 +341,25 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     secondBrainService
   });
 
+  // Auto-ingest local Obsidian vault on startup so Second Brain is immediately populated
+  const defaultVaultPath = findVaultPath();
+  if (defaultVaultPath) {
+    rootLogger.info(`Auto-ingesting Second Brain vault from: ${defaultVaultPath}`);
+    void secondBrainService.ingestVaultDirectory(defaultVaultPath).then(res => {
+      rootLogger.info(`Second Brain vault auto-ingest completed: ${res.ingested} notes indexed.`);
+    }).catch(err => {
+      rootLogger.warn('Second Brain vault auto-ingest failed', { error: String(err) });
+    });
+  }
+
+  registerAutomationRoutes(app, {
+    taskRepo: options.taskRepo,
+    taskQueue,
+    registry,
+    scheduledJobRepo: options.scheduledJobRepo,
+    workflowCheckpointRepo: options.workflowCheckpointRepo
+  });
+
   app.get('/api/v1/settings', async (_req, reply) => {
     let persistedModelSettings = null;
     if (options.modelProviderSettingsRepo) {
@@ -363,7 +388,84 @@ export function buildServer(options: ServerOptions): FastifyInstance {
           .map(origin => origin.trim())
           .filter(Boolean),
         source: persistedModelSettings ? 'database' : 'environment',
-        mutable: Boolean(options.modelProviderSettingsRepo)
+        mutable: Boolean(options.modelProviderSettingsRepo),
+        telegramConfigured: Boolean(options.config.TELEGRAM_BOT_TOKEN),
+        telegramAllowedUserIds: options.config.TELEGRAM_ALLOWED_USER_IDS || '',
+        telegramTokenMasked: options.config.TELEGRAM_BOT_TOKEN
+          ? options.config.TELEGRAM_BOT_TOKEN.slice(0, 4) + '••••••••' + options.config.TELEGRAM_BOT_TOKEN.slice(-4)
+          : null
+      }
+    });
+  });
+
+  // Update Telegram Bot Configuration
+  app.put('/api/v1/settings/telegram', async (req, reply) => {
+    const TelegramSettingsSchema = z.object({
+      botToken: z.string().trim().optional(),
+      allowedUserIds: z.string().trim().optional()
+    });
+    const parse = TelegramSettingsSchema.safeParse(req.body);
+    if (!parse.success) {
+      return reply.status(400).send({ error: 'Invalid telegram settings payload', details: parse.error.format() });
+    }
+    const { botToken, allowedUserIds } = parse.data;
+
+    if (botToken !== undefined) {
+      process.env.TELEGRAM_BOT_TOKEN = botToken;
+      options.config.TELEGRAM_BOT_TOKEN = botToken;
+    }
+    if (allowedUserIds !== undefined) {
+      process.env.TELEGRAM_ALLOWED_USER_IDS = allowedUserIds;
+      options.config.TELEGRAM_ALLOWED_USER_IDS = allowedUserIds;
+    }
+
+    const envPath = path.resolve(process.cwd(), '.env');
+    try {
+      if (fs.existsSync(envPath)) {
+        let content = fs.readFileSync(envPath, 'utf8');
+        if (botToken !== undefined) {
+          if (content.includes('TELEGRAM_BOT_TOKEN=')) {
+            content = content.replace(/TELEGRAM_BOT_TOKEN=.*(\r?\n|$)/, `TELEGRAM_BOT_TOKEN=${botToken}\n`);
+          } else {
+            content += `\nTELEGRAM_BOT_TOKEN=${botToken}\n`;
+          }
+        }
+        if (allowedUserIds !== undefined) {
+          if (content.includes('TELEGRAM_ALLOWED_USER_IDS=')) {
+            content = content.replace(/TELEGRAM_ALLOWED_USER_IDS=.*(\r?\n|$)/, `TELEGRAM_ALLOWED_USER_IDS=${allowedUserIds}\n`);
+          } else {
+            content += `\nTELEGRAM_ALLOWED_USER_IDS=${allowedUserIds}\n`;
+          }
+        }
+        fs.writeFileSync(envPath, content, 'utf8');
+      }
+    } catch (err) {
+      rootLogger.warn('Failed to update .env file for Telegram settings', { error: String(err) });
+    }
+
+    if (options.auditRepo) {
+      await options.auditRepo.create(
+        AuditService.format({
+          actor: 'owner-api',
+          action: 'telegram.settings_updated',
+          target: 'telegram',
+          ipAddress: req.ip,
+          details: {
+            tokenUpdated: Boolean(botToken),
+            allowedUserIds
+          }
+        })
+      );
+    }
+
+    return reply.status(200).send({
+      success: true,
+      data: {
+        telegramConfigured: Boolean(options.config.TELEGRAM_BOT_TOKEN),
+        telegramAllowedUserIds: options.config.TELEGRAM_ALLOWED_USER_IDS || '',
+        telegramTokenMasked: options.config.TELEGRAM_BOT_TOKEN
+          ? options.config.TELEGRAM_BOT_TOKEN.slice(0, 4) + '••••••••' + options.config.TELEGRAM_BOT_TOKEN.slice(-4)
+          : null
       }
     });
   });

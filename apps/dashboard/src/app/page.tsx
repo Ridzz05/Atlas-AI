@@ -14,6 +14,8 @@ import CircularProgress from '@mui/material/CircularProgress';
 import Divider from '@mui/material/Divider';
 import { CiCircleCheck, CiClock2, CiCircleAlert, CiDollar, CiCirclePlus, CiRedo, CiPause1, CiPlay1, CiWarning } from 'react-icons/ci';
 import { AgentGraph, AgentNodeData } from '../components/agent-graph';
+import { WorkflowLiveStream } from '../components/workflow-live-stream';
+import { ChiefVoiceAssistant } from '../components/chief-voice-assistant';
 import { atlasFetch } from '../lib/atlas-api';
 import { subscribeToAtlasEvents } from '../lib/event-stream';
 
@@ -107,6 +109,7 @@ export default function CommandCenterPage() {
   const [controlError, setControlError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const loadOverview = async () => {
     setLoading(true);
@@ -186,13 +189,26 @@ export default function CommandCenterPage() {
   const completedCount = tasks.filter(task => task.status === 'completed').length;
   const costToday = costMetrics?.costs?.periodCostUsd;
   const budget = costMetrics?.budget;
-  const agentIds = ['chief', 'ned', 'layla', 'hermes', 'argus'];
+  const agentIds = ['chief', 'ned', 'luna', 'layla', 'hermes', 'argus'];
+  const agentRoleMap: Record<string, string> = {
+    chief: 'System Orchestrator',
+    ned: 'Research Specialist',
+    luna: 'Data & Market Analyst',
+    layla: 'Lead Scoring Specialist',
+    hermes: 'Content Specialist',
+    argus: 'QA & Risk Gate'
+  };
   const graphAgents: AgentNodeData[] = agentIds.map(id => ({
     id,
     name: id[0]!.toUpperCase() + id.slice(1),
-    role: id === 'chief' ? 'Orchestrator' : id === 'argus' ? 'QA & Risk Gate' : id,
+    role: agentRoleMap[id] || id,
     status: toAgentStatus(tasks, id)
   }));
+
+  const activeTask = tasks.find(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status));
+  const latestTask = activeTask || tasks[0];
+  const effectiveTaskId = selectedTaskId || latestTask?.id || null;
+  const currentTask = tasks.find(t => t.id === effectiveTaskId) || latestTask;
 
   return (
     <Box sx={{ maxWidth: 1280, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
@@ -237,6 +253,14 @@ export default function CommandCenterPage() {
           {error}
         </Alert>
       )}
+
+      {/* Live Voice Communicator with Chief */}
+      <ChiefVoiceAssistant
+        onTaskCreated={newTask => {
+          setSelectedTaskId(newTask.id);
+          void loadOverview();
+        }}
+      />
 
       {/* Zapier Fleet Control Bar */}
       <Card sx={{ p: 3, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)' }}>
@@ -371,6 +395,15 @@ export default function CommandCenterPage() {
 
           {/* Multi-Agent Topology Graph */}
           <AgentGraph agents={graphAgents} />
+
+          {/* Live Autonomous Workflow & Inter-Agent Deliberation Feed */}
+          <WorkflowLiveStream
+            selectedTaskId={effectiveTaskId}
+            activeTaskTitle={currentTask?.title}
+            isTaskRunning={currentTask ? ['running', 'planning', 'review_pending', 'approval_pending'].includes(currentTask.status) : false}
+            onSelectTask={id => setSelectedTaskId(id)}
+            availableTasks={tasks.map(t => ({ id: t.id, title: t.title, status: t.status }))}
+          />
 
           {/* Recovery Telemetry Grid */}
           <Box

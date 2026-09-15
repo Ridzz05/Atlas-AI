@@ -35,6 +35,7 @@ import {
   CiPlay1
 } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
+import { FormattedMessage } from '../../components/formatted-message';
 
 interface SecondBrainStats {
   totalDocuments: number;
@@ -144,15 +145,29 @@ export default function SecondBrainPage() {
 
   const [, startTransition] = useTransition();
 
+  const autoSyncedRef = React.useRef(false);
+
   const loadData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [statsRes, docsRes, memoryRes] = await Promise.all([
+      let [statsRes, docsRes, memoryRes] = await Promise.all([
         atlasFetch<{ data: SecondBrainStats }>('/brain/stats'),
         atlasFetch<{ data: SecondBrainDocument[]; count: number }>('/brain/notes?limit=100'),
         atlasFetch<{ data: RawMemoryItem[]; count: number }>('/memory?limit=50')
       ]);
+
+      if (docsRes.data.length === 0 && !autoSyncedRef.current) {
+        autoSyncedRef.current = true;
+        try {
+          await atlasFetch('/brain/ingest', { method: 'POST', body: JSON.stringify({}) });
+          [statsRes, docsRes] = await Promise.all([
+            atlasFetch<{ data: SecondBrainStats }>('/brain/stats'),
+            atlasFetch<{ data: SecondBrainDocument[]; count: number }>('/brain/notes?limit=100')
+          ]);
+        } catch {}
+      }
+
       setStats(statsRes.data);
       setDocuments(docsRes.data);
       setRawMemoryItems(memoryRes.data);
@@ -266,15 +281,15 @@ export default function SecondBrainPage() {
 
   // Handle Vault Directory Sync
   const handleSyncVault = async () => {
-    if (!ingestVaultPath.trim() || isSyncing) return;
+    if (isSyncing) return;
     setIsSyncing(true);
     setError(null);
     try {
       const res = await atlasFetch<{ ingested: number; totalFiles: number }>('/brain/ingest', {
         method: 'POST',
-        body: JSON.stringify({ vaultPath: ingestVaultPath.trim() })
+        body: JSON.stringify({ vaultPath: ingestVaultPath.trim() || undefined })
       });
-      setSuccessMsg(`Vault sync complete! Ingested ${res.ingested} of ${res.totalFiles} files.`);
+      setSuccessMsg(`Vault sync complete! Ingested ${res.ingested} of ${res.totalFiles} notes.`);
       setIngestVaultPath('');
       void loadData();
     } catch (err) {
@@ -474,16 +489,22 @@ export default function SecondBrainPage() {
                 >
                   <Box
                     sx={{
-                      p: 2,
-                      borderRadius: '14px',
+                      p: msg.sender === 'user' ? 2 : 2.5,
+                      borderRadius: '16px',
                       bgcolor: msg.sender === 'user' ? '#c2410c' : '#ffffff',
                       color: msg.sender === 'user' ? '#ffffff' : '#201515',
                       border: msg.sender === 'user' ? 'none' : '1px solid rgba(32, 21, 21, 0.08)',
-                      fontSize: '0.86rem',
-                      lineHeight: 1.6
+                      boxShadow: msg.sender === 'user' ? 'none' : '0 1px 3px rgba(0, 0, 0, 0.02)',
+                      width: msg.sender === 'user' ? 'auto' : '100%'
                     }}
                   >
-                    <div dangerouslySetInnerHTML={{ __html: msg.text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                    {msg.sender === 'user' ? (
+                      <Typography variant="body2" sx={{ color: '#ffffff', fontWeight: 500, fontSize: '0.88rem', lineHeight: 1.6 }}>
+                        {msg.text}
+                      </Typography>
+                    ) : (
+                      <FormattedMessage content={msg.text} collapsible={false} />
+                    )}
                   </Box>
 
                   {/* Citations Preview */}
@@ -617,7 +638,7 @@ export default function SecondBrainPage() {
                 fullWidth
                 value={ingestVaultPath}
                 onChange={e => setIngestVaultPath(e.target.value)}
-                placeholder="Ingest Markdown folder path (e.g., docs/ or C:\Vault)..."
+                placeholder="Obsidian Vault path (default: project vault/ folder)..."
                 sx={{ flex: 1, minWidth: 260 }}
               />
               <Button
@@ -625,9 +646,10 @@ export default function SecondBrainPage() {
                 color="primary"
                 startIcon={<CiRedo size={18} />}
                 onClick={() => void handleSyncVault()}
-                disabled={isSyncing || !ingestVaultPath.trim()}
+                disabled={isSyncing}
+                sx={{ borderRadius: '10px', px: 2.5 }}
               >
-                {isSyncing ? 'Syncing...' : 'Sync Vault Folder'}
+                {isSyncing ? 'Syncing...' : 'Sync Vault (27 Notes)'}
               </Button>
             </Box>
           </Card>
@@ -676,6 +698,28 @@ export default function SecondBrainPage() {
           </Box>
 
           {/* Documents Grid */}
+          {documents.length === 0 && !loading && (
+            <Card sx={{ p: 4, textAlign: 'center', bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)' }}>
+              <CiVault size={42} color="#c2410c" style={{ marginBottom: 12 }} />
+              <Typography variant="h6" sx={{ fontWeight: 800, color: '#201515', mb: 1 }}>
+                Second Brain Belum Disinkronkan ke Memori Server
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666155', maxWidth: 480, mx: 'auto', mb: 3, fontSize: '0.84rem' }}>
+                Terdapat 27 catatan Obsidian di folder <code>vault/</code>. Klik tombol di bawah untuk menyinkronkan seluruh catatan ke indeks vektor secara instan.
+              </Typography>
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<CiRedo size={18} />}
+                onClick={() => void handleSyncVault()}
+                disabled={isSyncing}
+                sx={{ px: 3, py: 1, borderRadius: '10px', fontWeight: 700 }}
+              >
+                {isSyncing ? 'Menyinkronkan...' : '🔄 Sinkronkan 27 Catatan Vault Sekarang'}
+              </Button>
+            </Card>
+          )}
+
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' }, gap: 2.25 }}>
             {filteredDocuments.map(doc => (
               <Card

@@ -1,5 +1,6 @@
 import type { ResearchProvider } from '../types.js';
 import { BraveResearchProvider } from './brave-provider.js';
+import { ChromiumResearchProvider } from './chromium-provider.js';
 
 export interface ResearchProviderConfig {
   providerType?: string;
@@ -20,6 +21,8 @@ export function createResearchProvider(config: ResearchProviderConfig = {}): Res
         country: config.country || process.env.RESEARCH_COUNTRY,
         searchLang: config.searchLang || process.env.RESEARCH_SEARCH_LANG
       });
+    case 'chromium':
+      return new ChromiumResearchProvider();
     default:
       throw new Error(`Unsupported research provider: ${type}`);
   }

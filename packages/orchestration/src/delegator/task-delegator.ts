@@ -233,6 +233,15 @@ export class TaskDelegator {
           );
         }
 
+        // Publish transparent delegation dialogue
+        await this.publishDialogue(
+          parentTask.id,
+          'chief',
+          `[Chief ➔ ${agent.name}]: Melimpahkan subtask "${step.id}" kepada ${agent.name} (${agent.role}).\nFokus: ${step.objective}`,
+          step.agent,
+          { stage: 'delegation', stepId: step.id }
+        );
+
         // Run agent
         const summary = await this.runner.run({
           task: childTask,
@@ -257,6 +266,15 @@ export class TaskDelegator {
         if (summary.status !== 'completed') {
           throw new Error(`Subtask ${step.id} (${step.agent}) failed: ${summary.error || 'Unknown error'}`);
         }
+
+        // Publish transparent completion dialogue
+        await this.publishDialogue(
+          parentTask.id,
+          step.agent,
+          `[${agent.name} ➔ Chief]: Subtask "${step.id}" tuntas dilaksanakan.\n\nRingkasan Hasil:\n${summary.finalContent || 'Eksekusi subtask tuntas.'}`,
+          'chief',
+          { stage: 'subtask_completed', stepId: step.id }
+        );
 
         totalCostUsd += summary.totalCostUsd;
         return {
@@ -309,6 +327,15 @@ export class TaskDelegator {
     }
 
     // 3. Argus QA Gate Verification
+    const argusAgent = this.options.registry.getOrThrow('argus');
+    await this.publishDialogue(
+      parentTask.id,
+      'chief',
+      `[Chief ➔ Argus]: Seluruh subtask spesialis telah selesai dikerjakan. Mengajukan deliverable kepada Argus (${argusAgent.role}) untuk inspeksi QA dan gerbang risiko.`,
+      'argus',
+      { stage: 'qa_submission' }
+    );
+
     let qaResult: QAResult | undefined;
     try {
       qaResult = await this.qaGate.evaluate(parentTask, subtaskResults, signal, addCost);
@@ -368,6 +395,48 @@ export class TaskDelegator {
       await this.options.eventBus.publish(createTaskLifecycleEvent({ taskId, agentId, status, payload, type }));
     } catch (error) {
       rootLogger.error('Failed to publish task lifecycle event', { taskId, status, error: String(error) });
+    }
+  }
+
+  private async publishDialogue(
+    taskId: string,
+    senderId: string,
+    content: string,
+    recipientId?: string,
+    metadata?: Record<string, unknown>
+  ): Promise<void> {
+    if (this.options.messageRepo) {
+      try {
+        await this.options.messageRepo.create({
+          taskId,
+          senderType: 'agent',
+          senderId,
+          recipientId,
+          content,
+          metadata
+        });
+      } catch (err) {
+        rootLogger.warn('Failed to persist dialogue message', { taskId, senderId, error: String(err) });
+      }
+    }
+
+    try {
+      await this.options.eventBus.publish({
+        id: crypto.randomUUID(),
+        type: 'message.created',
+        taskId,
+        agentId: senderId,
+        payload: {
+          senderType: 'agent',
+          senderId,
+          recipientId,
+          content,
+          metadata: metadata || {}
+        },
+        timestamp: new Date().toISOString()
+      });
+    } catch (err) {
+      rootLogger.warn('Failed to publish message.created event', { taskId, senderId, error: String(err) });
     }
   }
 }

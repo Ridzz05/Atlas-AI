@@ -20,6 +20,7 @@ import {
   CommunicationMessageRecord,
   CommunicationToolCallRecord
 } from '../../lib/communications';
+import { ChiefVoiceAssistant } from '../../components/chief-voice-assistant';
 
 interface RecordListResponse<T> {
   data: T[];
@@ -41,6 +42,7 @@ function formatTimestamp(timestamp: string): string {
 const AGENT_CONFIGS: Record<string, { name: string; role: string; color: string; bg: string; border: string }> = {
   chief: { name: 'Chief', role: 'Orchestrator', color: '#c2410c', bg: '#fff7ed', border: '#ffedd5' },
   ned: { name: 'Ned', role: 'Research Specialist', color: '#2563eb', bg: '#eff6ff', border: '#dbeafe' },
+  luna: { name: 'Luna', role: 'Data & Market Analyst', color: '#0891b2', bg: '#ecfeff', border: '#cffafe' },
   layla: { name: 'Layla', role: 'Lead Scoring', color: '#16a34a', bg: '#f0fdf4', border: '#dcfce7' },
   hermes: { name: 'Hermes', role: 'Content Specialist', color: '#7c3aed', bg: '#f5f3ff', border: '#ede9fe' },
   argus: { name: 'Argus', role: 'QA & Risk Gate', color: '#d97706', bg: '#fffbeb', border: '#fef3c7' },
@@ -325,6 +327,13 @@ export default function CommunicationsPage() {
           {error}
         </Alert>
       )}
+
+      {/* Live Voice Communicator with Chief */}
+      <ChiefVoiceAssistant
+        onTaskCreated={() => {
+          void loadFeed();
+        }}
+      />
 
       {/* Filter Tabs */}
       <Stack direction="row" spacing={1}>
