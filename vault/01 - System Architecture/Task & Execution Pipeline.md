@@ -240,7 +240,7 @@ Snapshot 16 Sep 2026: 106 run, 36 gagal.
 | :--- | :--- |
 | `OpenRouter HTTP 401 "User not found"` | 15 |
 | `MODEL_API_KEY_MISSING` | 12 |
-| `[OI] 429` (rate limit) | 3 |
+| `HTTP 429` (rate limit) | 3 |
 | `Worker lease expired` | 2 |
 | OpenRouter 402 / 429 / 502 | 1 masing-masing |
 | `Invalid input for tool 'memory.search': expected array, received string` | 1 |

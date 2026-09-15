@@ -26,7 +26,7 @@ Daftar provider **bukan** daftar bebas — nilainya divalidasi Zod lewat `ModelP
 | `openai-compatible` | Adapter generik ada di `packages/providers/src/openai.ts`; perilaku retry di bawah berasal dari adapter ini. Tidak ada bukti dipakai langsung oleh deployment saat ini. |
 | `openrouter` | **Satu-satunya provider aktif** (baris DB, snapshot 16 Sep 2026). Satu-satunya subclass yang menulis tarif eksplisit — dan tarifnya nol. Provider lain memakai default kelas dasar bersama: **0.15 / 0.6 per juta token** (`packages/providers/src/openai.ts:33-34`), `mock` memakai `0.0015` per 1.000 token (`packages/providers/src/mock.ts:25`). |
 | `groq` | Dikenali enum. Tidak ada bukti pemakaian di DB. |
-| `ollama` | Dikenali enum. Dipakai layanan embedding Second Brain sebagai opsi (`packages/memory/src/second-brain/vector-embedding-service.ts:62-80`), **dan** factory juga memetakannya sebagai provider chat — `[OI]CompatibleProvider` ke `http://localhost:11434/v1` dengan `requireApiKey: false` (`packages/providers/src/factory.ts:41-47`). Deployment ini tidak terbukti memakainya untuk chat. |
+| `ollama` | Dikenali enum. Dipakai layanan embedding Second Brain sebagai opsi (`packages/memory/src/second-brain/vector-embedding-service.ts:62-80`), **dan** factory juga memetakannya sebagai provider chat — `OpenAICompatibleProvider` ke `http://localhost:11434/v1` dengan `requireApiKey: false` (`packages/providers/src/factory.ts:41-47`). Deployment ini tidak terbukti memakainya untuk chat. |
 | `deepseek` | Dikenali enum. Tidak ada bukti pemakaian di DB. |
 
 Default env `MODEL_PROVIDER` = **`openrouter`** (`packages/shared/src/schemas/config.ts:33`) — bukan Groq seperti yang sering dikutip di dokumen lain.

@@ -166,8 +166,16 @@ Dibaca dari `apps/dashboard/package.json` pada 16 Sep 2026:
 | Helper kelas | `tailwind-merge ^3.0.2`, `clsx ^2.1.1` |
 | Font | **"Valley Sans"** benar-benar dipakai: impor Google Fonts di `apps/dashboard/src/app/globals.css:1`, dipakai sebagai `font-family` di `:21-22`, dirujuk tema di `apps/dashboard/src/theme/theme.ts:55`, dan `<link>` di `apps/dashboard/src/app/layout.tsx:17` |
 
-> ⚠️ **Satu klaim lama tetap salah**: **tidak ada "Circum Icons"** di `apps/dashboard/package.json`.
-> Jangan menuliskannya kembali.
+> ✅ **Klaim "Circum Icons" itu BENAR** — set ikon Circum dipakai lewat subpath `react-icons/ci`
+> (paketnya `react-icons ^5.7.0`, lihat `apps/dashboard/package.json:26`).
+> Bukti impor: `apps/dashboard/src/app/page.tsx:15`, `app/agents/page.tsx:13`,
+> `app/approvals/page.tsx:15`, `app/artifacts/page.tsx:13`, `app/audit/page.tsx:12`,
+> `app/brain/page.tsx:36`, `app/communications/page.tsx:14`, `app/settings/page.tsx:29`,
+> `app/tasks/page.tsx:19`, `components/agent-graph.tsx:29`,
+> `components/chief-voice-assistant.tsx:20`, `components/formatted-message.tsx:13`,
+> `components/sidebar.tsx:25`, `components/workflow-live-stream.tsx:25`.
+> Catatan koreksi: catatan ini sebelumnya menyatakan "tidak ada Circum Icons" — itu salah,
+> keliru membaca `package.json` (yang memang tidak menyebut set ikon satu per satu).
 
 ---
 
