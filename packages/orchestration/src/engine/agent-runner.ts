@@ -316,6 +316,15 @@ export class AgentRunner {
         timestamp: new Date().toISOString()
       });
 
+      // Whether the loop actually finished, and whether the provider cut the answer short. Both were
+      // invisible before: the only handling for an exhausted turn budget was
+      // `if (turnsCount >= maxTurns && !finalContent)`, and `finalContent` is set from EVERY turn's
+      // content — so a model that emits any text alongside its tool calls left it non-empty, the
+      // condition never fired, and an unfinished subtask was written `completed`, handed to Argus
+      // and the synthesiser, and shown to the user as a deliverable.
+      let completedCleanly = false;
+      let truncatedByProvider = false;
+
       while (turnsCount < maxTurns) {
         await refreshDurableCancellation();
         if (controller.signal.aborted) {
@@ -363,6 +372,9 @@ export class AgentRunner {
         totalOutputTokens += modelResult.outputTokens;
         totalCostUsd += modelResult.costUsd;
         finalContent = modelResult.content;
+        if (modelResult.finishReason === 'length') {
+          truncatedByProvider = true;
+        }
 
         // Record turn in DB
         if (this.options.runRepo) {
@@ -398,7 +410,30 @@ export class AgentRunner {
           });
 
           for (const tc of modelResult.toolCalls) {
-            let output: Record<string, unknown> = { success: true };
+            // A tool call with no executor cannot run. The output used to default to
+            // `{ success: true }`, so the tool_calls row was completed as 'success', a
+            // {"success":true} tool message was persisted and appended to the conversation, and the
+            // run reported completed — a fabricated tool result plus a durable audit record
+            // claiming an action succeeded when nothing executed.
+            if (!this.options.toolExecutor) {
+              if (this.options.toolCallRepo) {
+                const failedRecord = await this.options.toolCallRepo.create({
+                  runId,
+                  taskId,
+                  agentId,
+                  toolName: tc.name,
+                  input: tc.arguments
+                });
+                await this.options.toolCallRepo.complete(failedRecord.id, {
+                  status: 'failed',
+                  error: 'No tool executor is configured for this run.',
+                  durationMs: 0
+                });
+              }
+              throw new Error(`Tool '${tc.name}' was requested but no tool executor is configured for this run.`);
+            }
+
+            let output: Record<string, unknown>;
             const toolCallRecordId = this.options.toolCallRepo
               ? (
                   await this.options.toolCallRepo.create({
@@ -412,27 +447,25 @@ export class AgentRunner {
               : undefined;
             const toolStartedAt = Date.now();
 
-            if (this.options.toolExecutor) {
-              try {
-                output = await this.options.toolExecutor.execute(tc, {
-                  taskId,
-                  runId,
-                  agentId,
-                  grantedScopes: input.agent.permissions.dataScopes,
-                  allowedTools: input.agent.permissions.tools,
-                  approvalToken: input.approvalToken,
-                  signal: controller.signal
+            try {
+              output = await this.options.toolExecutor.execute(tc, {
+                taskId,
+                runId,
+                agentId,
+                grantedScopes: input.agent.permissions.dataScopes,
+                allowedTools: input.agent.permissions.tools,
+                approvalToken: input.approvalToken,
+                signal: controller.signal
+              });
+            } catch (err: any) {
+              if (toolCallRecordId && this.options.toolCallRepo) {
+                await this.options.toolCallRepo.complete(toolCallRecordId, {
+                  status: 'failed',
+                  error: String(err?.message || 'Tool execution failed'),
+                  durationMs: Date.now() - toolStartedAt
                 });
-              } catch (err: any) {
-                if (toolCallRecordId && this.options.toolCallRepo) {
-                  await this.options.toolCallRepo.complete(toolCallRecordId, {
-                    status: 'failed',
-                    error: String(err?.message || 'Tool execution failed'),
-                    durationMs: Date.now() - toolStartedAt
-                  });
-                }
-                throw err;
               }
+              throw err;
             }
 
             if (toolCallRecordId && this.options.toolCallRepo) {
@@ -472,13 +505,17 @@ export class AgentRunner {
           }
         } else {
           // No more tool calls, execution completed
+          completedCleanly = true;
           break;
         }
       }
 
-      // If turns exhausted without stopping
-      if (turnsCount >= maxTurns && !finalContent) {
-        finalContent = 'Task completed: Maximum turns reached.';
+      if (truncatedByProvider) {
+        throw new Error(`Run truncated by the model provider after ${turnsCount} turn(s); the answer is incomplete.`);
+      }
+
+      if (!completedCleanly) {
+        throw new Error(`Run exhausted its ${maxTurns}-turn budget without finishing; the result is incomplete.`);
       }
 
       if (input.approvalToken && this.options.approvalExecutionStore) {
