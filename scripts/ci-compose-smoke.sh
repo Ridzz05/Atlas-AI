@@ -197,6 +197,21 @@ if [[ "$agent_count" != "$expected_agent_count" ]]; then
   exit 1
 fi
 
+echo "==> Verifying the migration chain applied in full..."
+applied_migrations="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-atlas_admin}" -d "${POSTGRES_DB:-atlas_os}" -Atqc "SELECT count(*) FROM schema_migrations;" | tr -d '[:space:]')"
+# One version row per file in packages/database/src/migrations. A migration that aborts the chain
+# leaves the later files unapplied, and the service still boots on the tables it needs — so the
+# count is the assertion that catches a partial chain rather than a missing table.
+expected_migrations="$(find packages/database/src/migrations -maxdepth 1 -name '*.sql' | wc -l | tr -d '[:space:]')"
+if [[ -z "$expected_migrations" || "$expected_migrations" == "0" ]]; then
+  echo "Could not determine the expected migration count from packages/database/src/migrations" >&2
+  exit 1
+fi
+if [[ "$applied_migrations" != "$expected_migrations" ]]; then
+  echo "Expected $expected_migrations applied migrations, found: $applied_migrations" >&2
+  exit 1
+fi
+
 echo "==> Starting Telegram bot and verifying service readiness..."
 "${COMPOSE[@]}" up -d telegram-bot
 wait_for_health telegram-bot
