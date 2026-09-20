@@ -65,10 +65,13 @@ jobs:
             tail -n 300 test-output.log | sed -E 's/\x1b\[[0-9;]*m//g'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY" || true
-          # Check-run annotations are public, so surface the failing lines there as well.
+          # Check-run annotations are public, so surface the failing lines there as well. The
+          # pattern is deliberately narrow: a loose one matches the structured log lines that
+          # tests emit on purpose (level:"error", stdout/stderr banners) and reports noise
+          # instead of the failure. Turbo names the failing package, vitest names the test.
           sed -E 's/\x1b\[[0-9;]*m//g' test-output.log \
-            | grep -aE 'FAIL|AssertionError|Error:|failed|not ok|✗|×' \
-            | head -n 10 \
+            | grep -aE 'Failed: +@atlas|FAIL |AssertionError|Tests +[0-9]+ failed|✗|❯' \
+            | head -n 12 \
             | while IFS= read -r line; do printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-900)"; done || true
           exit 1
 
