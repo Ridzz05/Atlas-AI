@@ -62,6 +62,7 @@ class EndlessToolProvider implements ModelProvider {
       inputTokens: 5,
       outputTokens: 5,
       costUsd: 0,
+      costUsdKnown: true,
       finishReason: 'tool_calls'
     };
   }
@@ -83,6 +84,7 @@ class TruncatedProvider implements ModelProvider {
       inputTokens: 5,
       outputTokens: 5,
       costUsd: 0,
+      costUsdKnown: true,
       finishReason: 'length'
     };
   }

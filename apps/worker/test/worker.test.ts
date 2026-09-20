@@ -308,6 +308,7 @@ describe('worker lifecycle and task execution tests', () => {
           inputTokens: 1,
           outputTokens: 1,
           costUsd: 0.001,
+          costUsdKnown: true,
           finishReason: 'tool_calls'
         })
         .mockResolvedValueOnce({
@@ -315,6 +316,7 @@ describe('worker lifecycle and task execution tests', () => {
           inputTokens: 1,
           outputTokens: 1,
           costUsd: 0.001,
+          costUsdKnown: true,
           finishReason: 'stop'
         })
     } as any;
@@ -401,6 +403,7 @@ describe('worker lifecycle and task execution tests', () => {
           inputTokens: 1,
           outputTokens: 1,
           costUsd: 0.001,
+          costUsdKnown: true,
           finishReason: 'tool_calls'
         })
         .mockResolvedValueOnce({
@@ -408,6 +411,7 @@ describe('worker lifecycle and task execution tests', () => {
           inputTokens: 1,
           outputTokens: 1,
           costUsd: 0.001,
+          costUsdKnown: true,
           finishReason: 'stop'
         })
     } as any;

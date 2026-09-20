@@ -33,6 +33,14 @@ export interface ModelRunResult {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /**
+   * Whether `costUsd` is a measurement rather than a placeholder.
+   *
+   * A provider whose price is neither declared nor reported by its API cannot know what a run cost,
+   * and `costUsd: 0` for such a run is indistinguishable from a genuinely free one. The budget
+   * subsystem cannot enforce a cap against an unknown price, so it must be able to say so.
+   */
+  costUsdKnown: boolean;
   finishReason: 'stop' | 'tool_calls' | 'length' | 'timeout' | 'cancelled';
 }
 

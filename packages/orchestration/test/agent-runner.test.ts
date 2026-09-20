@@ -175,6 +175,7 @@ describe('@atlas/orchestration AgentRunner tests', () => {
         inputTokens: 1,
         outputTokens: 1,
         costUsd: 0.001,
+        costUsdKnown: true,
         finishReason: 'stop'
       })
     } as any;
@@ -206,6 +207,7 @@ describe('@atlas/orchestration AgentRunner tests', () => {
         inputTokens: 1,
         outputTokens: 1,
         costUsd: 0.001,
+        costUsdKnown: true,
         finishReason: 'stop'
       })
     } as any;

@@ -27,7 +27,7 @@ class CountingProvider implements ModelProvider {
 
   public async run(request: ModelRunRequest): Promise<ModelRunResult> {
     this.calls += 1;
-    return { content: 'done', toolCalls: [], inputTokens: 5, outputTokens: 5, costUsd: 0, finishReason: 'stop' };
+    return { content: 'done', toolCalls: [], inputTokens: 5, outputTokens: 5, costUsd: 0, costUsdKnown: true, finishReason: 'stop' };
   }
 }
 

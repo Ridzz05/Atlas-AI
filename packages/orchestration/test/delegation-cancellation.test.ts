@@ -135,6 +135,7 @@ describe('TaskDelegator cancellation and stage tool access', () => {
             inputTokens: 1,
             outputTokens: 1,
             costUsd: 0,
+            costUsdKnown: true,
             finishReason: 'tool_calls' as const
           };
         }
@@ -151,6 +152,7 @@ describe('TaskDelegator cancellation and stage tool access', () => {
           inputTokens: 1,
           outputTokens: 1,
           costUsd: 0,
+          costUsdKnown: true,
           finishReason: 'stop' as const
         };
       })

@@ -37,6 +37,7 @@ class CountingProvider implements ModelProvider {
       inputTokens: 10,
       outputTokens: 5,
       costUsd: 0,
+      costUsdKnown: true,
       finishReason: 'stop'
     };
   }

@@ -118,6 +118,7 @@ describe('@atlas/orchestration TaskDelegator tests', () => {
         inputTokens: 1,
         outputTokens: 1,
         costUsd: costs[callIndex++],
+        costUsdKnown: true,
         finishReason: 'stop' as const
       }))
     };

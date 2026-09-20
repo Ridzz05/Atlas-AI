@@ -15,12 +15,17 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
 
   switch (type) {
     case 'openai':
+      // gpt-4o-mini is this provider's default model, so its prices are known for that case. Any
+      // other model is a price this codebase does not have, and guessing one would be inventing a
+      // fact the budget cap is then enforced against.
       return new OpenAICompatibleProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
-        defaultModel: config.model
+        defaultModel: config.model,
+        ...(config.model ? {} : { inputCostPerMillion: 0.15, outputCostPerMillion: 0.6 })
       });
     case 'openai-compatible':
+      // The model behind an arbitrary compatible endpoint is unknown, so its price is too.
       return new OpenAICompatibleProvider({
         apiKey: config.apiKey,
         baseUrl: config.baseUrl,
@@ -43,7 +48,12 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
         apiKey: config.apiKey,
         baseUrl: config.baseUrl || 'http://localhost:11434/v1',
         defaultModel: config.model,
-        requireApiKey: false
+        requireApiKey: false,
+        // A local runtime has no per-token price. Without this it inherited gpt-4o-mini's rates, so
+        // free local runs consumed the paid daily cap and a run could be stopped for exceeding a
+        // budget it never spent.
+        inputCostPerMillion: 0,
+        outputCostPerMillion: 0
       });
     case 'deepseek':
       return new OpenAICompatibleProvider({

@@ -10,6 +10,13 @@ export interface OpenAICompatibleOptions {
   providerName?: string;
   defaultHeaders?: Record<string, string>;
   requireApiKey?: boolean;
+  /**
+   * Provider-specific request fields, spread into the payload.
+   *
+   * Used by OpenRouter to ask for the cost it charges, which is the only accurate source for a model
+   * whose price this codebase does not know.
+   */
+  extraPayload?: Record<string, unknown>;
 }
 
 export class OpenAICompatibleProvider implements ModelProvider {
@@ -21,6 +28,17 @@ export class OpenAICompatibleProvider implements ModelProvider {
   private defaultModel: string;
   private inputCostPerMillion: number;
   private outputCostPerMillion: number;
+  /**
+   * Whether a price was actually declared for this endpoint.
+   *
+   * The constructor used to default both prices to 0.15/0.6 — gpt-4o-mini's — for every provider
+   * that did not override them, so `ollama` (a local runtime, free) was billed at gpt-4o-mini rates
+   * and its runs consumed the paid budget, and `groq`/`deepseek`/any OpenAI-compatible endpoint were
+   * priced as if they were gpt-4o-mini. An undeclared price is unknown, not zero and not someone
+   * else's.
+   */
+  private pricingConfigured: boolean;
+  private extraPayload: Record<string, unknown>;
   private providerHeaders: Record<string, string>;
   private requireApiKey: boolean;
 
@@ -30,13 +48,16 @@ export class OpenAICompatibleProvider implements ModelProvider {
     this.apiKey = options.apiKey !== undefined ? options.apiKey : process.env.MODEL_API_KEY || '';
     this.baseUrl = (options.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '');
     this.defaultModel = options.defaultModel || 'gpt-4o-mini';
-    this.inputCostPerMillion = options.inputCostPerMillion ?? 0.15;
-    this.outputCostPerMillion = options.outputCostPerMillion ?? 0.6;
+    this.pricingConfigured = options.inputCostPerMillion !== undefined && options.outputCostPerMillion !== undefined;
+    this.inputCostPerMillion = options.inputCostPerMillion ?? 0;
+    this.outputCostPerMillion = options.outputCostPerMillion ?? 0;
+    this.extraPayload = { ...(options.extraPayload || {}) };
     this.providerHeaders = { ...(options.defaultHeaders || {}) };
     this.requireApiKey = options.requireApiKey ?? true;
   }
 
   public estimateCost(inputTokens: number, outputTokens: number): number {
+    if (!this.pricingConfigured) return 0;
     const inputCost = (inputTokens / 1_000_000) * this.inputCostPerMillion;
     const outputCost = (outputTokens / 1_000_000) * this.outputCostPerMillion;
     return Number((inputCost + outputCost).toFixed(6));
@@ -73,7 +94,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
     const payload: Record<string, unknown> = {
       model: this.defaultModel,
       messages,
-      temperature: request.temperature ?? 0.2
+      temperature: request.temperature ?? 0.2,
+      ...this.extraPayload
     };
 
     if (request.maxTokens !== undefined) {
@@ -181,12 +203,18 @@ export class OpenAICompatibleProvider implements ModelProvider {
         finishReason = 'length';
       }
 
+      // Prefer the cost the provider itself reports: it is the only accurate figure for a model
+      // whose price this codebase does not know.
+      const reportedCost = data.usage?.cost;
+      const hasReportedCost = typeof reportedCost === 'number' && Number.isFinite(reportedCost);
+
       return {
         content: message?.content || '',
         toolCalls,
         inputTokens,
         outputTokens,
-        costUsd: this.estimateCost(inputTokens, outputTokens),
+        costUsd: hasReportedCost ? Number(reportedCost.toFixed(6)) : this.estimateCost(inputTokens, outputTokens),
+        costUsdKnown: hasReportedCost || this.pricingConfigured,
         finishReason
       };
     }

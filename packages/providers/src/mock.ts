@@ -58,6 +58,8 @@ export class MockModelProvider implements ModelProvider {
       inputTokens: Math.round(inputTokens),
       outputTokens: Math.round(outputTokens),
       costUsd: this.estimateCost(inputTokens, outputTokens),
+      // The mock's rate is declared (see estimateCost), so its cost is a known quantity.
+      costUsdKnown: true,
       finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
     };
   }
