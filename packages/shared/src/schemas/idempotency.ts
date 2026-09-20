@@ -35,7 +35,16 @@ function stableStringify(value: unknown): string {
   return '{' + entries.map(([k, v]) => JSON.stringify(k) + ':' + stableStringify(v)).join(',') + '}';
 }
 
+/**
+ * Canonical hash of an action payload.
+ *
+ * Key-order independent so the same logical action hashes the same across retries.
+ */
+export function computePayloadHash(payload: unknown): string {
+  return createHash('sha256').update(stableStringify(payload)).digest('hex');
+}
+
 export function computeIdempotencyKey(input: { taskId: string; runId?: string; actionName: string; payload: unknown }): string {
-  const hash = createHash('sha256').update(stableStringify(input.payload)).digest('hex');
+  const hash = computePayloadHash(input.payload);
   return `${input.taskId}:${input.runId ?? 'norun'}:${input.actionName}:${hash}`;
 }

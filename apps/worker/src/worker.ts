@@ -44,7 +44,7 @@ import {
   SDLCEngine,
   phaseOutcomeFromTaskStatus
 } from '@atlas/orchestration';
-import { ScheduledJobRepository } from '@atlas/database';
+import { ScheduledJobRepository, DatabaseIdempotencyStore, IdempotencyRepository } from '@atlas/database';
 
 export interface WorkerRunnerOptions {
   config: EnvConfig;
@@ -100,7 +100,12 @@ export class AgentWorkerRunner {
         baseUrl: options.config.MODEL_BASE_URL,
         model: options.config.MODEL_NAME
       });
-    const toolRegistry = new ToolRegistry();
+    const toolRegistry = new ToolRegistry({
+      // Give the registry the durable store, so a tool that declares `idempotency: 'required'`
+      // (communication.send_approved) has an exactly-once control that actually holds. The registry
+      // fails such a tool closed when no store is configured, and derives the key itself.
+      idempotencyStore: options.db ? new DatabaseIdempotencyStore(new IdempotencyRepository(options.db)) : undefined
+    });
     toolRegistry.registerLegacy(WebSearchTool);
     toolRegistry.registerLegacy(WebFetchTool);
     toolRegistry.registerLegacy(CompanyLookupTool);

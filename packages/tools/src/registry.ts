@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { ToolDefinition, ToolContext, ToolExecutionResponse } from './types.js';
 import { ApprovalMatrix, TokenVerifier } from '@atlas/policy';
 import { rootLogger, AuditService } from '@atlas/observability';
+import { computeIdempotencyKey, computePayloadHash, IdempotencyKey } from '@atlas/shared/schemas/idempotency';
 
 /**
  * Minimal local EventBus contract.
@@ -286,15 +287,53 @@ export class ToolRegistry {
     // Idempotency claim (P0 idempotency / side-effect safety)
     const idempotencyKey = context.idempotencyKey;
     const store = context.idempotencyStore ?? this.idempotencyStore;
+
+    // A manifest that declares `required` must not be satisfiable by accident. The claim below runs
+    // only when both the store and the key are present, so a missing either one used to skip the
+    // claim and execute anyway. No production caller supplied them — the worker built
+    // `new ToolRegistry()` with no options and the tool gateway sets no idempotencyStore — so the
+    // exactly-once control that `communication.send_approved` declares was a no-op.
+    //
+    // A store is the part only the caller can provide, so its absence fails closed. The key the
+    // registry can derive itself: it owns the requirement, and the key must be stable across retries
+    // of the same logical action, which (task, run, action, payload) gives us.
+    if (tool.manifest?.idempotency === 'required' && !store) {
+      const error = `Tool '${name}' declares idempotency 'required' but no idempotency store is configured; refusing to execute.`;
+      rootLogger.error('Refusing a required-idempotency tool without a store', {
+        toolName: name,
+        agentId: context.agentId,
+        taskId: context.taskId
+      });
+      return { success: false, error, durationMs: 0, riskLevel: tool.riskLevel };
+    }
+
+    const effectiveKey: IdempotencyKey | undefined =
+      idempotencyKey ??
+      (tool.manifest?.idempotency === 'required' && store
+        ? {
+            key: computeIdempotencyKey({
+              taskId: context.taskId,
+              runId: context.runId,
+              actionName: name,
+              payload: input
+            }),
+            taskId: context.taskId,
+            runId: context.runId,
+            actionName: name,
+            payloadHash: computePayloadHash(input),
+            createdAt: new Date().toISOString()
+          }
+        : undefined);
+
     let idempotencyClaimed = false;
-    if (tool.manifest?.idempotency && tool.manifest.idempotency !== 'none' && store && idempotencyKey) {
+    if (tool.manifest?.idempotency && tool.manifest.idempotency !== 'none' && store && effectiveKey) {
       try {
         const claim = await store.claim({
-          key: idempotencyKey.key,
-          taskId: idempotencyKey.taskId,
-          runId: idempotencyKey.runId,
-          actionName: idempotencyKey.actionName,
-          payloadHash: idempotencyKey.payloadHash
+          key: effectiveKey.key,
+          taskId: effectiveKey.taskId,
+          runId: effectiveKey.runId,
+          actionName: effectiveKey.actionName,
+          payloadHash: effectiveKey.payloadHash
         });
         if (claim.existing && claim.record) {
           const record = claim.record as {
@@ -335,7 +374,7 @@ export class ToolRegistry {
             };
           }
           // 'expired' or any other outcome: release and proceed.
-          await store.release(idempotencyKey.key);
+          await store.release(effectiveKey.key);
         }
         idempotencyClaimed = true;
       } catch (err) {
@@ -390,9 +429,9 @@ export class ToolRegistry {
         }
       }
 
-      if (idempotencyClaimed && store && idempotencyKey) {
+      if (idempotencyClaimed && store && effectiveKey) {
         try {
-          await store.recordSuccess(idempotencyKey.key, {
+          await store.recordSuccess(effectiveKey.key, {
             provider: tool.manifest?.name ?? tool.name,
             remoteId: extractRemoteId(output),
             result: output && typeof output === 'object' ? (output as Record<string, unknown>) : undefined
@@ -440,9 +479,9 @@ export class ToolRegistry {
           rootLogger.error('Failed to finalize durable approval execution', { error: String(finalizationError) });
         }
       }
-      if (idempotencyClaimed && store && idempotencyKey) {
+      if (idempotencyClaimed && store && effectiveKey) {
         try {
-          await store.recordFailure(idempotencyKey.key, String(err?.message || 'Tool execution failed'));
+          await store.recordFailure(effectiveKey.key, String(err?.message || 'Tool execution failed'));
         } catch (recErr) {
           rootLogger.error('Failed to record idempotency failure', { error: String((recErr as Error)?.message || recErr) });
         }

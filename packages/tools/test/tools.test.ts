@@ -601,8 +601,40 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(sendRes.error).toContain('requires a valid human approval token');
   });
 
+  /**
+   * Minimal in-memory IdempotencyStore.
+   *
+   * `communication.send_approved` declares `idempotency: 'required'`, so the registry now refuses to
+   * execute it without a store. These tests are about the approval-token control and the outbound
+   * connector, so they supply a store to get past the idempotency gate and reach what they assert.
+   */
+  function createInMemoryIdempotencyStore() {
+    const rows = new Map<string, { outcome: 'in_flight' | 'succeeded' | 'failed' | 'expired'; result?: unknown; error?: string }>();
+    return {
+      async claim(input: { key: string }) {
+        const existing = rows.get(input.key);
+        if (existing) return { existing: true, record: { key: input.key, ...existing } };
+        rows.set(input.key, { outcome: 'in_flight' });
+        return { existing: false };
+      },
+      async findByKey(key: string) {
+        return rows.get(key) ?? null;
+      },
+      async recordSuccess(key: string, fields: { result?: unknown }) {
+        rows.set(key, { outcome: 'succeeded', result: fields?.result });
+      },
+      async recordFailure(key: string, error: string) {
+        rows.set(key, { outcome: 'failed', error });
+      },
+      async release(key: string) {
+        rows.delete(key);
+        return true;
+      }
+    };
+  }
+
   it('allows communication.send_approved when valid approvalToken is supplied', async () => {
-    const registry = new ToolRegistry();
+    const registry = new ToolRegistry({ idempotencyStore: createInMemoryIdempotencyStore() });
     registry.registerLegacy(SendApprovedCommunicationTool);
     const secret = 'test-secret-key-32-chars-length!!';
     const payload = {
@@ -693,7 +725,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   });
 
   it('rejects outbound execution when no connector is configured', async () => {
-    const registry = new ToolRegistry();
+    const registry = new ToolRegistry({ idempotencyStore: createInMemoryIdempotencyStore() });
     registry.registerLegacy(SendApprovedCommunicationTool);
     const secret = 'test-secret-key-32-chars-length!!';
     const payload = {
@@ -718,8 +750,10 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   });
 
   it('uses a durable approval store to prevent replay across registry instances', async () => {
-    const registryOne = new ToolRegistry();
-    const registryTwo = new ToolRegistry();
+    // Separate stores on purpose: this test is about the approval execution store preventing
+    // replay across instances, so the idempotency control must not be what stops the second call.
+    const registryOne = new ToolRegistry({ idempotencyStore: createInMemoryIdempotencyStore() });
+    const registryTwo = new ToolRegistry({ idempotencyStore: createInMemoryIdempotencyStore() });
     registryOne.registerLegacy(SendApprovedCommunicationTool);
     registryTwo.registerLegacy(SendApprovedCommunicationTool);
 
