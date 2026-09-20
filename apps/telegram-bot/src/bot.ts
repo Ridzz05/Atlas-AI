@@ -148,8 +148,11 @@ export class AtlasTelegramBot {
       taskQueue: options.taskQueue,
       runner: options.runner,
       isPaused: this.isPaused,
-      setPaused: paused => {
-        return this.updatePausedState(paused);
+      // The actor id is forwarded: `commands.ts` passes it, and dropping it here wrote the default
+      // 'telegram-owner' into `updated_by`, so the only durable record of who paused the fleet was
+      // wrong for every allowlisted user except the first.
+      setPaused: (paused, actorId) => {
+        return this.updatePausedState(paused, actorId);
       },
       setEmergencyStop: (active, actorId) => this.updateEmergencyStop(active, actorId),
       resume: actorId => this.resumeControlState(actorId)

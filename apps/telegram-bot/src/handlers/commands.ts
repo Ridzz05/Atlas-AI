@@ -72,7 +72,7 @@ export class CommandRouter {
         return '▶️ *System resumed.* Task intake and worker dispatch active.';
 
       case 'stop':
-        return this.handleStopTask(args[0]);
+        return this.handleStopTask(args[0], actorId);
 
       case 'emergency_stop':
         return this.handleEmergencyStop(actorId);
@@ -264,43 +264,80 @@ ${task.error ? `\n⚠️ *Error:* \`${task.error}\`` : ''}`;
 Chief is preparing the multi-agent execution plan. You can check status with \`/task ${task.id}\`.`;
   }
 
-  private async handleStopTask(taskId?: string): Promise<string> {
+  /**
+   * Stop a task, and say what actually happened.
+   *
+   * This used to discard the `rowCount` from both cancellation calls, swallow the `updateStatus` error,
+   * and return "cancellation signal sent" unconditionally — including when nothing matched, and
+   * including for a task that had already finished, which it relabelled `cancelled` and overwrote
+   * `completed_at` on. A control that reports success it did not have is worse than one that fails: the
+   * operator stops looking.
+   */
+  private async handleStopTask(taskId?: string, actorId = 'telegram-owner'): Promise<string> {
     if (!taskId) return '⚠️ Please specify a task ID: `/stop <task_id>`';
 
-    if (this.ctx.runner) {
-      await this.ctx.runner.requestTaskCancellation(taskId, 'Stopped by user via Telegram command');
-    } else if (this.ctx.runRepo) {
-      await this.ctx.runRepo.requestCancellationForTask(taskId, 'Stopped by user via Telegram command');
-    }
+    const reason = `Stopped by ${actorId} via Telegram /stop command`;
+
+    // A terminal task has nothing to cancel, and relabelling it falsifies the record.
     if (this.ctx.taskRepo) {
-      try {
-        await this.ctx.taskRepo.updateStatus(taskId, 'cancelled', {
-          error: 'Cancelled via Telegram /stop command'
-        });
-      } catch {
-        // Ignored if not found
+      const task = await this.ctx.taskRepo.findById(taskId);
+      if (!task) return `⚠️ Task \`${taskId}\` not found.`;
+      if (['completed', 'failed', 'cancelled'].includes(String(task.status))) {
+        return `ℹ️ Task \`${taskId}\` is already *${task.status}* — nothing to cancel.`;
       }
     }
 
-    return `🛑 Task \`${taskId}\` cancellation signal sent.`;
+    let signalled = 0;
+    if (this.ctx.runner) {
+      signalled = await this.ctx.runner.requestTaskCancellation(taskId, reason);
+    } else if (this.ctx.runRepo) {
+      signalled = await this.ctx.runRepo.requestCancellationForTask(taskId, reason);
+    }
+
+    if (signalled === 0) {
+      // No runner was wired at all, or no live run matched: either way nothing was signalled.
+      return `⚠️ No running or active run found for task \`${taskId}\` — nothing was cancelled.`;
+    }
+
+    if (this.ctx.taskRepo) {
+      try {
+        await this.ctx.taskRepo.updateStatus(taskId, 'cancelled', { error: reason });
+      } catch (err) {
+        // The run was signalled but the row could not be updated; say so rather than hide it.
+        return `🛑 Cancellation signalled for \`${taskId}\` (${signalled} run(s)), but the task row could not be updated: ${String(err)}`;
+      }
+    }
+
+    return `🛑 Task \`${taskId}\` cancellation signalled for ${signalled} run(s).`;
   }
 
   private async handleEmergencyStop(actorId: string): Promise<string> {
     rootLogger.warn('EMERGENCY STOP TRIGGERED VIA TELEGRAM COMMAND');
+
+    // Only claim what was actually done. The reply used to promise that every active run had been sent
+    // an abort signal even when neither a runner nor a run repository was wired — in which case nothing
+    // was signalled at all — and that external writes were locked, which nothing in the tool or
+    // orchestration layer implements: cancellation is cooperative and polled between model turns.
+    let signalled: number | null = null;
     if (this.ctx.runner) {
-      await this.ctx.runner.requestAllCancellations('Emergency stop activated by Telegram owner');
+      signalled = await this.ctx.runner.requestAllCancellations(`Emergency stop activated by ${actorId}`);
     } else if (this.ctx.runRepo) {
-      await this.ctx.runRepo.requestCancellationForActive('Emergency stop activated by Telegram owner');
+      signalled = await this.ctx.runRepo.requestCancellationForActive(`Emergency stop activated by ${actorId}`);
     }
+
     if (this.ctx.setEmergencyStop) await this.ctx.setEmergencyStop(true, actorId);
     else await this.ctx.setPaused(true, actorId);
 
-    return `🚨 *EMERGENCY STOP ACTIVATED!*
-• All active agent runs have been sent abort signals.
-• Task intake has been frozen.
-• External writes are locked.
+    const lines = ['🚨 *EMERGENCY STOP ACTIVATED!*', '• Task intake has been frozen.'];
+    lines.push(
+      signalled === null
+        ? '• ⚠️ No run signaller is wired, so no in-flight run was signalled — cancel runs individually with `/stop`.'
+        : `• Cancellation signalled for ${signalled} run(s); each stops at its next checkpoint, not immediately.`
+    );
+    lines.push('• ⚠️ External writes are *not* locked by this command — it only stops new intake.');
+    lines.push('', 'Use `/resume` to unfreeze the system when ready.');
 
-Use \`/resume\` to unfreeze the system when ready.`;
+    return lines.join('\n');
   }
 
   private async handleCost(): Promise<string> {

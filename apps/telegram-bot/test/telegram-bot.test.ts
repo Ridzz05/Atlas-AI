@@ -500,11 +500,13 @@ describe('@atlas/telegram-bot tests', () => {
       }
     });
 
+    // The reason now names the actor, so the durable cancellation record says who asked. `/stop` used to
+    // pass no actor at all, and the reason was a constant.
     expect(runRepo.requestCancellationForTask).toHaveBeenCalledWith(
       '123e4567-e89b-12d3-a456-426614174000',
-      'Stopped by user via Telegram command'
+      'Stopped by 12345678 via Telegram /stop command'
     );
-    expect(runRepo.requestCancellationForActive).toHaveBeenCalledWith('Emergency stop activated by Telegram owner');
+    expect(runRepo.requestCancellationForActive).toHaveBeenCalledWith('Emergency stop activated by 12345678');
   });
 
   it('handles inline keyboard callback for approvals', async () => {
