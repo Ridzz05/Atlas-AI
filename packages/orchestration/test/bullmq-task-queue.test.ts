@@ -115,9 +115,21 @@ describe('BullMqTaskQueue', () => {
     getJob.mockResolvedValueOnce(null).mockResolvedValueOnce(pendingJob);
     const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-pending' });
 
-    await expect(queue.hasPending('task-pending')).resolves.toBe(true);
+    await expect(queue.hasPending({ taskId: 'task-pending' })).resolves.toBe(true);
     expect(getJob).toHaveBeenNthCalledWith(1, 'task-pending');
     expect(getJob).toHaveBeenNthCalledWith(2, 'deferred:task-pending');
+    await queue.close();
+  });
+
+  // A job carrying a runId is keyed on the runId, so probing only the taskId missed it and the
+  // recovery sweep re-enqueued a task that was still in flight.
+  it('reports a runId-keyed job as pending for its task', async () => {
+    const pendingJob = { getState: vi.fn().mockResolvedValue('waiting') };
+    getJob.mockResolvedValueOnce(null).mockResolvedValueOnce(null).mockResolvedValueOnce(pendingJob);
+    const queue = new BullMqTaskQueue({ redisUrl: 'redis://localhost:6379', queueName: 'test-atlas-runid' });
+
+    await expect(queue.hasPending({ taskId: 'task-x', runId: 'run-x' })).resolves.toBe(true);
+    expect(getJob).toHaveBeenCalledWith('run-x');
     await queue.close();
   });
 

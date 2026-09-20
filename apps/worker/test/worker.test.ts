@@ -117,8 +117,57 @@ describe('worker lifecycle and task execution tests', () => {
 
     await runner.start();
 
-    expect(taskQueue.hasPending).toHaveBeenCalledWith(mockTask.id);
+    expect(taskQueue.hasPending).toHaveBeenCalledWith({ taskId: mockTask.id });
     expect(taskQueue.enqueue).not.toHaveBeenCalled();
+    await runner.stop();
+  });
+
+  // The queue probe alone cannot answer for another replica, and a job keyed on a runId the sweep
+  // cannot see is invisible to it. A `queued` task whose run is still active already has something
+  // working on it, so re-enqueueing it here created a second job for the same work — and both
+  // attempts then passed the at-most-once precondition, which is a read-then-act with no CAS.
+  it('does not re-enqueue a queued task whose run is still active', async () => {
+    const taskRepo = {
+      list: vi.fn().mockResolvedValue([mockTask])
+    } as any;
+    const runRepo = {
+      recoverStaleRuns: vi.fn().mockResolvedValue(0),
+      findByTaskId: vi.fn().mockResolvedValue([{ id: 'run-1', taskId: mockTask.id, status: 'active' }])
+    } as any;
+    const taskQueue = {
+      hasPending: vi.fn().mockResolvedValue(false),
+      enqueue: vi.fn().mockResolvedValue(mockTask.id),
+      process: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({ config, taskRepo, runRepo, taskQueue });
+
+    await runner.start();
+
+    expect(runRepo.findByTaskId).toHaveBeenCalledWith(mockTask.id);
+    expect(taskQueue.enqueue).not.toHaveBeenCalled();
+    await runner.stop();
+  });
+
+  it('still re-enqueues a queued task whose runs are all finished', async () => {
+    const taskRepo = {
+      list: vi.fn().mockResolvedValue([mockTask])
+    } as any;
+    const runRepo = {
+      recoverStaleRuns: vi.fn().mockResolvedValue(0),
+      findByTaskId: vi.fn().mockResolvedValue([{ id: 'run-1', taskId: mockTask.id, status: 'failed' }])
+    } as any;
+    const taskQueue = {
+      hasPending: vi.fn().mockResolvedValue(false),
+      enqueue: vi.fn().mockResolvedValue(mockTask.id),
+      process: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined)
+    } as any;
+    const runner = new AgentWorkerRunner({ config, taskRepo, runRepo, taskQueue });
+
+    await runner.start();
+
+    expect(taskQueue.enqueue).toHaveBeenCalled();
     await runner.stop();
   });
 

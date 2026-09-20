@@ -105,7 +105,7 @@ describe('agent-service SDLC initiative API', () => {
     expect(created).toHaveLength(1);
     expect(created[0].assignedAgent).toBe('ceo');
     expect(created[0].id).toBe(body.data.phaseTaskId);
-    expect(await taskQueue.hasPending(body.data.phaseTaskId)).toBe(true);
+    expect(await taskQueue.hasPending({ taskId: body.data.phaseTaskId })).toBe(true);
   });
 
   it('does not enqueue a second task when the same phase is advanced twice', async () => {

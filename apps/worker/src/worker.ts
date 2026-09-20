@@ -508,8 +508,21 @@ export class AgentWorkerRunner {
           continue;
         }
 
-        if (this.taskQueue.hasPending && (await this.taskQueue.hasPending(task.id))) {
+        if (this.taskQueue.hasPending && (await this.taskQueue.hasPending({ taskId: task.id }))) {
           continue;
+        }
+
+        // Durable counterpart to the queue probe. A job may have been keyed on a runId the sweep
+        // cannot see, and the queue probe alone cannot answer for another replica. A task that is
+        // `queued` while one of its runs is still active already has something working on it, so
+        // re-enqueueing it here produced a second job for the same work; both attempts then passed
+        // the at-most-once precondition, which is a read-then-act with no compare-and-set.
+        if (this.options.runRepo && typeof (this.options.runRepo as any).findByTaskId === 'function') {
+          const runs = await this.options.runRepo.findByTaskId(task.id);
+          const hasActiveRun = runs.some(run =>
+            ['created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval'].includes(run.status)
+          );
+          if (hasActiveRun) continue;
         }
 
         await this.taskQueue.enqueue({

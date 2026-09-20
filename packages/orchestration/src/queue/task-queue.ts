@@ -18,10 +18,22 @@ export interface ApprovalResumeContext {
 
 export type TaskJobHandler = (data: TaskJobData) => Promise<unknown>;
 
+/**
+ * How a task is identified to the queue.
+ *
+ * `hasPending` must probe the SAME id `enqueue` would create, so both take this shape rather than
+ * a bare taskId: a job that carries a runId is keyed on the runId, and probing only the taskId made
+ * such a job invisible to the worker's recovery sweep.
+ */
+export interface TaskQueueIdentity {
+  taskId: string;
+  runId?: string;
+}
+
 export interface TaskQueue {
   enqueue(data: TaskJobData): Promise<string>;
   defer?(data: TaskJobData, delayMs?: number): Promise<string>;
-  hasPending?(taskId: string): Promise<boolean>;
+  hasPending?(identity: TaskQueueIdentity): Promise<boolean>;
   process(concurrency: number, handler: TaskJobHandler): void;
   healthCheck(): Promise<boolean>;
   close(): Promise<void>;
@@ -63,8 +75,11 @@ export class InMemoryTaskQueue implements TaskQueue {
     return jobId;
   }
 
-  public async hasPending(taskId: string): Promise<boolean> {
-    return this.pendingTaskIds.has(taskId) || this.deferredTaskIds.has(taskId);
+  public async hasPending(identity: { taskId: string; runId?: string }): Promise<boolean> {
+    // Both identities, mirroring the BullMQ implementation: a runId-keyed job must be visible or
+    // the recovery sweep re-enqueues a task that is still in flight.
+    const ids = [identity.taskId, ...(identity.runId ? [identity.runId] : [])];
+    return ids.some(id => this.pendingTaskIds.has(id) || this.deferredTaskIds.has(id));
   }
 
   public process(concurrency: number, handler: TaskJobHandler): void {
