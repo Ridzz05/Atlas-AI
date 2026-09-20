@@ -104,6 +104,46 @@ export class ScheduledJobRepository {
     );
   }
 
+  /**
+   * Atomically claim a due job by advancing its schedule, and only if it is still at the value the
+   * caller read.
+   *
+   * `recordRun` was a blind UPDATE applied AFTER the task was created and enqueued, so there was
+   * no compare-and-set anywhere in the tick. Two worker replicas ticking in the same minute both
+   * read the same `next_run_at`, both passed the due check, and both dispatched: the same cron
+   * tick ran twice, each with its own task id, so nothing downstream could deduplicate them. This
+   * is the claim, and it must happen BEFORE the side effects.
+   *
+   * `expectedNextRunAt` is the value the caller read (null for a job that has never run);
+   * `IS NOT DISTINCT FROM` makes that comparison NULL-safe. Returns the claimed row, or null when
+   * another caller got there first.
+   */
+  public async claimRun(id: string, expectedNextRunAt: Date | null, nextRunAt: Date): Promise<ScheduledJob | null> {
+    const res = await this.db.query(
+      `UPDATE scheduled_jobs
+       SET last_run_at = NOW(),
+           next_run_at = $3,
+           last_error = NULL,
+           updated_at = NOW()
+       WHERE id = $1
+         AND next_run_at IS NOT DISTINCT FROM $2
+       RETURNING *`,
+      [id, expectedNextRunAt, nextRunAt]
+    );
+
+    return res.rows[0] ? this.mapRow(res.rows[0]) : null;
+  }
+
+  /**
+   * Annotate a job whose dispatch failed after it was already claimed.
+   *
+   * It must not touch `next_run_at`: the claim already advanced the schedule, and re-pointing it
+   * here is what turned one transient failure into a duplicate task on every tick.
+   */
+  public async recordError(id: string, error: string): Promise<void> {
+    await this.db.query(`UPDATE scheduled_jobs SET last_error = $2, updated_at = NOW() WHERE id = $1`, [id, error]);
+  }
+
   public async delete(id: string): Promise<boolean> {
     const res = await this.db.query('DELETE FROM scheduled_jobs WHERE id = $1', [id]);
     return (res.rowCount || 0) > 0;

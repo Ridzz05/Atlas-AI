@@ -58,6 +58,8 @@ interface FakeRepos {
     list: ReturnType<typeof vi.fn>;
     findById: ReturnType<typeof vi.fn>;
     recordRun: ReturnType<typeof vi.fn>;
+    claimRun: ReturnType<typeof vi.fn>;
+    recordError: ReturnType<typeof vi.fn>;
   };
   taskRepo: {
     create: ReturnType<typeof vi.fn>;
@@ -65,14 +67,30 @@ interface FakeRepos {
   registry: {
     get: ReturnType<typeof vi.fn>;
   };
+  taskQueue?: { enqueue: ReturnType<typeof vi.fn> };
 }
 
 function makeRepos(jobs: ReturnType<typeof makeJob>[]): FakeRepos {
+  // The claim is a compare-and-set against the value the caller read, so the fake models the
+  // stored row: a claim that does not match the current next_run_at loses, exactly as the SQL
+  // `AND next_run_at IS NOT DISTINCT FROM $2` would.
+  const storedNextRun = new Map<string, string | null>(jobs.map(j => [j.id, j.nextRunAt]));
+
   return {
     scheduledJobRepo: {
       list: vi.fn(async () => jobs),
       findById: vi.fn(async (id: string) => jobs.find(j => j.id === id) || null),
-      recordRun: vi.fn(async () => undefined)
+      recordRun: vi.fn(async () => undefined),
+      claimRun: vi.fn(async (id: string, expectedNextRunAt: Date | null, nextRunAt: Date) => {
+        const current = storedNextRun.get(id) ?? null;
+        const expected = expectedNextRunAt ? expectedNextRunAt.toISOString() : null;
+        const matches =
+          current === expected || (current !== null && expected !== null && new Date(current).getTime() === new Date(expected).getTime());
+        if (!matches) return null;
+        storedNextRun.set(id, nextRunAt.toISOString());
+        return { ...(jobs.find(j => j.id === id) as object), nextRunAt: nextRunAt.toISOString() };
+      }),
+      recordError: vi.fn(async () => undefined)
     },
     taskRepo: {
       create: vi.fn(async (input: any) => ({
@@ -161,7 +179,8 @@ describe('ScheduledJobScheduler', () => {
     expect(handler).toHaveBeenCalledTimes(1);
     const handlerArg = handler.mock.calls[0][0] as ScheduledJobTriggerContext;
     expect(handlerArg.job.id).toBe('sj_morning');
-    expect(repos.scheduledJobRepo.recordRun).toHaveBeenCalledWith('sj_morning', new Date('2026-09-01T00:00:00Z'), undefined);
+    // The job has never run, so the claim's expected value is null (a NULL-safe compare).
+    expect(repos.scheduledJobRepo.claimRun).toHaveBeenCalledWith('sj_morning', null, new Date('2026-09-01T00:00:00Z'));
   });
 
   it('records error and skips handler when assigned agent is missing', async () => {
@@ -181,7 +200,10 @@ describe('ScheduledJobScheduler', () => {
     expect(result).toEqual({ executed: true });
     expect(repos.taskRepo.create).not.toHaveBeenCalled();
     expect(handler).not.toHaveBeenCalled();
-    expect(repos.scheduledJobRepo.recordRun).toHaveBeenCalledWith('sj_morning', null, 'Assigned agent not found: unknown-agent');
+    // The claim carries the schedule forward; the failure only annotates the row.
+    const [, , nextRunAt] = repos.scheduledJobRepo.claimRun.mock.calls.at(-1) as [string, Date | null, Date];
+    expect(nextRunAt).toBeInstanceOf(Date);
+    expect(repos.scheduledJobRepo.recordError).toHaveBeenCalledWith('sj_morning', 'Assigned agent not found: unknown-agent');
   });
 
   it('refuses to execute disabled jobs through runJobNow', async () => {
@@ -223,5 +245,84 @@ describe('ScheduledJobScheduler', () => {
     await new Promise(resolve => setTimeout(resolve, 80));
     // list should not have been called after stop
     expect(repos.scheduledJobRepo.list.mock.calls.length).toBe(seenBefore);
+  });
+
+  // A null nextRunAt meant "due now". Every dispatch-failure path persisted nextRunAt = null
+  // (agent missing, enqueue failure, unexpected error), and so did the success path whenever
+  // cron-parser could not read the stored pattern. Because the row was then permanently due, one
+  // bad pattern or one transient failure created a fresh duplicate task on every 60s tick,
+  // forever. A job that has never run is still due; a job that has already run and whose next run
+  // is unknown is not.
+  it('treats an unknown next run as due only for a job that has never run', () => {
+    repos = makeRepos([]);
+    scheduler = new ScheduledJobScheduler({
+      scheduledJobRepo: repos.scheduledJobRepo as any,
+      taskRepo: repos.taskRepo as any,
+      registry: repos.registry as any,
+      triggerHandler: vi.fn(async () => undefined),
+      nextRunCalculator
+    });
+
+    expect(scheduler.isDue(makeJob({ nextRunAt: null, lastRunAt: null }) as any)).toBe(true);
+    expect(scheduler.isDue(makeJob({ nextRunAt: null, lastRunAt: '2026-08-31T00:00:00Z' }) as any)).toBe(false);
+    // A future schedule is not due; a past one is.
+    expect(scheduler.isDue(makeJob({ nextRunAt: '2026-09-02T00:00:00Z' }) as any, new Date('2026-09-01T00:00:00Z'))).toBe(false);
+    expect(scheduler.isDue(makeJob({ nextRunAt: '2026-08-30T00:00:00Z' }) as any, new Date('2026-09-01T00:00:00Z'))).toBe(true);
+  });
+
+  it('keeps a retry horizon instead of nulling the schedule when a dispatch cannot be queued', async () => {
+    const job = makeJob({ nextRunAt: '2026-09-01T00:00:00Z' });
+    repos = makeRepos([job]);
+    repos.taskQueue = {
+      enqueue: vi.fn(async () => {
+        throw new Error('redis down');
+      })
+    };
+    handler = vi.fn(async () => undefined);
+    scheduler = new ScheduledJobScheduler({
+      scheduledJobRepo: repos.scheduledJobRepo as any,
+      taskRepo: repos.taskRepo as any,
+      registry: repos.registry as any,
+      triggerHandler: handler,
+      taskQueue: repos.taskQueue as any,
+      nextRunCalculator
+    });
+
+    await scheduler.runJobNow('sj_morning');
+
+    expect(handler).not.toHaveBeenCalled();
+    // The claim carries a real Date forward, never null.
+    const [, , nextRunAt] = repos.scheduledJobRepo.claimRun.mock.calls.at(-1) as [string, Date | null, Date];
+    expect(nextRunAt).toBeInstanceOf(Date);
+    // The failure annotates the row without re-pointing the schedule.
+    const [errorId, errorText] = repos.scheduledJobRepo.recordError.mock.calls.at(-1) as [string, string];
+    expect(errorId).toBe('sj_morning');
+    expect(errorText).toContain('enqueue failed');
+  });
+
+  it('dispatches a due job exactly once when two schedulers tick the same job', async () => {
+    // Two worker replicas read the same next_run_at and both decided the job was due. Without a
+    // claim each created its own task, so one cron tick ran twice with two distinct task ids.
+    const job = makeJob({ nextRunAt: '2026-08-31T00:00:00Z' });
+    repos = makeRepos([job]);
+    const handlerA = vi.fn(async () => undefined);
+    const handlerB = vi.fn(async () => undefined);
+
+    const makeScheduler = (triggerHandler: typeof handlerA) =>
+      new ScheduledJobScheduler({
+        scheduledJobRepo: repos.scheduledJobRepo as any,
+        taskRepo: repos.taskRepo as any,
+        registry: repos.registry as any,
+        triggerHandler,
+        nextRunCalculator
+      });
+
+    const a = makeScheduler(handlerA);
+    const b = makeScheduler(handlerB);
+
+    await Promise.all([a.runJobNow('sj_morning'), b.runJobNow('sj_morning')]);
+
+    expect(handlerA.mock.calls.length + handlerB.mock.calls.length).toBe(1);
+    expect(repos.taskRepo.create).toHaveBeenCalledTimes(1);
   });
 });

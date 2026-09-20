@@ -124,10 +124,10 @@ export class ScheduledJobScheduler {
     let dispatched = 0;
     for (const job of enabledJobs) {
       if (!this.isDue(job, now)) continue;
-      // Prevent parallel re-entry for same job: record nextRun before dispatch to avoid double-fire
+      // dispatch claims the job before it does anything, so a job another replica already took is
+      // not double-fired and is not counted as dispatched here.
       try {
-        await this.dispatch(job, { manual: false });
-        dispatched++;
+        if (await this.dispatch(job, { manual: false })) dispatched++;
       } catch (error) {
         rootLogger.error('Automation tick dispatch failed', { id: job.id, error: String(error) });
       }
@@ -139,11 +139,24 @@ export class ScheduledJobScheduler {
   }
 
   public isDue(job: ScheduledJob, now: Date = this.nowProvider()): boolean {
-    // If never scheduled, treat as due immediately so first tick fires
-    if (!job.nextRunAt) return true;
+    // A job that has never run is due immediately so the first tick fires it. A job that HAS run
+    // but whose next run is unknown is not due: `null` used to mean "due now", and every
+    // dispatch-failure path persisted `null`, so one transient failure turned the job into a
+    // duplicate-task generator on every tick, forever.
+    if (!job.nextRunAt) return !job.lastRunAt;
     const nextRun = new Date(job.nextRunAt);
-    if (Number.isNaN(nextRun.getTime())) return true;
+    if (Number.isNaN(nextRun.getTime())) return !job.lastRunAt;
     return nextRun <= now;
+  }
+
+  /**
+   * Where to point the schedule after a failed dispatch.
+   *
+   * The failure paths used to persist `null`, which read as "due now" and re-fired the job on
+   * every tick. A retry horizon keeps the retry but stops the hot loop.
+   */
+  private retryHorizon(): Date {
+    return new Date(this.nowProvider().getTime() + this.tickIntervalSeconds * 1000);
   }
 
   async syncInBackground(): Promise<void> {
@@ -201,13 +214,27 @@ export class ScheduledJobScheduler {
     }
   }
 
-  private async dispatch(job: ScheduledJob, _meta: { manual: boolean }): Promise<void> {
+  private async dispatch(job: ScheduledJob, _meta: { manual: boolean }): Promise<boolean> {
+    // Claim BEFORE any side effect. The tick read the job, decided it was due, created a task and
+    // enqueued it, and only then advanced the schedule with a blind UPDATE — no compare-and-set
+    // anywhere. Two worker replicas ticking in the same minute both read the same next_run_at,
+    // both passed isDue, and both dispatched, each minting its own task id, so one cron tick ran
+    // twice and nothing downstream could deduplicate the two runs.
+    const expectedNextRunAt = job.nextRunAt && !Number.isNaN(new Date(job.nextRunAt).getTime()) ? new Date(job.nextRunAt) : null;
+    const nextRunAt = this.nextRunCalculator(job) ?? this.retryHorizon();
+
+    const claimed = await this.scheduledJobRepo.claimRun(job.id, expectedNextRunAt, nextRunAt);
+    if (!claimed) {
+      rootLogger.info('Scheduled job was already claimed for this run', { id: job.id });
+      return false;
+    }
+
     const agent = this.registry.get(job.assignedAgent);
     if (!agent) {
       const error = `Assigned agent not found: ${job.assignedAgent}`;
-      await this.scheduledJobRepo.recordRun(job.id, null, error);
+      await this.scheduledJobRepo.recordError(job.id, error);
       rootLogger.error('Scheduled job has no matching agent', { id: job.id, agentId: job.assignedAgent });
-      return;
+      return false;
     }
     try {
       const input: CreateTaskInput = {
@@ -229,12 +256,11 @@ export class ScheduledJobScheduler {
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           rootLogger.error('Scheduled job enqueue failed', { id: job.id, error: message });
-          await this.scheduledJobRepo.recordRun(job.id, null, `enqueue failed: ${message}`);
-          return;
+          await this.scheduledJobRepo.recordError(job.id, `enqueue failed: ${message}`);
+          return false;
         }
       }
       await this.handler({ job, firedAt: new Date() });
-      await this.scheduledJobRepo.recordRun(job.id, this.nextRunCalculator(job), undefined);
       rootLogger.info('Scheduled job dispatched', {
         id: job.id,
         taskId: task.id,
@@ -243,9 +269,12 @@ export class ScheduledJobScheduler {
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      await this.scheduledJobRepo.recordRun(job.id, null, message);
+      await this.scheduledJobRepo.recordError(job.id, message);
       rootLogger.error('Scheduled job dispatch failed', { id: job.id, error: message });
+      return false;
     }
+
+    return true;
   }
 
   private buildGoalForJob(job: ScheduledJob): string {
