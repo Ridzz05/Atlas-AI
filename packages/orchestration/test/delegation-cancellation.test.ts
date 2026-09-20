@@ -244,4 +244,65 @@ describe('TaskDelegator cancellation and stage tool access', () => {
     // The real cause must survive into the durable row.
     expect(JSON.stringify(parentFailure?.[2])).toContain('provider exploded');
   });
+
+  // A child row that already exists was skipped by the create guard, but the child task object was
+  // still built with a fresh crypto.randomUUID(). The child then ran with an id that has no `tasks`
+  // row, so the run insert violated `runs.task_id REFERENCES tasks(id)`; the catch that followed
+  // called updateStatus on the same phantom id and threw 'Task not found' from inside the catch, so
+  // the real subtask error was lost. Reachable whenever executePlan is re-entered with a child that
+  // is neither completed nor the approval-resume target — for example a plan needing two concurrent
+  // human approvals, or a re-run of a partially failed plan.
+  it('reuses the persisted row of an existing child instead of minting a new id', async () => {
+    const existingChildId = 'existing-child-1234-5678-90ab-cdef12345678';
+    const provider = buildProvider();
+
+    const runRepoCreate = vi.fn(async (input: any) => ({ id: input.id || crypto.randomUUID(), ...input, status: 'active' }));
+    const runRepo = {
+      create: runRepoCreate,
+      updateStatus: vi.fn(async () => null),
+      acquireLease: vi.fn(async () => ({ id: 'run' })),
+      heartbeat: vi.fn(async () => true),
+      recordTurn: vi.fn(async () => undefined)
+    };
+    const budgetRepo = {
+      reserve: vi.fn(async () => ({ id: 'reservation-1' })),
+      commit: vi.fn(async () => true),
+      release: vi.fn(async () => true)
+    };
+    const taskRepo = {
+      updatePlan: vi.fn(async () => undefined),
+      updateStatus: vi.fn(async () => undefined),
+      create: vi.fn(async () => {
+        throw new Error('a child row already exists; create must not be called for it');
+      }),
+      findChildren: vi.fn(async () => [
+        {
+          ...parentTask,
+          id: existingChildId,
+          parentId: parentTask.id,
+          assignedAgent: 'ned',
+          depth: 1,
+          status: 'failed',
+          context: { stepId: 'step_1', parentGoal: parentTask.goal }
+        }
+      ])
+    };
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      taskRepo: taskRepo as any,
+      runRepo: runRepo as any,
+      budgetRepo: budgetRepo as any,
+      globalDailyBudgetUsd: 5
+    });
+
+    await delegator.executePlan(parentTask);
+
+    expect(taskRepo.create).not.toHaveBeenCalled();
+    // Every run must reference a task row that actually exists.
+    const runTaskIds = runRepoCreate.mock.calls.map(call => (call[0] as any).taskId);
+    expect(runTaskIds).toContain(existingChildId);
+  });
 });

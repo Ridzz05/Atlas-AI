@@ -265,23 +265,29 @@ export class TaskDelegator {
         // Create child task record in DB if repository available
         const existingChild = existingChildrenByStep.get(step.id);
         const resumableChild = existingChild && approvalResume && existingChild.id === approvalResume.taskId ? existingChild : undefined;
-        let childTask: Task = resumableChild || {
-          id: crypto.randomUUID(),
-          parentId: parentTask.id,
-          title: `Subtask: ${step.id} (${step.agent})`,
-          goal: step.objective,
-          assignedAgent: step.agent,
-          depth: parentTask.depth + 1,
-          status: 'queued',
-          priority: parentTask.priority,
-          context: { stepId: step.id, parentGoal: parentTask.goal },
-          plan: null,
-          result: null,
-          error: null,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          completedAt: null
-        };
+        // Reuse the persisted row for ANY existing child, not only the approval-resume target.
+        // Minting a fresh UUID here while the create below is skipped for an existing child means
+        // the child runs with an id that has no `tasks` row, so the run insert violates
+        // `runs.task_id REFERENCES tasks(id)` — and the catch that follows calls updateStatus on the
+        // same phantom id, throwing 'Task not found' and discarding the real subtask error.
+        let childTask: Task = resumableChild ||
+          existingChild || {
+            id: crypto.randomUUID(),
+            parentId: parentTask.id,
+            title: `Subtask: ${step.id} (${step.agent})`,
+            goal: step.objective,
+            assignedAgent: step.agent,
+            depth: parentTask.depth + 1,
+            status: 'queued',
+            priority: parentTask.priority,
+            context: { stepId: step.id, parentGoal: parentTask.goal },
+            plan: null,
+            result: null,
+            error: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            completedAt: null
+          };
 
         if (this.options.taskRepo && !existingChild) {
           childTask = await this.options.taskRepo.create(
