@@ -1,3 +1,4 @@
+import cronParser from 'cron-parser';
 import { ScheduledJobRepository, TaskRepository } from '@atlas/database';
 import { AgentDefinition, CreateTaskInput, ScheduledJob } from '@atlas/shared';
 import { AgentRegistry } from '@atlas/agents';
@@ -15,11 +16,8 @@ export type NextRunCalculator = (job: ScheduledJob) => Date | null;
 
 const defaultNextRunCalculator: NextRunCalculator = job => {
   try {
-    const dynamicRequire = (0, eval)('require') as NodeRequire;
-    const CronExpressionParser = dynamicRequire('cron-parser') as {
-      parseExpression: (expr: string, opts?: { tz?: string }) => { next: () => { toDate: () => Date } };
-    };
-    const interval = CronExpressionParser.parseExpression(job.cronPattern, { tz: job.timezone });
+    const parser = (cronParser as unknown as { default?: typeof cronParser }).default || cronParser;
+    const interval = parser.parseExpression(job.cronPattern, { tz: job.timezone });
     return interval.next().toDate();
   } catch {
     return null;
@@ -261,29 +259,39 @@ export class ScheduledJobScheduler {
           'Jangan kirim apa pun lewat Telegram; cukup tampilkan di dashboard dan tulis artifact briefing.'
         ].join(' ');
       case 'lead_discovery':
-        return [
-          'Jalankan otomasi lead discovery: cari calon klien potensial berdasarkan payload dan konteks terakhir.',
-          'Delegasikan ke Ned untuk research/enrichment, Layla untuk scoring rubric, Hermes untuk draft outreach, Argus untuk QA.',
-          'Simpan hasil sebagai artifact CSV/Markdown dan jangan kirim outbound tanpa approval.'
-        ].join(' ') + payloadHint;
+        return (
+          [
+            'Jalankan otomasi lead discovery: cari calon klien potensial berdasarkan payload dan konteks terakhir.',
+            'Delegasikan ke Ned untuk research/enrichment, Layla untuk scoring rubric, Hermes untuk draft outreach, Argus untuk QA.',
+            'Simpan hasil sebagai artifact CSV/Markdown dan jangan kirim outbound tanpa approval.'
+          ].join(' ') + payloadHint
+        );
       case 'research_sync':
-        return [
-          'Sinkronkan riset dan knowledge: kumpulkan update terbaru dari sumber yang terkonfigurasi.',
-          'Ned memverifikasi sumber dan menulis ke Second Brain, Argus memvalidasi factuality.'
-        ].join(' ') + payloadHint;
+        return (
+          [
+            'Sinkronkan riset dan knowledge: kumpulkan update terbaru dari sumber yang terkonfigurasi.',
+            'Ned memverifikasi sumber dan menulis ke Second Brain, Argus memvalidasi factuality.'
+          ].join(' ') + payloadHint
+        );
       case 'memory_consolidation':
-        return [
-          'Lakukan konsolidasi memori: review episodic memory, ringkas keputusan penting, dan usulkan deprecation untuk stale knowledge.',
-          'Gunakan MemoryTools dengan expiry enforcement; hanya verified memory yang dipromosikan.'
-        ].join(' ') + payloadHint;
+        return (
+          [
+            'Lakukan konsolidasi memori: review episodic memory, ringkas keputusan penting, dan usulkan deprecation untuk stale knowledge.',
+            'Gunakan MemoryTools dengan expiry enforcement; hanya verified memory yang dipromosikan.'
+          ].join(' ') + payloadHint
+        );
       case 'workflow_resume':
-        return [
-          'Lanjutkan workflow tertunda: periksa checkpoint scheduled/waiting_external_event yang sudah jatuh tempo dan resume task terkait.'
-        ].join(' ') + payloadHint;
+        return (
+          [
+            'Lanjutkan workflow tertunda: periksa checkpoint scheduled/waiting_external_event yang sudah jatuh tempo dan resume task terkait.'
+          ].join(' ') + payloadHint
+        );
       case 'custom_automation':
-        return (typeof job.payload.goal === 'string' && job.payload.goal.length > 0
-          ? String(job.payload.goal)
-          : `Jalankan otomasi kustom ${job.name}: ${job.jobType}.`) + payloadHint;
+        return (
+          (typeof job.payload.goal === 'string' && job.payload.goal.length > 0
+            ? String(job.payload.goal)
+            : `Jalankan otomasi kustom ${job.name}: ${job.jobType}.`) + payloadHint
+        );
       default:
         return `Run scheduled job ${job.id} of type ${job.jobType}` + payloadHint;
     }

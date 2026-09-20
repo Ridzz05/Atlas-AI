@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import * as path from 'node:path';
 import { buildServer } from '../src/server.js';
 import { EnvConfigSchema } from '@atlas/shared';
 import { SecondBrainService } from '@atlas/memory';
+import { findVaultPath } from '../src/routes/second-brain.js';
 
 describe('agent-service second brain REST endpoints', () => {
   const config = EnvConfigSchema.parse({ NODE_ENV: 'test' });
@@ -57,6 +59,31 @@ Reach 50 gyms across Sumatra and Java with automated Telegram outreach.`
     const body = JSON.parse(response.body);
     expect(body.count).toBeGreaterThanOrEqual(1);
     expect(body.data[0].title).toBe('Sales Strategy 2026');
+  });
+
+  it('rejects an ingest vaultPath outside the configured vault root', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/v1/brain/ingest',
+      payload: { vaultPath: path.resolve(process.cwd(), '..') }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(JSON.parse(response.body).error).toContain('configured Second Brain vault root');
+  });
+
+  it('accepts an ingest vaultPath that resolves to the configured vault root', async () => {
+    const vaultRoot = findVaultPath();
+    expect(vaultRoot).not.toBeNull();
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/v1/brain/ingest',
+      payload: { vaultPath: path.relative(process.cwd(), vaultRoot as string) }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(JSON.parse(response.body).type).toBe('vault_sync');
   });
 
   it('GET /api/v1/brain/search retrieves matching chunks with citations', async () => {

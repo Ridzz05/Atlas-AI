@@ -43,6 +43,13 @@ export interface AgentRunnerOptions {
 
 export interface RunCancellationStore {
   isCancellationRequested?(runId: string): Promise<{ requested: boolean; reason?: string }>;
+  /**
+   * Task-level cancellation. A delegation graph is driven by the parent orchestrator task,
+   * which has no Run row of its own, so `isCancellationRequested(runId)` cannot see a cancel
+   * aimed at it. Without this the planner, every specialist, the QA gate and the synthesiser
+   * all ran to completion after an emergency stop.
+   */
+  isCancellationRequestedForTask?(taskId: string): Promise<{ requested: boolean; reason?: string }>;
   requestCancellation?(runId: string, reason: string): Promise<unknown | null>;
   requestCancellationForTask?(taskId: string, reason: string): Promise<number>;
   requestCancellationForActive?(reason: string): Promise<number>;
@@ -74,6 +81,7 @@ export interface AgentRunSummary {
 export class AgentRunner {
   private activeRuns = new Map<string, { controller: AbortController; taskId: string }>();
   private readonly workerId: string;
+  private durableBudgetWarningLogged = false;
 
   constructor(private options: AgentRunnerOptions) {
     this.workerId = options.workerId || `${process.env.HOSTNAME || 'atlas'}:${process.pid}`;
@@ -271,6 +279,19 @@ export class AgentRunner {
           throw new Error(`BUDGET_EXCEEDED: durable budget is unavailable for run ${runId}.`);
         }
         budgetReservationId = reservation.id;
+      } else if (!this.durableBudgetWarningLogged) {
+        // The global daily cap is enforced by the durable reservation. When the repositories
+        // or the configured limit are missing, only the in-memory per-run ceiling applies, so
+        // the daily budget silently does not exist. Production always wires all three; warn
+        // once so a caller that forgets is not left believing the cap is in force.
+        this.durableBudgetWarningLogged = true;
+        rootLogger.warn('Durable budget enforcement is disabled: only the per-run cost ceiling applies', {
+          runId,
+          taskId,
+          hasBudgetRepo: Boolean(this.options.budgetRepo),
+          hasRunRepo: Boolean(this.options.runRepo),
+          hasGlobalDailyBudget: Boolean(this.options.globalDailyBudgetUsd)
+        });
       }
 
       if (this.options.taskRepo) {
@@ -474,7 +495,7 @@ export class AgentRunner {
 
       // Update terminal status in DB
       if (this.options.runRepo) {
-        await this.options.runRepo.updateStatus(runId, 'completed');
+        await this.options.runRepo.updateStatus(runId, 'completed', undefined, this.workerId);
       }
       if (this.options.taskRepo) {
         await this.options.taskRepo.updateStatus(taskId, 'completed', {
@@ -530,7 +551,10 @@ export class AgentRunner {
       rootLogger.error(`Run ${runId} ended with status: ${status}`, { error: errorMessage });
 
       if (this.options.runRepo) {
-        await this.options.runRepo.updateStatus(runId, status as any, errorMessage);
+        // Guarded by workerId: if this worker lost the lease (for example because
+        // acquireRunLease returned null), it must not write a terminal status for a run
+        // that another worker now owns — a terminal write clears the lease columns.
+        await this.options.runRepo.updateStatus(runId, status as any, errorMessage, this.workerId);
         if (status === 'waiting_approval' && typeof (this.options.runRepo as any).releaseLease === 'function') {
           await (this.options.runRepo as any).releaseLease(runId, this.workerId);
         }

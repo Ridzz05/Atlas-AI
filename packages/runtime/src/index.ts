@@ -17,12 +17,13 @@ import {
   ModelProviderSettingsRepository,
   ScheduledJobRepository,
   WorkflowCheckpointRepository,
+  SDLCRepository,
   seedAgents,
   TaskRepository
 } from '@atlas/database';
 import { DatabaseMemoryStore } from '@atlas/memory';
 import { EventBus, PostgresEventBus } from '@atlas/events';
-import { BullMqTaskQueue, TaskQueue } from '@atlas/orchestration';
+import { BullMqTaskQueue, SDLCEngine, TaskQueue } from '@atlas/orchestration';
 import { createModelProvider, ModelProvider, ReloadableModelProvider } from '@atlas/providers';
 import { AgentDefinition, EnvConfig } from '@atlas/shared';
 import { createResearchProvider, DEFAULT_LEAD_RUBRIC, LeadRubricDefinitionSchema, ResearchProvider, RubricEngine } from '@atlas/tools';
@@ -46,6 +47,8 @@ export interface AtlasRuntime {
   modelProviderSettingsRepo: ModelProviderSettingsRepository;
   scheduledJobRepo: ScheduledJobRepository;
   workflowCheckpointRepo: WorkflowCheckpointRepository;
+  sdlcRepo: SDLCRepository;
+  sdlcEngine: SDLCEngine;
   taskQueue: TaskQueue;
   eventBus: EventBus;
   provider: ModelProvider;
@@ -116,6 +119,7 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
   const rubricRepo = new LeadRubricRepository(db);
   const scheduledJobRepo = new ScheduledJobRepository(db);
   const workflowCheckpointRepo = new WorkflowCheckpointRepository(db);
+  const sdlcRepo = new SDLCRepository(db);
 
   if (typeof (db as any).query === 'function') {
     await budgetRepo.recoverStaleReservations();
@@ -152,6 +156,10 @@ export async function createAtlasRuntime(config: EnvConfig, options: AtlasRuntim
     modelProviderSettingsRepo,
     scheduledJobRepo,
     workflowCheckpointRepo,
+    sdlcRepo,
+    // One SDLC coordinator per process. The API enqueues phases through it and the worker
+    // reports finished phases back to it, so both must share the same construction.
+    sdlcEngine: new SDLCEngine({ sdlcRepo, taskRepo, taskQueue, registry }),
     taskQueue,
     eventBus,
     provider,

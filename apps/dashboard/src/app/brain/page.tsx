@@ -705,7 +705,8 @@ export default function SecondBrainPage() {
                 Second Brain Belum Disinkronkan ke Memori Server
               </Typography>
               <Typography variant="body2" sx={{ color: '#666155', maxWidth: 480, mx: 'auto', mb: 3, fontSize: '0.84rem' }}>
-                Terdapat 27 catatan Obsidian di folder <code>vault/</code>. Klik tombol di bawah untuk menyinkronkan seluruh catatan ke indeks vektor secara instan.
+                Terdapat 27 catatan Obsidian di folder <code>vault/</code>. Klik tombol di bawah untuk menyinkronkan seluruh catatan ke
+                indeks vektor secara instan.
               </Typography>
               <Button
                 variant="contained"

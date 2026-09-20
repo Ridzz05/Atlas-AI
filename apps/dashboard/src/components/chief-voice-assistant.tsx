@@ -9,15 +9,7 @@ import Button from '@mui/material/Button';
 import Chip from '@mui/material/Chip';
 import Tooltip from '@mui/material/Tooltip';
 import Alert from '@mui/material/Alert';
-import {
-  CiMicrophoneOn,
-  CiVolumeHigh,
-  CiVolumeMute,
-  CiPlay1,
-  CiRedo,
-  CiCircleCheck,
-  CiCircleAlert
-} from 'react-icons/ci';
+import { CiMicrophoneOn, CiVolumeHigh, CiVolumeMute, CiPlay1, CiRedo, CiCircleCheck, CiCircleAlert } from 'react-icons/ci';
 import { atlasFetch } from '../lib/atlas-api';
 
 interface ChiefVoiceAssistantProps {
@@ -56,117 +48,126 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
   }, [state]);
 
   // Audio Chime using Web Audio API
-  const playChime = useCallback((type: 'wake' | 'success') => {
-    if (typeof window === 'undefined' || audioMuted) return;
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
+  const playChime = useCallback(
+    (type: 'wake' | 'success') => {
+      if (typeof window === 'undefined' || audioMuted) return;
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
 
-      if (type === 'wake') {
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-        osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.18); // A5
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.28);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.3);
-      } else {
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.12); // E5
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.26);
+        if (type === 'wake') {
+          osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+          osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.18); // A5
+          gain.gain.setValueAtTime(0.12, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.28);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.3);
+        } else {
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+          osc.frequency.exponentialRampToValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+          gain.gain.setValueAtTime(0.1, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+          osc.start(ctx.currentTime);
+          osc.stop(ctx.currentTime + 0.26);
+        }
+      } catch {
+        // Audio context blocked or not supported
       }
-    } catch {
-      // Audio context blocked or not supported
-    }
-  }, [audioMuted]);
+    },
+    [audioMuted]
+  );
 
   // Chief Speech Synthesis (TTS)
-  const speak = useCallback((text: string, onDone?: () => void) => {
-    setLastSpeech(text);
-    if (typeof window === 'undefined' || !('speechSynthesis' in window) || audioMuted) {
-      if (onDone) setTimeout(onDone, 600);
-      return;
-    }
-
-    try {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = lang;
-      utterance.rate = 1.04;
-      utterance.pitch = 1.0;
-
-      const voices = window.speechSynthesis.getVoices();
-      const targetVoice = voices.find(v => v.lang.toLowerCase().includes(lang.toLowerCase().slice(0, 2)));
-      if (targetVoice) {
-        utterance.voice = targetVoice;
+  const speak = useCallback(
+    (text: string, onDone?: () => void) => {
+      setLastSpeech(text);
+      if (typeof window === 'undefined' || !('speechSynthesis' in window) || audioMuted) {
+        if (onDone) setTimeout(onDone, 600);
+        return;
       }
 
-      utterance.onend = () => {
-        if (onDone) onDone();
-      };
-      utterance.onerror = () => {
-        if (onDone) onDone();
-      };
+      try {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = lang;
+        utterance.rate = 1.04;
+        utterance.pitch = 1.0;
 
-      setState('speaking');
-      window.speechSynthesis.speak(utterance);
-    } catch {
-      if (onDone) onDone();
-    }
-  }, [audioMuted, lang]);
+        const voices = window.speechSynthesis.getVoices();
+        const targetVoice = voices.find(v => v.lang.toLowerCase().includes(lang.toLowerCase().slice(0, 2)));
+        if (targetVoice) {
+          utterance.voice = targetVoice;
+        }
+
+        utterance.onend = () => {
+          if (onDone) onDone();
+        };
+        utterance.onerror = () => {
+          if (onDone) onDone();
+        };
+
+        setState('speaking');
+        window.speechSynthesis.speak(utterance);
+      } catch {
+        if (onDone) onDone();
+      }
+    },
+    [audioMuted, lang]
+  );
 
   // Task Dispatch Function
-  const dispatchVoiceTask = useCallback(async (commandText: string) => {
-    const cleanGoal = commandText.trim();
-    if (!cleanGoal) {
-      setState('standby');
-      setStatusMessage('Instruksi kosong. Katakan "Hei Chief" untuk mencoba lagi');
-      return;
-    }
-
-    setState('processing');
-    setStatusMessage('Chief sedang menyusun rencana multi-agen...');
-    setErrorMessage(null);
-
-    try {
-      const title = cleanGoal.length > 50 ? `${cleanGoal.slice(0, 48)}...` : cleanGoal;
-      const res = await atlasFetch<{ data: { id: string; title: string; status: string } }>('/tasks', {
-        method: 'POST',
-        body: JSON.stringify({
-          title,
-          goal: cleanGoal,
-          assignedAgent: 'chief'
-        })
-      });
-
-      playChime('success');
-      const confirmation = 'Misi diterima, Tuan. Saya dan armada spesialis segera melaksanakannya.';
-      speak(confirmation, () => {
+  const dispatchVoiceTask = useCallback(
+    async (commandText: string) => {
+      const cleanGoal = commandText.trim();
+      if (!cleanGoal) {
         setState('standby');
-        setStatusMessage('Tugas berhasil dibuat. Katakan "Hei Chief" untuk instruksi berikutnya');
-        setTranscript('');
-        setInterimText('');
-      });
-
-      if (onTaskCreated && res.data) {
-        onTaskCreated(res.data);
+        setStatusMessage('Instruksi kosong. Katakan "Hei Chief" untuk mencoba lagi');
+        return;
       }
-    } catch (err: any) {
-      const errStr = err?.message || 'Gagal membuat tugas';
-      setErrorMessage(errStr);
-      speak('Maaf Tuan, terjadi kendala saat membuat tugas.', () => {
-        setState('standby');
-        setStatusMessage('Terjadi kesalahan. Katakan "Hei Chief" untuk mencoba lagi');
-      });
-    }
-  }, [playChime, speak, onTaskCreated]);
+
+      setState('processing');
+      setStatusMessage('Chief sedang menyusun rencana multi-agen...');
+      setErrorMessage(null);
+
+      try {
+        const title = cleanGoal.length > 50 ? `${cleanGoal.slice(0, 48)}...` : cleanGoal;
+        const res = await atlasFetch<{ data: { id: string; title: string; status: string } }>('/tasks', {
+          method: 'POST',
+          body: JSON.stringify({
+            title,
+            goal: cleanGoal,
+            assignedAgent: 'chief'
+          })
+        });
+
+        playChime('success');
+        const confirmation = 'Misi diterima, Tuan. Saya dan armada spesialis segera melaksanakannya.';
+        speak(confirmation, () => {
+          setState('standby');
+          setStatusMessage('Tugas berhasil dibuat. Katakan "Hei Chief" untuk instruksi berikutnya');
+          setTranscript('');
+          setInterimText('');
+        });
+
+        if (onTaskCreated && res.data) {
+          onTaskCreated(res.data);
+        }
+      } catch (err: any) {
+        const errStr = err?.message || 'Gagal membuat tugas';
+        setErrorMessage(errStr);
+        speak('Maaf Tuan, terjadi kendala saat membuat tugas.', () => {
+          setState('standby');
+          setStatusMessage('Terjadi kesalahan. Katakan "Hei Chief" untuk mencoba lagi');
+        });
+      }
+    },
+    [playChime, speak, onTaskCreated]
+  );
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -360,11 +361,7 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
               justifyContent: 'center',
               cursor: 'pointer',
               position: 'relative',
-              boxShadow: isChiefActive
-                ? '0 0 16px rgba(194, 65, 12, 0.45)'
-                : isLive
-                  ? '0 0 8px rgba(194, 65, 12, 0.2)'
-                  : 'none',
+              boxShadow: isChiefActive ? '0 0 16px rgba(194, 65, 12, 0.45)' : isLive ? '0 0 8px rgba(194, 65, 12, 0.2)' : 'none',
               animation: isChiefActive ? 'orbPulse 1.8s infinite' : 'none',
               '@keyframes orbPulse': {
                 '0%': { transform: 'scale(1)', boxShadow: '0 0 0 0 rgba(194, 65, 12, 0.5)' },
@@ -494,7 +491,8 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
 
       {!supported && (
         <Alert severity="info" sx={{ py: 0.5, fontSize: '0.78rem' }}>
-          Browser Anda belum mendukung Web Speech API secara native. Gunakan Google Chrome atau Microsoft Edge untuk pengalaman suara live optimal.
+          Browser Anda belum mendukung Web Speech API secara native. Gunakan Google Chrome atau Microsoft Edge untuk pengalaman suara live
+          optimal.
         </Alert>
       )}
 
@@ -548,9 +546,7 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
                 </>
               ) : (
                 <span style={{ color: '#a8a29e' }}>
-                  {state === 'standby'
-                    ? 'Katakan "Hei Chief" untuk mulai berbicara...'
-                    : 'Silakan sampaikan instruksi Anda...'}
+                  {state === 'standby' ? 'Katakan "Hei Chief" untuk mulai berbicara...' : 'Silakan sampaikan instruksi Anda...'}
                 </span>
               )}
             </Typography>

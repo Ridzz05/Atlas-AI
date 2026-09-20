@@ -21,7 +21,7 @@ describe('@atlas/runtime', () => {
     expect(runtime.taskRepo).toBeDefined();
     expect(runtime.runRepo).toBeDefined();
     expect(runtime.taskQueue).toBe(queue);
-    expect(runtime.registry.list()).toHaveLength(5);
+    expect(runtime.registry.list()).toHaveLength(9);
 
     await runtime.close();
   });

@@ -177,8 +177,11 @@ describe('RunRepository cancellation state', () => {
       'completed',
       null,
       true,
-      '123e4567-e89b-12d3-a456-426614174000'
+      '123e4567-e89b-12d3-a456-426614174000',
+      null
     ]);
+    // The query carries the lease guard: a run owned by another worker must not be touched.
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('worker_id IS NULL OR worker_id = $5'), expect.anything());
   });
 
   it('acquires a worker lease atomically for an executable run', async () => {
@@ -191,6 +194,55 @@ describe('RunRepository cancellation state', () => {
 
     expect(run?.id).toBe(runId);
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('lease_expires_at = NOW() + ($3 * INTERVAL'), [runId, 'worker-a', 60]);
+  });
+
+  it('sees a task-level cancel through the runs of the task and of its children', async () => {
+    // An orchestrator task has no Run row of its own, so a cancel aimed at it is only visible
+    // through its children's runs. Without the join an emergency stop left the whole
+    // delegation graph running to completion.
+    const db = {
+      query: vi.fn().mockResolvedValue({ rows: [{ cancel_reason: 'emergency stop' }] })
+    } as any;
+    const repository = new RunRepository(db);
+
+    const cancellation = await repository.isCancellationRequestedForTask('parent-task-id');
+
+    expect(cancellation.requested).toBe(true);
+    expect(cancellation.reason).toBe('emergency stop');
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('t.parent_id = $1'), ['parent-task-id']);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('r.cancel_requested = TRUE'), expect.anything());
+  });
+
+  it('reports no task-level cancellation when no run asked for one', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rows: [] }) } as any;
+    const repository = new RunRepository(db);
+
+    const cancellation = await repository.isCancellationRequestedForTask('parent-task-id');
+
+    expect(cancellation.requested).toBe(false);
+    expect(cancellation.reason).toBeUndefined();
+  });
+
+  it('recovers runs that hold no lease at all, and only after they go stale', async () => {
+    // The leak: the sweep required `lease_expires_at IS NOT NULL`, so a run left in an active
+    // status whose lease was never acquired was immortal. Its task then looked like it had an
+    // active run, so the orphan-task sweep skipped it too, and the task stayed 'running'
+    // forever across restarts. The time guard keeps a freshly started task from being killed
+    // between "task -> running" and "run created".
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 0, rows: [] }) } as any;
+    const repository = new RunRepository(db);
+
+    await repository.recoverStaleRuns();
+
+    const runSweep = db.query.mock.calls[0][0] as string;
+    expect(runSweep).toContain('lease_expires_at < NOW()');
+    expect(runSweep).toContain('lease_expires_at IS NULL');
+    expect(runSweep).toContain('updated_at < NOW()');
+
+    const taskSweep = db.query.mock.calls[1][0] as string;
+    expect(taskSweep).toContain("status IN ('running', 'planning')");
+    expect(taskSweep).toContain('NOT EXISTS');
+    expect(taskSweep).toContain('updated_at < NOW()');
   });
 
   it('renews only an owned worker lease', async () => {
@@ -223,7 +275,7 @@ describe('RunRepository cancellation state', () => {
 
     await expect(repository.recoverStaleRuns('worker lease expired')).resolves.toBe(2);
 
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"), ['worker lease expired']);
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('lease_expires_at < NOW()'), ['worker lease expired']);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"), ['worker lease expired', 900]);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('lease_expires_at < NOW()'), ['worker lease expired', 900]);
   });
 });

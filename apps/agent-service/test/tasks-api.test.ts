@@ -119,7 +119,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
 
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
-    expect(body.data.length).toBe(6);
+    expect(body.data.length).toBe(9);
     const ids = body.data.map((a: any) => a.id);
     expect(ids).toContain('chief');
     expect(ids).toContain('ned');
@@ -127,6 +127,9 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     expect(ids).toContain('layla');
     expect(ids).toContain('hermes');
     expect(ids).toContain('argus');
+    expect(ids).toContain('ceo');
+    expect(ids).toContain('cto');
+    expect(ids).toContain('cfo');
   });
 
   it('POST /api/v1/tasks triggers multi-agent delegation', async () => {

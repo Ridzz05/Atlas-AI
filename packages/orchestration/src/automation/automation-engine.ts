@@ -132,11 +132,19 @@ export class AutomationEngine {
     const payloadSnippet = trigger.payload ? ` Payload: ${JSON.stringify(trigger.payload)}.` : '';
     switch (trigger.jobType) {
       case 'daily_briefing':
-        return 'Susun ringkasan harian untuk owner: highlight hasil kemarin, status berjalan, risiko hari ini, dan rekomendasi. Delegasikan ke Ned (rekap 24 jam), Hermes (narasi), Argus (QA).' + payloadSnippet;
+        return (
+          'Susun ringkasan harian untuk owner: highlight hasil kemarin, status berjalan, risiko hari ini, dan rekomendasi. Delegasikan ke Ned (rekap 24 jam), Hermes (narasi), Argus (QA).' +
+          payloadSnippet
+        );
       case 'lead_discovery':
-        return 'Jalankan lead discovery otomasi: cari, enrich, dan scoring calon klien sesuai payload, lalu draft outreach via Hermes dan verifikasi via Argus. Jangan kirim outbound tanpa approval.' + payloadSnippet;
+        return (
+          'Jalankan lead discovery otomasi: cari, enrich, dan scoring calon klien sesuai payload, lalu draft outreach via Hermes dan verifikasi via Argus. Jangan kirim outbound tanpa approval.' +
+          payloadSnippet
+        );
       case 'research_sync':
-        return 'Sinkronkan riset terbaru: kumpulkan dan verifikasi informasi dari sumber terkonfigurasi, tulis ke Second Brain.' + payloadSnippet;
+        return (
+          'Sinkronkan riset terbaru: kumpulkan dan verifikasi informasi dari sumber terkonfigurasi, tulis ke Second Brain.' + payloadSnippet
+        );
       case 'memory_consolidation':
         return 'Konsolidasikan memori: ringkas episodic, tandai superseded knowledge, dan usulkan deprecation.' + payloadSnippet;
       default:

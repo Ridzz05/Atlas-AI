@@ -32,7 +32,10 @@ if (fs.existsSync(envPath)) {
     if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
       const idx = trimmed.indexOf('=');
       const key = trimmed.substring(0, idx).trim();
-      const val = trimmed.substring(idx + 1).trim().replace(/^["']|["']$/g, '');
+      const val = trimmed
+        .substring(idx + 1)
+        .trim()
+        .replace(/^["']|["']$/g, '');
       envVars[key] = val;
     }
   }

@@ -2,7 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
 
 const sourceExtensions = new Set(['.js', '.mjs', '.ts', '.tsx']);
-const ignoredDirectories = new Set(['.next', 'coverage', 'dist', 'node_modules']);
+const ignoredDirectories = new Set(['.next', '.next-dev', '.turbo', 'coverage', 'dist', 'node_modules']);
 const sourceRoots = ['apps', 'packages', 'scripts'];
 const secretPatterns = [
   { pattern: new RegExp('gsk_' + '[A-Za-z0-9]{20,}'), label: 'Groq API key' },
@@ -36,6 +36,9 @@ for (const absoluteFile of sourceFiles) {
   const file = relative(repositoryRoot, absoluteFile).replaceAll('\\', '/');
   const lines = readFileSync(absoluteFile, 'utf8').split(/\r?\n/);
   const checkSemanticRules = file !== 'scripts/lint.mjs';
+  // Application code must log through @atlas/observability. The CLI scripts under scripts/
+  // are operator tools whose stdout IS their interface, so console output is correct there.
+  const checkConsoleLogging = checkSemanticRules && !file.startsWith('scripts/');
 
   lines.forEach((line, index) => {
     if (/[ \t]+$/.test(line)) {
@@ -44,7 +47,7 @@ for (const absoluteFile of sourceFiles) {
     if (checkSemanticRules && debuggerPattern.test(line)) {
       violations.push(`${file}:${index + 1}: debugger statement`);
     }
-    if (checkSemanticRules && file !== 'packages/observability/src/logger.ts' && consoleLogPattern.test(line)) {
+    if (checkConsoleLogging && file !== 'packages/observability/src/logger.ts' && consoleLogPattern.test(line)) {
       violations.push(`${file}:${index + 1}: use structured logger instead of console logging`);
     }
     if (checkSemanticRules) {

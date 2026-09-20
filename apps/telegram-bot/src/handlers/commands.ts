@@ -1,7 +1,16 @@
-import { ApprovalRepository, BudgetRepository, DatabaseClient, MessageRepository, RunRepository, TaskRepository } from '@atlas/database';
+import {
+  ApprovalRepository,
+  BudgetRepository,
+  DatabaseClient,
+  MessageRepository,
+  RunRepository,
+  SDLCRepository,
+  TaskRepository
+} from '@atlas/database';
 import { AgentRegistry } from '@atlas/agents';
 import { TaskQueue, AgentRunner } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
+import { SDLCInitiative } from '@atlas/shared';
 
 export interface CommandContext {
   db?: DatabaseClient;
@@ -10,6 +19,7 @@ export interface CommandContext {
   runRepo?: RunRepository;
   budgetRepo?: BudgetRepository;
   approvalRepo?: ApprovalRepository;
+  sdlcRepo?: SDLCRepository;
   registry: AgentRegistry;
   taskQueue?: TaskQueue;
   runner?: AgentRunner;
@@ -46,6 +56,12 @@ export class CommandRouter {
       case 'new':
         return this.handleNewTask(args.join(' '), actorId);
 
+      case 'initiatives':
+        return this.handleInitiatives();
+
+      case 'initiative':
+        return this.handleInitiativeDetail(args[0]);
+
       case 'pause':
         await this.ctx.setPaused(true, actorId);
         return '⏸️ *System paused.* No new tasks will be dispatched to workers until resumed.';
@@ -79,28 +95,30 @@ export class CommandRouter {
   }
 
   private handleHelp(): string {
-    return `🤖 *ATLAS AI OS — Command Reference*
+    return `🤖 *ATLAS AI OS: Command Reference*
 
-• \`/new <goal>\` — Create a new task for Chief
-• \`/status\` — View active & queued tasks
-• \`/agents\` — View core specialist agent roster
-• \`/task <id>\` — View details of a specific task
-• \`/approve <id>\` — Approve a pending action
-• \`/reject <id>\` — Reject a pending action
-• \`/revise <id> <notes>\` — Request revisions on a pending action
-• \`/pause\` — Pause taking new tasks
-• \`/resume\` — Resume task processing
-• \`/stop <id>\` — Cancel a specific active task
-• \`/emergency_stop\` — Abort all runs & freeze external actions
-• \`/cost\` — View current budget and token usage
-• \`/help\` — Show this help message
+• \`/new <goal>\`: Create a new task for Chief
+• \`/initiatives\`: View active Executive SDLC initiatives
+• \`/initiative <id>\`: View detail of an SDLC initiative
+• \`/status\`: View active & queued tasks
+• \`/agents\`: View core agent roster (C-Suite & Specialists)
+• \`/task <id>\`: View details of a specific task
+• \`/approve <id>\`: Approve a pending action
+• \`/reject <id>\`: Reject a pending action
+• \`/revise <id> <notes>\`: Request revisions on a pending action
+• \`/pause\`: Pause taking new tasks
+• \`/resume\`: Resume task processing
+• \`/stop <id>\`: Cancel a specific active task
+• \`/emergency_stop\`: Abort all runs & freeze external actions
+• \`/cost\`: View current budget and token usage
+• \`/help\`: Show this help message
 
 _Or simply send any natural message to talk with Chief._`;
   }
 
   private handleAgents(): string {
     const agents = this.ctx.registry.list();
-    const rows = agents.map(a => `• *${a.name}* (\`${a.id}\`) — *${a.role}*\n  _${a.description}_`);
+    const rows = agents.map(a => `• *${a.name}* (\`${a.id}\`): *${a.role}*\n  _${a.description}_`);
     return `👥 *ATLAS Core Agent Roster:*\n\n${rows.join('\n\n')}`;
   }
 
@@ -395,5 +413,71 @@ Use \`/resume\` to unfreeze the system when ready.`;
   private handleRevise(requestId?: string, notes?: string): string {
     if (!requestId) return '⚠️ Please specify an approval request ID: `/revise <id> <notes>`';
     return `✍️ Revision requested for \`${requestId}\`: "${notes || 'Please adjust parameters.'}"`;
+  }
+
+  private async handleInitiatives(): Promise<string> {
+    if (!this.ctx.sdlcRepo) {
+      return 'ℹ️ SDLC repository is not configured; initiatives lookup unavailable.';
+    }
+
+    try {
+      const initiatives = await this.ctx.sdlcRepo.list({ limit: 10 });
+      if (initiatives.length === 0) {
+        return 'ℹ️ No SDLC initiatives found. Create one in Dashboard > Executive Board.';
+      }
+
+      const rows = initiatives.map((i: SDLCInitiative) => {
+        const phaseEmoji: Record<string, string> = {
+          inception: '💡',
+          architecture: '📐',
+          budget_gate: '💰',
+          sprint_planning: '📋',
+          implementation: '⚡',
+          qa_audit: '🛡️',
+          release: '🚀'
+        };
+        const emoji = phaseEmoji[i.currentPhase] || '📌';
+        return `• ${emoji} *${i.title}*\n  ID: \`${i.id.slice(0, 8)}\` | Phase: *${i.currentPhase}* | Status: \`${i.status}\``;
+      });
+
+      return `🏛️ *Executive SDLC Initiatives:*\n\n${rows.join('\n\n')}\n\n_Use \`/initiative <id>\` for detailed phase deliverables._`;
+    } catch (error) {
+      rootLogger.error('Telegram initiatives query failed', { error: String(error) });
+      return '⚠️ Failed to load initiatives. Please try again later.';
+    }
+  }
+
+  private async handleInitiativeDetail(initiativeId?: string): Promise<string> {
+    if (!initiativeId) return '⚠️ Please specify an initiative ID: `/initiative <id>`';
+    if (!this.ctx.sdlcRepo) return 'ℹ️ SDLC repository is not configured.';
+
+    try {
+      const all = await this.ctx.sdlcRepo.list({ limit: 50 });
+      const match = all.find((i: SDLCInitiative) => i.id === initiativeId || i.id.startsWith(initiativeId));
+      if (!match) return `⚠️ Initiative \`${initiativeId}\` was not found.`;
+
+      const deliverables = [
+        match.strategicBrief ? 'Strategic Brief (CEO)' : null,
+        match.technicalSpec ? 'Technical Spec (CTO)' : null,
+        match.budgetEnvelope ? 'Budget Envelope (CFO)' : null,
+        match.sprintPlan ? 'Sprint Plan (COO)' : null,
+        match.qaReport ? 'QA Report (Argus)' : null
+      ].filter(Boolean);
+
+      const delSummary = deliverables.length > 0 ? deliverables.map(d => `- ${d}: Completed`).join('\n') : '- None yet';
+
+      return `🏛️ *Initiative Detail:*
+*Title:* ${match.title}
+*ID:* \`${match.id}\`
+*Current Phase:* ${match.currentPhase}
+*Status:* ${match.status}
+*Created At:* ${new Date(match.createdAt).toISOString().slice(0, 10)}
+
+*Deliverables:*
+${delSummary}`;
+    } catch (error) {
+      rootLogger.error('Telegram initiative detail query failed', { error: String(error), initiativeId });
+      return `⚠️ Failed to load initiative \`${initiativeId}\`.`;
+    }
   }
 }

@@ -98,7 +98,23 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
 
     const { title, filePath, content, vaultPath, scope } = parse.data;
 
-    const targetVaultPath = (vaultPath && vaultPath.trim()) ? vaultPath.trim() : (!content ? findVaultPath() : undefined);
+    // A client-supplied vaultPath used to be passed straight to a recursive directory
+    // walk, which turned this route into an unauthenticated arbitrary-file-read primitive:
+    // POST {"vaultPath":"C:/Users/<user>"} indexed every .md/.txt under that tree and
+    // GET /api/v1/brain/search returned the contents. Only the configured vault root is
+    // accepted now.
+    const configuredVaultPath = findVaultPath();
+    if (vaultPath && vaultPath.trim()) {
+      const requested = path.resolve(vaultPath.trim());
+      const configured = configuredVaultPath ? path.resolve(configuredVaultPath) : null;
+      if (!configured || requested !== configured) {
+        return reply.status(400).send({
+          error: 'vaultPath must resolve to the configured Second Brain vault root.'
+        });
+      }
+    }
+
+    const targetVaultPath = vaultPath && vaultPath.trim() ? vaultPath.trim() : !content ? findVaultPath() : undefined;
 
     if (targetVaultPath) {
       try {

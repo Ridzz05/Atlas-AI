@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'openrouter', 'groq', 'ollama', 'deepseek']);
+const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'openrouter', 'groq', 'ollama', 'deepseek', 'zrouter']);
 const ResearchProviderSchema = z.enum(['none', 'brave', 'chromium']);
 const EmptyStringAsUndefined = z.preprocess(value => (typeof value === 'string' && value.trim() === '' ? undefined : value), z.unknown());
 const StrictBooleanFromEnvSchema = z.preprocess(value => {

@@ -28,9 +28,9 @@ class FakeEventSource {
 }
 
 describe('@atlas/dashboard Integration Tests', () => {
-  it('loads the core agent roster with all 6 specialist definitions', () => {
+  it('loads the core agent roster with all 9 executive and specialist definitions', () => {
     const agents = defaultAgentRegistry.list();
-    expect(agents.length).toBe(6);
+    expect(agents.length).toBe(9);
 
     const ids = agents.map(a => a.id);
     expect(ids).toContain('chief');
@@ -39,6 +39,9 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(ids).toContain('layla');
     expect(ids).toContain('hermes');
     expect(ids).toContain('argus');
+    expect(ids).toContain('ceo');
+    expect(ids).toContain('cto');
+    expect(ids).toContain('cfo');
   });
 
   it('keeps Node-only shared modules out of the browser entrypoint', () => {
@@ -237,6 +240,29 @@ describe('@atlas/dashboard Integration Tests', () => {
     expect(dashboardProxyIndex).toBeGreaterThanOrEqual(0);
     expect(directApiIndex).toBeGreaterThan(dashboardProxyIndex);
     expect(caddy.slice(dashboardProxyIndex, directApiIndex)).toContain('reverse_proxy dashboard:3000');
+  });
+
+  it('gates the whole Caddy site behind basic auth while leaving health checks public', () => {
+    // The dashboard proxy injects the real API bearer token for every forwarded request, so
+    // an unauthenticated dashboard is a fully privileged operator console. Caddy must demand
+    // the operator credential, and /health + /ready must stay open or the container
+    // healthchecks fail.
+    const caddy = readFileSync(resolve(process.cwd(), '../../Caddyfile'), 'utf8');
+
+    expect(caddy).toContain('basic_auth {');
+    expect(caddy).toContain('{$ATLAS_BASIC_AUTH_USER}');
+    expect(caddy).toContain('{$ATLAS_BASIC_AUTH_HASH}');
+
+    const basicAuthIndex = caddy.indexOf('basic_auth {');
+    const dashboardProxyIndex = caddy.indexOf('handle /api/atlas/*');
+    const healthIndex = caddy.indexOf('handle /health');
+    const readyIndex = caddy.indexOf('handle /ready');
+
+    expect(healthIndex).toBeGreaterThanOrEqual(0);
+    expect(readyIndex).toBeGreaterThanOrEqual(0);
+    expect(healthIndex).toBeLessThan(basicAuthIndex);
+    expect(readyIndex).toBeLessThan(basicAuthIndex);
+    expect(basicAuthIndex).toBeLessThan(dashboardProxyIndex);
   });
 
   it('excludes local secrets and generated data from Docker build contexts', () => {

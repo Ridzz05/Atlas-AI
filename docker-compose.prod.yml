@@ -326,6 +326,11 @@ services:
     restart: always
     environment:
       ATLAS_DOMAIN: ${ATLAS_DOMAIN:-localhost}
+      # Mandatory: the dashboard proxy injects the real API bearer token, so reaching the
+      # dashboard is equivalent to operator credentials. Generate the hash with
+      # `docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'`.
+      ATLAS_BASIC_AUTH_USER: ${ATLAS_BASIC_AUTH_USER:?Set ATLAS_BASIC_AUTH_USER for the Caddy access gate}
+      ATLAS_BASIC_AUTH_HASH: ${ATLAS_BASIC_AUTH_HASH:?Set ATLAS_BASIC_AUTH_HASH (caddy hash-password) for the Caddy access gate}
     ports:
       - '80:80'
       - '443:443'

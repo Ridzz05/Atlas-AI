@@ -7,6 +7,14 @@ import { buildServer } from './server.js';
 async function main() {
   const config = EnvConfigSchema.parse(process.env);
   const runtime = await createAtlasRuntime(config);
+  try {
+    const recovered = await runtime.runRepo.recoverStaleRuns();
+    if (recovered > 0) {
+      rootLogger.info(`Cleaned up ${recovered} stale runs/orphaned tasks on startup`);
+    }
+  } catch (err) {
+    rootLogger.warn('Failed to recover stale runs on startup', { error: String(err) });
+  }
   const server = buildServer({
     config,
     db: runtime.db,
@@ -25,6 +33,8 @@ async function main() {
     modelProviderSettingsRepo: runtime.modelProviderSettingsRepo,
     scheduledJobRepo: runtime.scheduledJobRepo,
     workflowCheckpointRepo: runtime.workflowCheckpointRepo,
+    sdlcRepo: runtime.sdlcRepo,
+    sdlcEngine: runtime.sdlcEngine,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     registry: runtime.registry,

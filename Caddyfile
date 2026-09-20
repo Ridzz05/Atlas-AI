@@ -3,26 +3,44 @@
 }
 
 # Set ATLAS_DOMAIN to the public hostname in production; localhost is suitable only for staging.
+#
+# Access control: the dashboard server proxy injects the real API bearer token for every
+# request it forwards, so reaching the dashboard is equivalent to holding operator
+# credentials. Caddy therefore gates the whole site with HTTP basic auth, and
+# ATLAS_BASIC_AUTH_USER / ATLAS_BASIC_AUTH_HASH are mandatory. /health and /ready stay public
+# so container healthchecks keep working.
+#
+# Generate the hash once with:
+#   docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'
+#
+# `route` is used to preserve the written order: Caddy's default directive order would run
+# basic_auth before the /health matcher, which would break the healthchecks.
 {$ATLAS_DOMAIN} {
-    # Dashboard browser requests use the Next.js server proxy so the API token
-    # stays server-side. Keep this more-specific matcher before /api/*.
-    handle /api/atlas/* {
-        reverse_proxy dashboard:3000
-    }
+    route {
+        handle /health {
+            reverse_proxy agent-service:4000
+        }
 
-    handle /api/* {
-        reverse_proxy agent-service:4000
-    }
+        handle /ready {
+            reverse_proxy agent-service:4000
+        }
 
-    handle /health {
-        reverse_proxy agent-service:4000
-    }
+        basic_auth {
+            {$ATLAS_BASIC_AUTH_USER} {$ATLAS_BASIC_AUTH_HASH}
+        }
 
-    handle /ready {
-        reverse_proxy agent-service:4000
-    }
+        # Dashboard browser requests use the Next.js server proxy so the API token
+        # stays server-side. Keep this more-specific matcher before /api/*.
+        handle /api/atlas/* {
+            reverse_proxy dashboard:3000
+        }
 
-    handle {
-        reverse_proxy dashboard:3000
+        handle /api/* {
+            reverse_proxy agent-service:4000
+        }
+
+        handle {
+            reverse_proxy dashboard:3000
+        }
     }
 }

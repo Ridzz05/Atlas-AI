@@ -17,6 +17,7 @@ async function main() {
     runRepo: runtime.runRepo,
     budgetRepo: runtime.budgetRepo,
     approvalRepo: runtime.approvalRepo,
+    sdlcRepo: runtime.sdlcRepo,
     stateRepo: runtime.telegramStateRepo,
     registry: runtime.registry,
     taskQueue: runtime.taskQueue

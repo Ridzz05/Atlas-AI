@@ -110,7 +110,8 @@ RULES:
 
       if (this.options.messageRepo) {
         const findingsList = findings.length > 0 ? findings.map(f => `• ${f}`).join('\n') : 'Semua komponen memenuhi standar kualifikasi.';
-        const recommendationsList = recommendations.length > 0 ? recommendations.map(r => `• ${r}`).join('\n') : 'Tidak ada catatan koreksi.';
+        const recommendationsList =
+          recommendations.length > 0 ? recommendations.map(r => `• ${r}`).join('\n') : 'Tidak ada catatan koreksi.';
         const qaDialogue = `[Argus ➔ Chief]: Audit Kualitas & Gerbang Risiko Selesai.\n\nVerdict: ${verdict}\nStatus: ${passed ? 'PASSED ✅' : 'REJECTED/BLOCKED ❌'}\n\nTemuan:\n${findingsList}\n\nRekomendasi:\n${recommendationsList}`;
 
         await this.options.messageRepo.create({

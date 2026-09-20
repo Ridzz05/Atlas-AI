@@ -40,7 +40,9 @@ import {
   ToolGatewayExecutor,
   ScheduledJobScheduler,
   WorkflowAutomationService,
-  AutomationEngine
+  AutomationEngine,
+  SDLCEngine,
+  phaseOutcomeFromTaskStatus
 } from '@atlas/orchestration';
 import { ScheduledJobRepository } from '@atlas/database';
 
@@ -63,6 +65,7 @@ export interface WorkerRunnerOptions {
   budgetRepo?: BudgetRepository;
   scheduledJobRepo?: ScheduledJobRepository;
   workflowCheckpointRepo?: WorkflowCheckpointRepository;
+  sdlcEngine?: SDLCEngine;
   researchProvider?: ResearchProvider;
   workerId?: string;
   leaseSeconds?: number;
@@ -238,8 +241,7 @@ export class AgentWorkerRunner {
     // --- Full AI Automation: Durable Workflow Resume (scheduled / waiting_external_event / paused) ---
     const workflowEnabled = (this.options.config as any).WORKFLOW_AUTOMATION_ENABLED ?? true;
     const workflowCheckpointRepo =
-      this.options.workflowCheckpointRepo ||
-      (this.options.db ? new WorkflowCheckpointRepository(this.options.db) : undefined);
+      this.options.workflowCheckpointRepo || (this.options.db ? new WorkflowCheckpointRepository(this.options.db) : undefined);
     if (workflowCheckpointRepo && this.options.taskRepo && workflowEnabled) {
       this.workflowAutomation = new WorkflowAutomationService({
         checkpointRepo: workflowCheckpointRepo,
@@ -291,10 +293,23 @@ export class AgentWorkerRunner {
 
       rootLogger.info(`Worker processing job for task ${job.task.id} (Agent: ${job.agent.id}, Role: ${job.agent.role})`);
 
+      // At-most-once precondition. BullMQ retries a job up to three times, and every attempt
+      // mints a fresh runId when the job carries none, so the lease cannot deduplicate two
+      // attempts of the same task. Without this check a retry re-ran the whole task: duplicate
+      // provider spend, duplicate artifact writes, duplicate tool side effects.
+      const precheck = await this.checkTaskRunnable(job.task.id);
+      if (!precheck.runnable) {
+        rootLogger.warn(`Skipping job for task ${job.task.id}: ${precheck.reason}`, {
+          taskId: job.task.id
+        });
+        return { status: 'skipped', reason: precheck.reason };
+      }
+
+      let result: unknown;
       if (job.agent.role === 'orchestrator') {
-        return this.delegator.executePlan(job.task, undefined, job.approvalResume);
+        result = await this.delegator.executePlan(job.task, undefined, job.approvalResume);
       } else {
-        return this.runner.run({
+        result = await this.runner.run({
           task: job.task,
           agent: job.agent,
           initialPrompt: job.prompt,
@@ -302,6 +317,9 @@ export class AgentWorkerRunner {
           approvalToken: job.approvalResume?.token
         });
       }
+
+      await this.reportPhaseResult(job.task.id);
+      return result;
     });
 
     rootLogger.info('ATLAS Agent Worker started', {
@@ -323,6 +341,65 @@ export class AgentWorkerRunner {
         });
       }
     }, 30000);
+  }
+
+  /**
+   * May this job run right now?
+   *
+   * At handler entry a task may be `queued` (a fresh intake or a recovered task) or
+   * `approval_pending` (an approved run resuming). Anything else means the work is already in
+   * flight or already finished, and re-running it would duplicate provider spend, artifacts
+   * and tool side effects.
+   *
+   * Returns runnable when the repository cannot answer (no `findById`, or no task row): this
+   * is a precondition, not a substitute for the repository being present.
+   */
+  private async checkTaskRunnable(taskId: string): Promise<{ runnable: boolean; reason?: string }> {
+    const taskRepo = this.options.taskRepo;
+    if (!taskRepo || typeof (taskRepo as any).findById !== 'function') return { runnable: true };
+
+    const task = await taskRepo.findById(taskId);
+    if (!task) return { runnable: false, reason: 'task_not_found' };
+
+    switch (task.status) {
+      case 'queued':
+        return { runnable: true };
+      case 'approval_pending':
+        return { runnable: true };
+      default:
+        return { runnable: false, reason: `task_already_${task.status}` };
+    }
+  }
+
+  /**
+   * Tells the SDLC coordinator that a phase task finished, so the initiative advances (or
+   * pauses for human review) as a side effect of real task execution rather than from an
+   * unawaited promise in the API process.
+   *
+   * The task row is the source of truth: the runner or delegator has just written its
+   * terminal status and result there, so the outcome and the agent's output are read back
+   * instead of being inferred from a return value.
+   */
+  private async reportPhaseResult(taskId: string): Promise<void> {
+    const sdlcEngine = this.options.sdlcEngine;
+    const taskRepo = this.options.taskRepo;
+    if (!sdlcEngine || !taskRepo) return;
+
+    try {
+      const task = await taskRepo.findById(taskId);
+      if (!task) return;
+
+      const outcome = phaseOutcomeFromTaskStatus(task.status);
+      if (!outcome) return;
+
+      const result = (task.result || {}) as Record<string, unknown>;
+      const output = String(result.summary ?? result.synthesis ?? '');
+
+      await sdlcEngine.recordPhaseResult(taskId, { outcome, output });
+    } catch (err) {
+      // Never let SDLC bookkeeping fail the task that just ran successfully.
+      rootLogger.error(`Failed to report SDLC phase result for task ${taskId}`, { error: String(err) });
+    }
   }
 
   public async stop(): Promise<void> {
@@ -458,10 +535,46 @@ export class AgentWorkerRunner {
     this.queueRecoveryInFlight = true;
     try {
       await this.recoverQueuedTasks();
+      await this.recoverStaleWork();
+      await this.recoverStaleBudgetReservations();
     } catch (error) {
       rootLogger.error('Queued task recovery failed; will retry on the next interval', { error: String(error) });
     } finally {
       this.queueRecoveryInFlight = false;
+    }
+  }
+
+  /**
+   * Re-run the stale-run and orphaned-task sweeps on the recovery interval.
+   *
+   * Both used to run only at worker boot, so work abandoned by a worker that died mid-run
+   * stayed `running` until the next restart — which is how tasks ended up stuck permanently.
+   */
+  private async recoverStaleWork(): Promise<void> {
+    const runRepo = this.options.runRepo;
+    if (!runRepo || typeof (runRepo as any).recoverStaleRuns !== 'function') return;
+
+    const recovered = await runRepo.recoverStaleRuns();
+    if (recovered > 0) {
+      rootLogger.warn('Recovered stale runs and orphaned tasks', { recovered });
+    }
+  }
+
+  /**
+   * Release budget reservations abandoned by a run that died between reserve and settle.
+   *
+   * `recoverStaleReservations` used to run only at runtime bootstrap. A worker killed after
+   * reserving left `global_daily.reserved_usd` inflated, and because nothing swept it the
+   * global daily cap could refuse new runs until the process restarted more than 15 minutes
+   * later. It now rides the same recovery interval as the queued-task sweep.
+   */
+  private async recoverStaleBudgetReservations(): Promise<void> {
+    const budgetRepo = this.options.budgetRepo;
+    if (!budgetRepo || typeof budgetRepo.recoverStaleReservations !== 'function') return;
+
+    const released = await budgetRepo.recoverStaleReservations();
+    if (released > 0) {
+      rootLogger.warn('Released stale budget reservations', { count: released });
     }
   }
 }

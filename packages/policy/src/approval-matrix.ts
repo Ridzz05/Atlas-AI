@@ -56,6 +56,39 @@ export class ApprovalMatrix {
     'system.deploy'
   ]);
 
+  /**
+   * Internal read/analysis actions that never mutate external, production, or canonical
+   * state, and therefore execute without human approval.
+   *
+   * This set is the SINGLE OWNER of the "no approval needed" decision. It exists because
+   * the decision used to have two owners: every tool definition declared
+   * `requiresApproval: false` and `ToolRegistry.registerLegacy` copied that into a manifest
+   * with `approval: 'auto'`, which the registry then used to override this matrix. The
+   * result was that a tool author could opt their own action out of approval — including
+   * actions on HUMAN_APPROVAL_REQUIRED_ACTIONS. The registry now only lets a manifest
+   * escalate, so any action not listed here and not covered by a safe prefix falls through
+   * to the fail-closed default below and demands human approval.
+   */
+  private static readonly NO_APPROVAL_ACTIONS = new Set([
+    'web.search',
+    'web.fetch_safe',
+    'company.lookup',
+    'lead.enrich',
+    'lead.score',
+    'policy.verify',
+    'memory.search',
+    'memory.get',
+    'memory.propose_write',
+    'artifacts.read',
+    'artifacts.write',
+    'communication.create_draft',
+    'second_brain.search',
+    'second_brain.read_note',
+    'second_brain.list_notes',
+    'second_brain.query',
+    'second_brain.sync_vault'
+  ]);
+
   private static readonly KNOWN_ACTIONS = new Set<string>();
 
   public static evaluate(action: string, options?: { externalWritesEnabled?: boolean; knownActions?: ReadonlySet<string> }): ActionPolicy {
@@ -83,6 +116,14 @@ export class ApprovalMatrix {
         blocked: false,
         riskLevel: 'high',
         reason: `Action '${action}' modifies external or production state and requires human approval.`
+      };
+    }
+
+    if (this.NO_APPROVAL_ACTIONS.has(action)) {
+      return {
+        requiresApproval: false,
+        blocked: false,
+        riskLevel: 'read'
       };
     }
 
@@ -122,6 +163,16 @@ export class ApprovalMatrix {
 
   public static registerKnownAction(action: string): void {
     this.KNOWN_ACTIONS.add(action);
+  }
+
+  /**
+   * Registers an action as internal-read at the policy layer, so it executes without human
+   * approval. This is the ONLY supported way to grant that, and it lives on the matrix
+   * precisely so the decision has one owner. Tool definitions and tool manifests must never
+   * be able to do this — see the escalate-only rule in ToolRegistry.execute.
+   */
+  public static registerSafeAction(action: string): void {
+    this.NO_APPROVAL_ACTIONS.add(action);
   }
 
   public static getKnownActions(): ReadonlySet<string> {

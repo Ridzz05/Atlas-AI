@@ -59,6 +59,7 @@ export const CreateTaskInputSchema = z.object({
   goal: z.string().min(1),
   assignedAgent: z.string().default('chief'),
   parentId: z.string().uuid().optional(),
+  depth: z.number().int().min(0).max(2).optional(),
   priority: TaskPrioritySchema.default('normal'),
   context: z.record(z.unknown()).default({})
 });

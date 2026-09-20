@@ -1,5 +1,8 @@
 import { AgentDefinition, AgentDefinitionSchema } from '@atlas/shared';
 import { CHIEF_AGENT } from './definitions/chief.js';
+import { CEO_AGENT } from './definitions/ceo.js';
+import { CFO_AGENT } from './definitions/cfo.js';
+import { CTO_AGENT } from './definitions/cto.js';
 import { NED_AGENT } from './definitions/ned.js';
 import { LAYLA_AGENT } from './definitions/layla.js';
 import { HERMES_AGENT } from './definitions/hermes.js';
@@ -10,6 +13,9 @@ export class AgentRegistry {
   private agents = new Map<string, AgentDefinition>();
 
   constructor() {
+    this.register(CEO_AGENT);
+    this.register(CFO_AGENT);
+    this.register(CTO_AGENT);
     this.register(CHIEF_AGENT);
     this.register(NED_AGENT);
     this.register(LUNA_AGENT);

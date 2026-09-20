@@ -7,6 +7,7 @@ import {
   DatabaseClient,
   MessageRepository,
   RunRepository,
+  SDLCRepository,
   TaskRepository,
   TelegramStateRepository
 } from '@atlas/database';
@@ -110,6 +111,7 @@ export interface AtlasTelegramBotOptions {
   runRepo?: RunRepository;
   budgetRepo?: BudgetRepository;
   approvalRepo?: ApprovalRepository;
+  sdlcRepo?: SDLCRepository;
   stateRepo?: TelegramStateRepository;
   registry?: AgentRegistry;
   taskQueue?: TaskQueue;
@@ -139,6 +141,7 @@ export class AtlasTelegramBot {
       runRepo: options.runRepo,
       budgetRepo: options.budgetRepo,
       approvalRepo: options.approvalRepo,
+      sdlcRepo: options.sdlcRepo,
       registry: options.registry || defaultAgentRegistry,
       taskQueue: options.taskQueue,
       runner: options.runner,

@@ -26,6 +26,7 @@ import {
 
 const NAV_ITEMS = [
   { name: 'Command Center', href: '/', icon: CiGrid41 },
+  { name: 'Executive Board', href: '/board', icon: CiPlay1, badge: 'SDLC' },
   { name: 'Tasks', href: '/tasks', icon: CiSquareCheck },
   { name: 'Communications', href: '/communications', icon: CiChat1 },
   { name: 'Agent Fleet', href: '/agents', icon: CiUser },

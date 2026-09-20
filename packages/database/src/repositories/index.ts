@@ -13,3 +13,4 @@ export * from './model-provider.repository.js';
 export * from './scheduled-job.repository.js';
 export * from './idempotency.repository.js';
 export * from './workflow-checkpoint.repository.js';
+export * from './sdlc.repository.js';

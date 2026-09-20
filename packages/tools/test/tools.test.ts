@@ -20,13 +20,14 @@ import {
   createMemoryTools,
   BraveResearchProvider
 } from '../src/index.js';
-import { TokenVerifier } from '@atlas/policy';
+import { ApprovalMatrix, TokenVerifier } from '@atlas/policy';
 import { InMemoryMemoryStore, MemoryRetriever, MemoryProposalService, MemoryTools } from '@atlas/memory';
 
 const completeLeadEvidence = Object.fromEntries(LEAD_DIMENSIONS.map(dimension => [dimension, `${dimension} verified`]));
 
 describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   it('rejects malformed tool output before returning it to orchestration', async () => {
+    ApprovalMatrix.registerSafeAction('test.malformed_output');
     const registry = new ToolRegistry();
     registry.registerLegacy({
       name: 'test.malformed_output',
@@ -45,6 +46,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'test.malformed_output',
       {},
       {
+        allowedTools: ['test.malformed_output'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'argus'
@@ -56,6 +58,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
   });
 
   it('aborts a running tool when the gateway timeout expires', async () => {
+    ApprovalMatrix.registerSafeAction('test.timeout_abort');
     const registry = new ToolRegistry();
     let aborted = false;
     registry.registerLegacy({
@@ -84,6 +87,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'test.timeout_abort',
       {},
       {
+        allowedTools: ['test.timeout_abort'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'ned'
@@ -104,6 +108,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'web.search',
       { query: 'gyms in Palembang' },
       {
+        allowedTools: ['web.search'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'ned'
@@ -119,6 +124,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'company.lookup',
       { companyName: 'Unknown Gym' },
       {
+        allowedTools: ['company.lookup'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'ned'
@@ -219,12 +225,24 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const search = await registry.execute(
       'web.search',
       { query: 'gym Palembang' },
-      { taskId: 'task-1', runId: 'run-1', agentId: 'ned', researchProvider: provider }
+      {
+        allowedTools: ['web.search'],
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        researchProvider: provider
+      }
     );
     const fetch = await registry.execute(
       'web.fetch_safe',
       { url: 'https://fitness.example.com/palembang' },
-      { taskId: 'task-1', runId: 'run-1', agentId: 'ned', researchProvider: provider }
+      {
+        allowedTools: ['web.fetch_safe'],
+        taskId: 'task-1',
+        runId: 'run-1',
+        agentId: 'ned',
+        researchProvider: provider
+      }
     );
 
     expect(search.success).toBe(true);
@@ -476,6 +494,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'web.search',
       { query: 'gyms in Palembang' },
       {
+        allowedTools: ['web.search'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'ned',
@@ -513,6 +532,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'web.search',
       { query: 'gyms in Palembang' },
       {
+        allowedTools: ['web.search'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'ned',
@@ -536,6 +556,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       'company.lookup',
       { companyName: 'Gym result' },
       {
+        allowedTools: ['company.lookup'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'ned',
@@ -567,6 +588,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         content: 'Hello Gym owner'
       },
       {
+        allowedTools: ['communication.send_approved'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'hermes',
@@ -592,6 +614,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     let sendCount = 0;
 
     const sendRes = await registry.execute('communication.send_approved', payload, {
+      allowedTools: ['communication.send_approved'],
       taskId: 'task-1',
       runId: 'run-1',
       agentId: 'hermes',
@@ -612,6 +635,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect((sendRes.output as any).messageId).toBe('provider-message-1');
 
     const replayRes = await registry.execute('communication.send_approved', payload, {
+      allowedTools: ['communication.send_approved'],
       taskId: 'task-1',
       runId: 'run-1',
       agentId: 'hermes',
@@ -649,6 +673,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         content: 'Tampered copy'
       },
       {
+        allowedTools: ['communication.send_approved'],
         taskId: 'task-1',
         runId: 'run-1',
         agentId: 'hermes',
@@ -679,6 +704,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     const approvalToken = TokenVerifier.generateToken(randomUUID(), 'communication.send_approved', payload, secret);
 
     const sendRes = await registry.execute('communication.send_approved', payload, {
+      allowedTools: ['communication.send_approved'],
       taskId: 'task-1',
       runId: 'run-1',
       agentId: 'hermes',
@@ -727,6 +753,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       taskId: 'task-1',
       runId: 'run-1',
       agentId: 'hermes',
+      allowedTools: ['communication.send_approved'],
       externalWritesEnabled: true,
       approvalToken,
       approvalSecretKey: secret,
@@ -737,6 +764,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       taskId: 'task-1',
       runId: 'run-1',
       agentId: 'hermes',
+      allowedTools: ['communication.send_approved'],
       externalWritesEnabled: true,
       approvalToken,
       approvalSecretKey: secret,
@@ -766,6 +794,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
         content: 'Approval required'
       },
       {
+        allowedTools: ['communication.send_approved'],
         taskId: '123e4567-e89b-12d3-a456-426614174000',
         runId: '123e4567-e89b-12d3-a456-426614174001',
         agentId: 'hermes',
@@ -1131,6 +1160,44 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
     expect(knownActions.has('integration.legacy_tool')).toBe(true);
   });
 
+  it('does not let a tool manifest lower an ApprovalMatrix human-approval requirement', async () => {
+    const { ApprovalMatrix } = await import('@atlas/policy');
+    expect(ApprovalMatrix.evaluate('memory.delete_canonical').requiresApproval).toBe(true);
+
+    const registry = new ToolRegistry();
+    registry.register({
+      name: 'memory.delete_canonical',
+      description: 'Deletes a canonical memory item',
+      inputSchema: z.object({ id: z.string() }),
+      outputSchema: z.object({ ok: z.boolean() }),
+      riskLevel: 'read',
+      requiresApproval: false,
+      timeoutMs: 1000,
+      manifest: {
+        name: 'memory.delete_canonical',
+        version: 1,
+        capability: 'memory',
+        description: 'Deletes a canonical memory item',
+        sideEffects: ['database_write'],
+        riskLevel: 'read',
+        approval: 'auto'
+      },
+      async execute() {
+        return { ok: true };
+      }
+    } as any);
+
+    const result = await registry.execute('memory.delete_canonical', { id: 'memory-1' }, {
+      agentId: 'chief',
+      taskId: 'task-1',
+      runId: 'run-1',
+      allowedTools: ['memory.delete_canonical']
+    } as any);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('approval');
+  });
+
   it('publishes tool.requested, tool.started, and tool.completed events when an eventBus is provided', async () => {
     const events: Array<{ type: string; payload: any }> = [];
     const eventBus = {
@@ -1139,6 +1206,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       })
     };
     const registry = new ToolRegistry({ eventBus });
+    ApprovalMatrix.registerSafeAction('integration.event_traced');
     registry.register({
       name: 'integration.event_traced',
       description: 'Tool that emits events',
@@ -1166,7 +1234,16 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       }
     });
 
-    const result = await registry.execute('integration.event_traced', {}, { taskId: 't-1', runId: 'r-1', agentId: 'argus' });
+    const result = await registry.execute(
+      'integration.event_traced',
+      {},
+      {
+        allowedTools: ['integration.event_traced'],
+        taskId: 't-1',
+        runId: 'r-1',
+        agentId: 'argus'
+      }
+    );
 
     expect(result.success).toBe(true);
     const types = events.map(e => e.type);
@@ -1183,6 +1260,7 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       })
     };
     const registry = new ToolRegistry({ eventBus });
+    ApprovalMatrix.registerSafeAction('integration.event_failing');
     registry.register({
       name: 'integration.event_failing',
       description: 'Tool that fails',
@@ -1210,12 +1288,64 @@ describe('@atlas/tools Tool Gateway & Rubric Tests', () => {
       }
     });
 
-    const result = await registry.execute('integration.event_failing', {}, { taskId: 't-1', runId: 'r-1', agentId: 'argus' });
+    const result = await registry.execute(
+      'integration.event_failing',
+      {},
+      {
+        allowedTools: ['integration.event_failing'],
+        taskId: 't-1',
+        runId: 'r-1',
+        agentId: 'argus'
+      }
+    );
 
     expect(result.success).toBe(false);
     const types = events.map(e => e.type);
     expect(types).toContain('tool.requested');
     expect(types).toContain('tool.started');
     expect(types).toContain('tool.failed');
+  });
+
+  it('denies a tool the caller does not have on its allowlist, including an empty one', async () => {
+    const registry = new ToolRegistry();
+    registry.registerLegacy(WebSearchTool);
+
+    const notListed = await registry.execute(
+      'web.search',
+      { query: 'gyms' },
+      {
+        taskId: 't-1',
+        runId: 'r-1',
+        agentId: 'hermes',
+        allowedTools: ['communication.create_draft']
+      }
+    );
+
+    expect(notListed.success).toBe(false);
+    expect(notListed.error).toContain('not permitted');
+
+    // The fail-open hole: an absent allowlist used to mean "allow everything". It now denies,
+    // because ToolContext.allowedTools is required and the gateway checks it unconditionally.
+    const missing = await registry.execute('web.search', { query: 'gyms' }, {
+      taskId: 't-1',
+      runId: 'r-1',
+      agentId: 'hermes'
+    } as any);
+
+    expect(missing.success).toBe(false);
+    expect(missing.error).toContain('not permitted');
+
+    const listed = await registry.execute(
+      'web.search',
+      { query: 'gyms' },
+      {
+        taskId: 't-1',
+        runId: 'r-1',
+        agentId: 'ned',
+        allowedTools: ['web.search']
+      }
+    );
+
+    expect(listed.success).toBe(true);
   });
 });

@@ -278,14 +278,16 @@ export default function TasksPage() {
                   </Button>
                 </Box>
 
-                <Collapse in={Boolean(expandedTaskIds[task.id])}>
-                  <Box sx={{ mt: 1.5 }}>
-                    <WorkflowLiveStream
-                      selectedTaskId={task.id}
-                      activeTaskTitle={task.title}
-                      isTaskRunning={['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)}
-                    />
-                  </Box>
+                <Collapse in={Boolean(expandedTaskIds[task.id])} unmountOnExit>
+                  {expandedTaskIds[task.id] && (
+                    <Box sx={{ mt: 1.5 }}>
+                      <WorkflowLiveStream
+                        selectedTaskId={task.id}
+                        activeTaskTitle={task.title}
+                        isTaskRunning={['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)}
+                      />
+                    </Box>
+                  )}
                 </Collapse>
               </Card>
             );

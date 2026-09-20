@@ -148,7 +148,10 @@ export class ToolRegistry {
       };
     }
 
-    if (context.allowedTools && !context.allowedTools.includes(name)) {
+    // Fail closed. `allowedTools` is required on ToolContext, so this also catches a caller
+    // that built a context outside the type system: an absent allowlist denies the tool
+    // rather than permitting everything.
+    if (!Array.isArray(context.allowedTools) || !context.allowedTools.includes(name)) {
       return {
         success: false,
         error: `Tool '${name}' is not permitted for agent '${context.agentId}'.`,
@@ -181,9 +184,15 @@ export class ToolRegistry {
       };
     }
 
+    // A tool manifest may ESCALATE the policy decision (demand human approval) but may
+    // never lower it. Previously `approval: 'auto'` forced requiresApproval to false,
+    // which let a tool author opt out of the ApprovalMatrix requirement for their own
+    // action — including permanently-approval-required actions such as
+    // memory.delete_canonical. registerLegacy assigns 'auto' by default, so any new tool
+    // that forgot requiresApproval:true would have executed without approval.
     const manifestApproval = tool.manifest?.approval;
     const effectivePolicy = {
-      requiresApproval: manifestApproval === 'auto' ? false : manifestApproval === 'human' ? true : policy.requiresApproval
+      requiresApproval: policy.requiresApproval || manifestApproval === 'human'
     };
 
     let durableApprovalId: string | undefined;

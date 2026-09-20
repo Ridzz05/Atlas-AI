@@ -77,7 +77,14 @@ export class TaskDelegator {
         budgetRepo: options.budgetRepo,
         globalDailyBudgetUsd: options.globalDailyBudgetUsd,
         workerId: options.workerId,
-        leaseSeconds: options.leaseSeconds
+        leaseSeconds: options.leaseSeconds,
+        // The planner, QA gate and synthesiser are agents too. Without these two the QA gate
+        // could not call `policy.verify` (it is on Argus's allowlist) and none of the three
+        // stages could be cancelled.
+        toolExecutor: options.toolExecutor,
+        cancellationStore: options.cancellationStore,
+        approvalExecutionStore: options.approvalExecutionStore,
+        toolCallRepo: options.toolCallRepo
       });
     }
 
@@ -115,10 +122,37 @@ export class TaskDelegator {
       if (Number.isFinite(costUsd) && costUsd >= 0) totalCostUsd += costUsd;
     };
 
+    // Cancellation for a delegation graph. The worker used to call this with `undefined`, so
+    // an emergency stop or a cancel from another process left the planner, every specialist,
+    // the QA gate and the synthesiser running to completion. The graph is driven by the
+    // parent orchestrator task, which has no Run row, so the durable check is task-level.
+    const controller = new AbortController();
+    if (signal) {
+      if (signal.aborted) controller.abort(signal.reason);
+      else signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    }
+
+    const throwIfCancelled = async (): Promise<void> => {
+      if (controller.signal.aborted) {
+        throw new Error(`Delegation cancelled: ${String(controller.signal.reason || 'abort signal')}`);
+      }
+
+      const store = this.options.cancellationStore;
+      if (!store?.isCancellationRequestedForTask) return;
+
+      const cancellation = await store.isCancellationRequestedForTask(parentTask.id);
+      if (cancellation.requested) {
+        controller.abort(cancellation.reason || 'Cancellation requested by another process');
+        throw new Error(`Delegation cancelled: ${cancellation.reason || 'Cancellation requested by another process'}`);
+      }
+    };
+
+    await throwIfCancelled();
+
     // 1. Generate Structured Plan if not already attached
     let plan = parentTask.plan;
     if (!plan) {
-      plan = await this.planner.plan(parentTask, signal, addCost);
+      plan = await this.planner.plan(parentTask, controller.signal, addCost);
       if (this.options.taskRepo) {
         await this.options.taskRepo.updatePlan(parentTask.id, plan);
         await this.publishTaskState(parentTask.id, parentTask.assignedAgent, 'running');
@@ -153,9 +187,7 @@ export class TaskDelegator {
 
     // 2. Execute Dependency Graph iteratively
     while (pendingSteps.length > 0) {
-      if (signal?.aborted) {
-        throw new Error('Multi-agent execution aborted');
-      }
+      await throwIfCancelled();
 
       // Find steps whose dependencies are fully satisfied
       const readySteps = pendingSteps.filter(step => step.depends_on.every(dep => completedStepIds.has(dep)));
@@ -219,6 +251,7 @@ export class TaskDelegator {
               goal: childTask.goal,
               assignedAgent: childTask.assignedAgent,
               parentId: parentTask.id,
+              depth: childTask.depth,
               priority: childTask.priority,
               context: childTask.context
             },
@@ -247,7 +280,7 @@ export class TaskDelegator {
           task: childTask,
           agent,
           initialPrompt: prompt,
-          signal,
+          signal: controller.signal,
           runId: approvalResume?.taskId === childTask.id ? approvalResume.runId : undefined,
           approvalToken: approvalResume?.taskId === childTask.id ? approvalResume.token : undefined
         });
@@ -338,7 +371,7 @@ export class TaskDelegator {
 
     let qaResult: QAResult | undefined;
     try {
-      qaResult = await this.qaGate.evaluate(parentTask, subtaskResults, signal, addCost);
+      qaResult = await this.qaGate.evaluate(parentTask, subtaskResults, controller.signal, addCost);
       rootLogger.info(`QA Gate result for task ${parentTask.id}: ${qaResult.verdict}`);
     } catch (err) {
       rootLogger.error('QA Gate execution failed; task is blocked', { error: String(err) });
@@ -352,7 +385,7 @@ export class TaskDelegator {
 
     // 4. Chief Final Synthesis
     const finalSynthesis = qaResult.passed
-      ? await this.synthesizer.synthesize(parentTask, subtaskResults, qaResult, signal, addCost)
+      ? await this.synthesizer.synthesize(parentTask, subtaskResults, qaResult, controller.signal, addCost)
       : `Task blocked by Argus QA gate (${qaResult.verdict}). ${qaResult.findings.join(' ')}`;
 
     // 5. Update Parent Task only after a passing QA gate.

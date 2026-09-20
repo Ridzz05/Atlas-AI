@@ -16,8 +16,8 @@ export class TaskRepository {
     const taskId = id || crypto.randomUUID();
     const query = `
       INSERT INTO tasks (
-        id, parent_id, title, goal, assigned_agent, priority, context, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued')
+        id, parent_id, title, goal, assigned_agent, priority, context, status, depth
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'queued', $8)
       RETURNING *;
     `;
 
@@ -28,7 +28,8 @@ export class TaskRepository {
       input.goal,
       input.assignedAgent || 'chief',
       input.priority || 'normal',
-      JSON.stringify(input.context || {})
+      JSON.stringify(input.context || {}),
+      input.depth ?? 0
     ]);
 
     return this.mapRow(res.rows[0]);

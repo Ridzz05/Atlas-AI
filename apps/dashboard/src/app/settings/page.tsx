@@ -55,6 +55,13 @@ interface SettingsResponse {
 
 const SUPPORTED_PROVIDERS = [
   {
+    id: 'zrouter',
+    label: 'zRouter (DeepSeek v4.1 Flash / Ultra Fast & Cheap)',
+    placeholder: 'zr-...',
+    defaultModel: 'deepseek-v4.1-flash',
+    popularModels: ['deepseek-v4.1-flash', 'deepseek-v4-flash', 'deepseek-v4-pro', 'glm-5.3-flash', 'minimax-m3']
+  },
+  {
     id: 'openrouter',
     label: 'OpenRouter (Multi-Platform: Claude, GPT, Gemini, DeepSeek)',
     placeholder: 'sk-or-v1-...',
@@ -351,10 +358,7 @@ export default function SettingsPage() {
             </Box>
 
             {telegramMessage && (
-              <Alert
-                severity={telegramMessage.type}
-                sx={{ mb: 2.5, borderRadius: '10px' }}
-              >
+              <Alert severity={telegramMessage.type} sx={{ mb: 2.5, borderRadius: '10px' }}>
                 {telegramMessage.text}
               </Alert>
             )}
@@ -528,8 +532,9 @@ export default function SettingsPage() {
               </Box>
               <Typography variant="caption" sx={{ color: '#666155', display: 'block', lineHeight: 1.6 }}>
                 Sistem agent seperti <strong>ATLAS AI OS</strong> bekerja secara otonom di latar belakang (background worker) 24/7 untuk
-                menjalankan <em>tool execution</em> (Chromium search, file I/O, database). Login web OAuth konsumen (seperti login ChatGPT Plus
-                atau Claude Pro di browser) hanya berlaku untuk sesi tab browser manual dan tidak menyediakan izin API untuk agen otonom.
+                menjalankan <em>tool execution</em> (Chromium search, file I/O, database). Login web OAuth konsumen (seperti login ChatGPT
+                Plus atau Claude Pro di browser) hanya berlaku untuk sesi tab browser manual dan tidak menyediakan izin API untuk agen
+                otonom.
               </Typography>
               <Typography variant="caption" sx={{ color: '#201515', display: 'block', fontWeight: 600, mt: 0.75 }}>
                 💡 <strong>Solusi Terbaik:</strong> Cukup gunakan satu <strong>OpenRouter API Key</strong>, Anda langsung bisa menggunakan

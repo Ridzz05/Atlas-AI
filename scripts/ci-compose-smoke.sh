@@ -18,8 +18,17 @@ export ATLAS_CONTAINER_PREFIX
 : "${MODEL_BASE_URL:=http://127.0.0.1:9/v1}"
 : "${MODEL_NAME:=ci-smoke}"
 : "${ATLAS_DOMAIN:=localhost}"
+# Caddy gates the whole site with HTTP basic auth because the dashboard proxy injects the
+# real API bearer token. These CI fixtures are public values, not secrets. Assigned
+# separately because a bcrypt hash contains `$`, which must not be re-expanded.
+: "${ATLAS_BASIC_AUTH_USER:=ci-operator}"
+: "${ATLAS_BASIC_AUTH_PASSWORD:=ci-dashboard-basic-auth}"
+if [[ -z "${ATLAS_BASIC_AUTH_HASH:-}" ]]; then
+  ATLAS_BASIC_AUTH_HASH='$2b$10$.N7ued2ENxJveCUeoXijCufvA3w0bPhvs90bIpR6UBohBG53l9PMy'
+fi
 export POSTGRES_PASSWORD REDIS_PASSWORD API_AUTH_TOKEN ENCRYPTION_KEY
 export TELEGRAM_BOT_TOKEN TELEGRAM_ALLOWED_USER_IDS MODEL_PROVIDER MODEL_API_KEY MODEL_BASE_URL MODEL_NAME ATLAS_DOMAIN
+export ATLAS_BASIC_AUTH_USER ATLAS_BASIC_AUTH_HASH
 
 COMPOSE=(docker compose -f "$COMPOSE_FILE")
 CI_BACKUP_FILE=""
@@ -107,13 +116,25 @@ assert_task_recovered() {
 
 assert_dashboard_proxy() {
   local caddy_host="${ATLAS_DOMAIN}:443:127.0.0.1"
-  curl --fail --silent --show-error --insecure --max-time 10 --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/api/atlas/tasks?limit=1" >/dev/null
+  local basic_auth="${ATLAS_BASIC_AUTH_USER}:${ATLAS_BASIC_AUTH_PASSWORD}"
+
+  # The gate must reject anonymous access, and /health must stay reachable without it so
+  # container healthchecks keep working.
+  local anonymous_status
+  anonymous_status="$(curl --silent --output /dev/null --write-out '%{http_code}' --insecure --max-time 10 --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/")"
+  if [[ "$anonymous_status" != "401" ]]; then
+    echo "Caddy access gate did not reject an anonymous dashboard request (status ${anonymous_status})" >&2
+    return 1
+  fi
+  curl --fail --silent --show-error --insecure --max-time 10 --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/health" >/dev/null
+
+  curl --fail --silent --show-error --user "$basic_auth" --insecure --max-time 10 --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/api/atlas/tasks?limit=1" >/dev/null
 
   local stream_headers=""
   local stream_status=0
   stream_headers="$(mktemp)"
   set +e
-  curl --silent --insecure --max-time 5 --dump-header "$stream_headers" --output /dev/null --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/api/atlas/events/stream"
+  curl --silent --user "$basic_auth" --insecure --max-time 5 --dump-header "$stream_headers" --output /dev/null --resolve "$caddy_host" "https://${ATLAS_DOMAIN}/api/atlas/events/stream"
   stream_status=$?
   set -e
   if [[ "$stream_status" -ne 0 && "$stream_status" -ne 28 ]]; then
@@ -162,8 +183,17 @@ assert_ready agent-service http://127.0.0.1:4000/ready
 assert_ready worker http://127.0.0.1:8081/ready
 
 agent_count="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-atlas_admin}" -d "${POSTGRES_DB:-atlas_os}" -Atqc "SELECT count(*) FROM agents;" | tr -d '[:space:]')"
-if [[ "$agent_count" != "5" ]]; then
-  echo "Expected 5 seeded agents, found: $agent_count" >&2
+# The seeder upserts defaultAgentRegistry.list(), which has one entry per file in
+# packages/agents/src/definitions. Deriving the expectation from there keeps this
+# assertion from drifting every time the fleet changes (it previously hardcoded 5 while
+# the registry had 9). packages/agents/test/agents.test.ts pins the two together.
+expected_agent_count="$(find packages/agents/src/definitions -maxdepth 1 -name '*.ts' | wc -l | tr -d '[:space:]')"
+if [[ -z "$expected_agent_count" || "$expected_agent_count" == "0" ]]; then
+  echo "Could not determine the expected agent count from packages/agents/src/definitions" >&2
+  exit 1
+fi
+if [[ "$agent_count" != "$expected_agent_count" ]]; then
+  echo "Expected $expected_agent_count seeded agents, found: $agent_count" >&2
   exit 1
 fi
 
@@ -177,7 +207,7 @@ echo "==> Starting dashboard and Caddy..."
 wait_for_health dashboard
 wait_for_health caddy
 curl --fail --silent --show-error -H "Host: ${ATLAS_DOMAIN}" http://127.0.0.1/health >/dev/null
-curl --fail --silent --show-error -H "Host: ${ATLAS_DOMAIN}" http://127.0.0.1/ >/dev/null
+curl --fail --silent --show-error --user "${ATLAS_BASIC_AUTH_USER}:${ATLAS_BASIC_AUTH_PASSWORD}" -H "Host: ${ATLAS_DOMAIN}" http://127.0.0.1/ >/dev/null
 echo "==> Verifying dashboard task and SSE proxy routes..."
 assert_dashboard_proxy
 
@@ -189,8 +219,8 @@ restore_db="atlas_restore_check"
 "${COMPOSE[@]}" exec -T postgres createdb -U "${POSTGRES_USER:-atlas_admin}" "$restore_db"
 gunzip -c "$CI_BACKUP_FILE" | "${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-atlas_admin}" -d "$restore_db" -v ON_ERROR_STOP=1 >/dev/null
 restored_agent_count="$("${COMPOSE[@]}" exec -T postgres psql -U "${POSTGRES_USER:-atlas_admin}" -d "$restore_db" -Atqc "SELECT count(*) FROM agents;" | tr -d '[:space:]')"
-if [[ "$restored_agent_count" != "5" ]]; then
-  echo "Expected 5 restored agents, found: $restored_agent_count" >&2
+if [[ "$restored_agent_count" != "$expected_agent_count" ]]; then
+  echo "Expected $expected_agent_count restored agents, found: $restored_agent_count" >&2
   exit 1
 fi
 "${COMPOSE[@]}" exec -T postgres dropdb -U "${POSTGRES_USER:-atlas_admin}" "$restore_db"

@@ -1,0 +1,192 @@
+import { describe, it, expect, vi } from 'vitest';
+import { TaskDelegator } from '../src/index.js';
+import { defaultAgentRegistry } from '@atlas/agents';
+import { MockModelProvider, ModelProvider } from '@atlas/providers';
+import { InMemoryEventBus } from '@atlas/events';
+import { Task } from '@atlas/shared';
+
+/**
+ * Characterisation tests for cancellation and tool access inside the delegation graph.
+ *
+ * Two gaps:
+ *
+ * 1. A cancel requested in another process never reached the delegation graph. The worker
+ *    calls `executePlan(task, undefined, ...)`, so the signal was always undefined, and the
+ *    delegator never consulted the durable cancellation store for the parent orchestrator
+ *    task. An emergency stop therefore left the planner, every specialist, the QA gate and
+ *    the synthesiser running to completion.
+ * 2. The planner/QA/synthesis stage runner was built without a `toolExecutor`, so Argus
+ *    could not call `policy.verify` even though its allowlist grants it.
+ */
+
+const parentTask: Task = {
+  id: 'parent-task-1234-5678-90ab-cdef12345678',
+  parentId: null,
+  title: 'Cancellable campaign',
+  goal: 'Run a delegation graph that must honour a durable cancel.',
+  assignedAgent: 'chief',
+  depth: 0,
+  status: 'queued',
+  priority: 'normal',
+  context: {},
+  plan: null,
+  result: null,
+  error: null,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  completedAt: null
+};
+
+function buildProvider() {
+  return new MockModelProvider({
+    cannedResponses: [
+      {
+        content: JSON.stringify({
+          goal: 'Cancellable campaign',
+          assumptions: [],
+          questions: [],
+          steps: [{ id: 'step_1', agent: 'ned', objective: 'Collect evidence', depends_on: [] }],
+          approval_points: [],
+          estimated_cost_usd: 0.1
+        })
+      },
+      { content: 'Ned findings.' },
+      { content: JSON.stringify({ verdict: 'PASS', findings: [], recommendations: [] }) },
+      { content: 'Chief synthesis.' }
+    ]
+  });
+}
+
+describe('TaskDelegator cancellation and stage tool access', () => {
+  it('stops before running any subtask when the parent task has a durable cancel request', async () => {
+    const provider = buildProvider();
+    const runSpy = vi.spyOn(provider, 'run');
+    const cancellationStore = {
+      isCancellationRequested: vi.fn().mockResolvedValue({ requested: false }),
+      isCancellationRequestedForTask: vi.fn().mockResolvedValue({ requested: true, reason: 'emergency stop' })
+    };
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      cancellationStore: cancellationStore as any
+    });
+
+    await expect(delegator.executePlan(parentTask)).rejects.toThrow(/cancel|abort/i);
+
+    // The planner may have run (the cancel is checked before delegating), but no specialist
+    // subtask and no QA/synthesis stage may have spent tokens.
+    const prompts = runSpy.mock.calls.map(call => JSON.stringify((call[0] as any).messages));
+    expect(prompts.some(prompt => prompt.includes('Collect evidence'))).toBe(false);
+  });
+
+  it('runs normally when no cancellation is requested', async () => {
+    const provider = buildProvider();
+    const cancellationStore = {
+      isCancellationRequested: vi.fn().mockResolvedValue({ requested: false }),
+      isCancellationRequestedForTask: vi.fn().mockResolvedValue({ requested: false })
+    };
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      cancellationStore: cancellationStore as any
+    });
+
+    const result = await delegator.executePlan(parentTask);
+
+    expect(result.status).toBe('completed');
+    expect(cancellationStore.isCancellationRequestedForTask).toHaveBeenCalledWith(parentTask.id);
+  });
+
+  it('honours a signal that is already aborted', async () => {
+    const provider = buildProvider();
+    const runSpy = vi.spyOn(provider, 'run');
+    const controller = new AbortController();
+    controller.abort('stopped by operator');
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus()
+    });
+
+    await expect(delegator.executePlan(parentTask, controller.signal)).rejects.toThrow(/cancel|abort/i);
+
+    const prompts = runSpy.mock.calls.map(call => JSON.stringify((call[0] as any).messages));
+    expect(prompts.some(prompt => prompt.includes('Collect evidence'))).toBe(false);
+  });
+
+  it('gives the planner, QA and synthesis stages the same tool access as the specialists', async () => {
+    // Argus holds `policy.verify` in its allowlist; the stage runner must be able to reach
+    // the tool gateway or the QA gate can only ever judge from text. The stage runner is only
+    // built when run and budget repositories are present, which is what production passes.
+    const provider: ModelProvider = {
+      id: 'stage-tools',
+      name: 'Stage Tools Provider',
+      estimateCost: vi.fn(() => 0),
+      run: vi.fn(async (request: any) => {
+        if (request.agentId === 'argus') {
+          return {
+            content: 'Assessing.',
+            toolCalls: [{ id: 'call-1', name: 'policy.verify', arguments: { action: 'communication.send_approved' } }],
+            inputTokens: 1,
+            outputTokens: 1,
+            costUsd: 0,
+            finishReason: 'tool_calls' as const
+          };
+        }
+        return {
+          content: JSON.stringify({
+            goal: 'Stage tools',
+            assumptions: [],
+            questions: [],
+            steps: [{ id: 'step_1', agent: 'ned', objective: 'Collect evidence', depends_on: [] }],
+            approval_points: [],
+            estimated_cost_usd: 0.1
+          }),
+          toolCalls: [],
+          inputTokens: 1,
+          outputTokens: 1,
+          costUsd: 0,
+          finishReason: 'stop' as const
+        };
+      })
+    };
+
+    const runRepo = {
+      create: vi.fn(async (input: any, id?: string) => ({ id: id || crypto.randomUUID(), ...input, status: 'active' })),
+      updateStatus: vi.fn(async () => null),
+      acquireLease: vi.fn(async () => ({ id: 'run' })),
+      heartbeat: vi.fn(async () => true),
+      recordTurn: vi.fn(async () => undefined)
+    };
+    const budgetRepo = {
+      reserve: vi.fn(async () => 'reservation-1'),
+      commit: vi.fn(async () => true),
+      release: vi.fn(async () => true)
+    };
+
+    const toolExecutor = {
+      execute: vi.fn(async () => ({ success: true, output: { requiresApproval: true } })),
+      getToolDefinitions: vi.fn(() => [{ name: 'policy.verify', description: 'verify', parameters: { type: 'object', properties: {} } }])
+    };
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      runRepo: runRepo as any,
+      budgetRepo: budgetRepo as any,
+      globalDailyBudgetUsd: 5,
+      toolExecutor: toolExecutor as any
+    });
+
+    await delegator.executePlan(parentTask);
+
+    expect(toolExecutor.execute).toHaveBeenCalled();
+    expect(toolExecutor.execute.mock.calls[0][0]).toMatchObject({ name: 'policy.verify' });
+  });
+});

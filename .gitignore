@@ -43,6 +43,7 @@ coverage/
 
 # Kilo / agent scaffolding (local only, not tracked)
 .kilo/
+.hermes/
 
 # Data & Storage
 /data/

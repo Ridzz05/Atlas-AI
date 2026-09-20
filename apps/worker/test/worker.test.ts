@@ -381,4 +381,41 @@ describe('worker lifecycle and task execution tests', () => {
     expect(provider.run).toHaveBeenCalledTimes(2);
     expect(provider.run.mock.calls[1]?.[0].messages.at(-1)?.content).toContain('qualified');
   });
+
+  it('sweeps stale budget reservations on the recovery interval, not only at boot', async () => {
+    vi.useFakeTimers();
+    try {
+      const taskRepo = { list: vi.fn().mockResolvedValue([]) } as any;
+      const budgetRepo = { recoverStaleReservations: vi.fn().mockResolvedValue(2) } as any;
+      const runRepo = { recoverStaleRuns: vi.fn().mockResolvedValue(1) } as any;
+      const taskQueue = {
+        enqueue: vi.fn().mockResolvedValue('job-1'),
+        process: vi.fn(),
+        close: vi.fn().mockResolvedValue(undefined)
+      } as any;
+
+      const runner = new AgentWorkerRunner({ config, taskRepo, budgetRepo, runRepo, taskQueue });
+      await runner.start();
+
+      // `createAtlasRuntime` sweeps once at bootstrap; the worker must also sweep on its
+      // recovery interval, or a reservation abandoned by a worker that died between reserve
+      // and settle keeps the daily cap inflated until the next process restart.
+      const bootSweeps = runRepo.recoverStaleRuns.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(0);
+      expect(budgetRepo.recoverStaleReservations).not.toHaveBeenCalled();
+
+      const intervalMs = (config.QUEUE_RECOVERY_INTERVAL_SECONDS ?? 30) * 1000;
+      await vi.advanceTimersByTimeAsync(intervalMs);
+      expect(budgetRepo.recoverStaleReservations).toHaveBeenCalledTimes(1);
+      // The stale-run / orphaned-task sweep also runs on the interval, not only at boot.
+      expect(runRepo.recoverStaleRuns.mock.calls.length).toBe(bootSweeps + 1);
+
+      await vi.advanceTimersByTimeAsync(intervalMs);
+      expect(budgetRepo.recoverStaleReservations).toHaveBeenCalledTimes(2);
+
+      await runner.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

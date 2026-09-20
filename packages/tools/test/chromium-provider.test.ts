@@ -16,11 +16,7 @@ describe('ChromiumResearchProvider', () => {
 
   it('rejects unsafe local URLs on fetchSafe', async () => {
     const provider = new ChromiumResearchProvider();
-    await expect(provider.fetchSafe('http://127.0.0.1:8080/secret')).rejects.toThrow(
-      /is not a permitted public web URL/
-    );
-    await expect(provider.fetchSafe('http://localhost:3000')).rejects.toThrow(
-      /is not a permitted public web URL/
-    );
+    await expect(provider.fetchSafe('http://127.0.0.1:8080/secret')).rejects.toThrow(/is not a permitted public web URL/);
+    await expect(provider.fetchSafe('http://localhost:3000')).rejects.toThrow(/is not a permitted public web URL/);
   });
 });

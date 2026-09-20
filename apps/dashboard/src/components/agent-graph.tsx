@@ -180,7 +180,9 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
     const y = ((e.clientY - rect.top) / rect.height) * svgHeight;
 
     setNodes(prev =>
-      prev.map(n => (n.id === draggingId ? { ...n, x: Math.max(35, Math.min(svgWidth - 35, x)), y: Math.max(35, Math.min(svgHeight - 35, y)) } : n))
+      prev.map(n =>
+        n.id === draggingId ? { ...n, x: Math.max(35, Math.min(svgWidth - 35, x)), y: Math.max(35, Math.min(svgHeight - 35, y)) } : n
+      )
     );
   };
 
@@ -497,13 +499,7 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
                       y1={sNode.y}
                       x2={tNode.x}
                       y2={tNode.y}
-                      stroke={
-                        isHighlight
-                          ? '#ff4f00'
-                          : isWorking
-                            ? '#f97316'
-                            : 'rgba(255, 255, 255, 0.12)'
-                      }
+                      stroke={isHighlight ? '#ff4f00' : isWorking ? '#f97316' : 'rgba(255, 255, 255, 0.12)'}
                       strokeWidth={isHighlight ? 2.5 : isWorking ? 2 : 1.2}
                       strokeDasharray={isWorking ? '4 4' : 'none'}
                       style={{
@@ -514,20 +510,8 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
                     {/* Animated moving pulse circle along working links */}
                     {isWorking && (
                       <circle r={3} fill="#ff4f00">
-                        <animate
-                          attributeName="cx"
-                          from={sNode.x}
-                          to={tNode.x}
-                          dur="2.2s"
-                          repeatCount="indefinite"
-                        />
-                        <animate
-                          attributeName="cy"
-                          from={sNode.y}
-                          to={tNode.y}
-                          dur="2.2s"
-                          repeatCount="indefinite"
-                        />
+                        <animate attributeName="cx" from={sNode.x} to={tNode.x} dur="2.2s" repeatCount="indefinite" />
+                        <animate attributeName="cy" from={sNode.y} to={tNode.y} dur="2.2s" repeatCount="indefinite" />
                       </circle>
                     )}
                   </g>
@@ -538,7 +522,12 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
               {nodes.map(node => {
                 const isHovered = hoveredNodeId === node.id;
                 const isSelected = selectedNodeId === node.id;
-                const isDimmed = (hoveredNodeId || selectedNodeId) && !isHovered && !isSelected && !activeLinks.has(`${node.id}->${hoveredNodeId || selectedNodeId}`) && !activeLinks.has(`${hoveredNodeId || selectedNodeId}->${node.id}`);
+                const isDimmed =
+                  (hoveredNodeId || selectedNodeId) &&
+                  !isHovered &&
+                  !isSelected &&
+                  !activeLinks.has(`${node.id}->${hoveredNodeId || selectedNodeId}`) &&
+                  !activeLinks.has(`${hoveredNodeId || selectedNodeId}->${node.id}`);
                 const isWorking = node.status === 'WORKING';
 
                 return (
@@ -556,25 +545,14 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
                   >
                     {/* Breathing Outer Ring when WORKING */}
                     {isWorking && (
-                      <circle
-                        r={node.radius + 8}
-                        fill="none"
-                        stroke={node.color}
-                        strokeWidth={2}
-                        opacity={0.6}
-                      >
+                      <circle r={node.radius + 8} fill="none" stroke={node.color} strokeWidth={2} opacity={0.6}>
                         <animate
                           attributeName="r"
                           values={`${node.radius + 4}; ${node.radius + 14}; ${node.radius + 4}`}
                           dur="1.8s"
                           repeatCount="indefinite"
                         />
-                        <animate
-                          attributeName="opacity"
-                          values="0.8; 0.1; 0.8"
-                          dur="1.8s"
-                          repeatCount="indefinite"
-                        />
+                        <animate attributeName="opacity" values="0.8; 0.1; 0.8" dur="1.8s" repeatCount="indefinite" />
                       </circle>
                     )}
 
@@ -589,17 +567,10 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
                     />
 
                     {/* Inner Core Circle */}
-                    <circle
-                      r={node.radius - 6}
-                      fill="#22201e"
-                      stroke={node.color}
-                      strokeWidth={1.5}
-                    />
+                    <circle r={node.radius - 6} fill="#22201e" stroke={node.color} strokeWidth={1.5} />
 
                     {/* Icon container */}
-                    <g transform="translate(-8, -8)">
-                      {getAgentIcon(node.id)}
-                    </g>
+                    <g transform="translate(-8, -8)">{getAgentIcon(node.id)}</g>
 
                     {/* Node Title Text (Obsidian style label underneath) */}
                     <text
@@ -818,7 +789,9 @@ export function AgentGraph({ agents = DEFAULT_AGENTS }: AgentGraphProps) {
 
                   <Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.05)' }} />
 
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem', color: '#8c827a' }}>
+                  <Box
+                    sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.7rem', color: '#8c827a' }}
+                  >
                     <span>Depth: 1</span>
                     <span>Max Turns: 10</span>
                   </Box>

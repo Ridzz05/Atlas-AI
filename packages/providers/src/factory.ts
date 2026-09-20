@@ -51,6 +51,16 @@ export function createModelProvider(config: ProviderConfig = {}): ModelProvider 
         baseUrl: config.baseUrl || 'https://api.deepseek.com/v1',
         defaultModel: config.model
       });
+    case 'zrouter':
+      return new OpenAICompatibleProvider({
+        providerId: 'zrouter',
+        providerName: 'zRouter Provider',
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || process.env.MODEL_BASE_URL || 'https://api.zrouter.dev/v1',
+        defaultModel: config.model || process.env.MODEL_NAME || 'deepseek-v4.1-flash',
+        inputCostPerMillion: 0.0075,
+        outputCostPerMillion: 0.03
+      });
     case 'mock':
       return new MockModelProvider();
     default:

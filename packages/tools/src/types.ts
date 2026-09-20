@@ -166,7 +166,15 @@ export interface ToolContext {
   runId: string;
   agentId: string;
   grantedScopes?: string[];
-  allowedTools?: string[];
+  /**
+   * The calling agent's tool allowlist. REQUIRED on purpose.
+   *
+   * It used to be optional and the gateway skipped the least-privilege check when it was
+   * absent (`if (context.allowedTools && ...)`), so any caller that forgot it silently
+   * disabled the whole per-agent allowlist layer. Requiring it turns that fail-open runtime
+   * hole into a compile error, and the gateway now denies a tool that is not on the list.
+   */
+  allowedTools: string[];
   externalWritesEnabled?: boolean;
   approvalToken?: ApprovalToken;
   approvalSecretKey?: string;

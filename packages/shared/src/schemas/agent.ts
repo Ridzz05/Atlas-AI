@@ -1,6 +1,20 @@
 import { z } from 'zod';
 
-export const AgentRoleSchema = z.enum(['orchestrator', 'researcher', 'lead_scoring', 'content_creator', 'qa_verifier', 'data_analyst', 'custom']);
+export const AgentRoleSchema = z.enum([
+  'orchestrator',
+  'ceo',
+  'coo',
+  'cto',
+  'cfo',
+  'director',
+  'manager',
+  'researcher',
+  'lead_scoring',
+  'content_creator',
+  'qa_verifier',
+  'data_analyst',
+  'custom'
+]);
 export type AgentRole = z.infer<typeof AgentRoleSchema>;
 
 export const ModelPolicySchema = z.object({

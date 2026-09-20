@@ -1,6 +1,7 @@
 node_modules
 .turbo
 .next
+.next-dev
 dist
 **/tsconfig.tsbuildinfo
 **/next-env.d.ts
@@ -8,3 +9,7 @@ dist
 pnpm-lock.yaml
 *.md
 .env*
+vault/.obsidian
+.openclaude
+.agents
+.kilo

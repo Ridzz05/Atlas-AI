@@ -2,8 +2,31 @@ import * as crypto from 'node:crypto';
 import { ApprovalToken } from '@atlas/shared';
 
 export class TokenVerifier {
+  /**
+   * Recursively sort object keys so that equal payloads always serialise to the same
+   * string, at every nesting level. The previous implementation passed
+   * `Object.keys(payload).sort()` as `JSON.stringify`'s second argument, which is a
+   * property *whitelist* rather than a key sorter: nested objects serialised as `{}`,
+   * so their contents were excluded from the signature and two different nested
+   * payloads produced the same hash.
+   */
+  private static canonicalize(value: unknown): unknown {
+    if (Array.isArray(value)) {
+      return value.map(item => TokenVerifier.canonicalize(item));
+    }
+    if (value !== null && typeof value === 'object') {
+      const source = value as Record<string, unknown>;
+      const ordered: Record<string, unknown> = {};
+      for (const key of Object.keys(source).sort()) {
+        ordered[key] = TokenVerifier.canonicalize(source[key]);
+      }
+      return ordered;
+    }
+    return value;
+  }
+
   public static hashPayload(payload: unknown): string {
-    const normalized = JSON.stringify(payload, Object.keys((payload as object) || {}).sort());
+    const normalized = JSON.stringify(TokenVerifier.canonicalize(payload));
     return crypto
       .createHash('sha256')
       .update(normalized || '')

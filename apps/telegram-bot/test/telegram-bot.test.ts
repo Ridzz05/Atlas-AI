@@ -110,6 +110,69 @@ describe('@atlas/telegram-bot tests', () => {
     expect(result.responseText).toContain('Argus');
   });
 
+  it('handles /initiatives and /initiative commands via SDLC repository', async () => {
+    const mockSdlcRepo = {
+      list: vi.fn().mockResolvedValue([
+        {
+          id: 'init-sdlc-12345678',
+          title: 'SaaS Market Expansion',
+          currentPhase: 'inception',
+          status: 'in_progress',
+          createdAt: new Date().toISOString(),
+          strategicBrief: { title: 'Strategic Brief' }
+        }
+      ]),
+      findById: vi.fn().mockResolvedValue({
+        id: 'init-sdlc-12345678',
+        title: 'SaaS Market Expansion',
+        currentPhase: 'inception',
+        status: 'in_progress',
+        createdAt: new Date().toISOString(),
+        strategicBrief: { title: 'Strategic Brief' }
+      })
+    } as any;
+
+    const sdlcBot = new AtlasTelegramBot({
+      config: {
+        botToken: 'mock-token',
+        allowedUserIds: new Set(['12345678']),
+        isPolling: true
+      },
+      registry: defaultAgentRegistry,
+      sdlcRepo: mockSdlcRepo
+    });
+
+    const listResult = await sdlcBot.processUpdate({
+      update_id: 104,
+      message: {
+        message_id: 4,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/initiatives',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(listResult.responseText).toContain('Executive SDLC Initiatives');
+    expect(listResult.responseText).toContain('SaaS Market Expansion');
+    expect(listResult.responseText).toContain('inception');
+
+    const detailResult = await sdlcBot.processUpdate({
+      update_id: 105,
+      message: {
+        message_id: 5,
+        from: { id: allowedUser, is_bot: false, first_name: 'Owner' },
+        chat: { id: allowedUser, type: 'private' },
+        text: '/initiative init-sdlc-12345678',
+        date: Math.floor(Date.now() / 1000)
+      }
+    });
+
+    expect(detailResult.responseText).toContain('Initiative Detail');
+    expect(detailResult.responseText).toContain('SaaS Market Expansion');
+    expect(detailResult.responseText).toContain('Strategic Brief (CEO)');
+  });
+
   it('handles natural language message as task creation', async () => {
     const update = {
       update_id: 104,

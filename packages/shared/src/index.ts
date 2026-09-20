@@ -9,4 +9,5 @@ export * from './schemas/config.js';
 export * from './schemas/scheduled-job.js';
 export * from './schemas/tool-manifest.js';
 export * from './schemas/workflow.js';
+export * from './schemas/sdlc.js';
 export * from './model.js';

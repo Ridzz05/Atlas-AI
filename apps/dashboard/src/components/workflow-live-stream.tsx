@@ -70,18 +70,50 @@ export interface WorkflowTimelineItem {
   };
 }
 
-export const AGENT_THEMES: Record<
-  string,
-  { name: string; role: string; color: string; bg: string; border: string; iconLabel: string }
-> = {
+export const AGENT_THEMES: Record<string, { name: string; role: string; color: string; bg: string; border: string; iconLabel: string }> = {
   chief: { name: 'Chief', role: 'System Orchestrator', color: '#c2410c', bg: '#fff7ed', border: 'rgba(255, 79, 0, 0.22)', iconLabel: '👑' },
   ned: { name: 'Ned', role: 'Research Specialist', color: '#2563eb', bg: '#eff6ff', border: 'rgba(37, 99, 235, 0.22)', iconLabel: '🔍' },
-  luna: { name: 'Luna', role: 'Data & Market Analyst', color: '#0891b2', bg: '#ecfeff', border: 'rgba(8, 145, 178, 0.22)', iconLabel: '📊' },
-  layla: { name: 'Layla', role: 'Lead Scoring Specialist', color: '#16a34a', bg: '#f0fdf4', border: 'rgba(22, 163, 74, 0.22)', iconLabel: '🎯' },
-  hermes: { name: 'Hermes', role: 'Content Specialist', color: '#7c3aed', bg: '#f5f3ff', border: 'rgba(124, 58, 237, 0.22)', iconLabel: '✍️' },
+  luna: {
+    name: 'Luna',
+    role: 'Data & Market Analyst',
+    color: '#0891b2',
+    bg: '#ecfeff',
+    border: 'rgba(8, 145, 178, 0.22)',
+    iconLabel: '📊'
+  },
+  layla: {
+    name: 'Layla',
+    role: 'Lead Scoring Specialist',
+    color: '#16a34a',
+    bg: '#f0fdf4',
+    border: 'rgba(22, 163, 74, 0.22)',
+    iconLabel: '🎯'
+  },
+  hermes: {
+    name: 'Hermes',
+    role: 'Content Specialist',
+    color: '#7c3aed',
+    bg: '#f5f3ff',
+    border: 'rgba(124, 58, 237, 0.22)',
+    iconLabel: '✍️'
+  },
   argus: { name: 'Argus', role: 'QA & Risk Gate', color: '#d97706', bg: '#fffbeb', border: 'rgba(217, 119, 6, 0.22)', iconLabel: '🛡️' },
-  user: { name: 'Owner', role: 'Operator & Task Creator', color: '#201515', bg: '#f5efe6', border: 'rgba(32, 21, 21, 0.14)', iconLabel: '👤' },
-  'api-owner': { name: 'Owner', role: 'API Command Client', color: '#201515', bg: '#f5efe6', border: 'rgba(32, 21, 21, 0.14)', iconLabel: '👤' }
+  user: {
+    name: 'Owner',
+    role: 'Operator & Task Creator',
+    color: '#201515',
+    bg: '#f5efe6',
+    border: 'rgba(32, 21, 21, 0.14)',
+    iconLabel: '👤'
+  },
+  'api-owner': {
+    name: 'Owner',
+    role: 'API Command Client',
+    color: '#201515',
+    bg: '#f5efe6',
+    border: 'rgba(32, 21, 21, 0.14)',
+    iconLabel: '👤'
+  }
 };
 
 interface WorkflowLiveStreamProps {

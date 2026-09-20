@@ -204,8 +204,29 @@ export class RunRepository {
     return (result.rowCount || 0) > 0;
   }
 
-  public async recoverStaleRuns(reason = 'Worker lease expired'): Promise<number> {
+  /**
+   * Recover work abandoned by a worker that died.
+   *
+   * Two sweeps:
+   *
+   * 1. Runs. A run whose lease expired is failed. A run in an active status that never
+   *    acquired a lease at all is ALSO failed once it goes stale — the previous predicate
+   *    required `lease_expires_at IS NOT NULL`, which made such a run immortal, and because
+   *    the task sweep below then saw it as an active run, its task was never recovered either
+   *    and stayed `running` forever across restarts.
+   * 2. Orphaned tasks. A task in `running`/`planning` with no active run is failed, but only
+   *    once it has been stale for `staleAfterSeconds`, so a task is not killed in the window
+   *    between "task -> running" and "run created".
+   *
+   * Returns the number of runs failed. The worker calls this on its recovery interval, not
+   * only at boot.
+   */
+  public async recoverStaleRuns(reason = 'Worker lease expired', staleAfterSeconds = 900): Promise<number> {
     if (!reason.trim()) throw new RangeError('reason must not be empty.');
+    if (!Number.isFinite(staleAfterSeconds) || staleAfterSeconds <= 0) {
+      throw new RangeError('staleAfterSeconds must be a positive number.');
+    }
+
     const result = await this.db.query(
       `
       UPDATE runs
@@ -217,10 +238,32 @@ export class RunRepository {
           lease_expires_at = NULL,
           updated_at = NOW()
       WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
-        AND lease_expires_at IS NOT NULL
-        AND lease_expires_at < NOW()
+        AND (
+          (lease_expires_at IS NOT NULL AND lease_expires_at < NOW())
+          OR (lease_expires_at IS NULL AND updated_at < NOW() - ($2 * INTERVAL '1 second'))
+        )
     `,
-      [reason]
+      [reason, staleAfterSeconds]
+    );
+
+    // Also update any orphaned tasks that are stuck in 'running' or 'planning'
+    // with no active runs
+    await this.db.query(
+      `
+      UPDATE tasks
+      SET status = 'failed',
+          error = COALESCE(error, 'Execution terminated: worker lease expired or abandoned'),
+          updated_at = NOW(),
+          completed_at = NOW()
+      WHERE status IN ('running', 'planning')
+        AND updated_at < NOW() - ($1 * INTERVAL '1 second')
+        AND NOT EXISTS (
+          SELECT 1 FROM runs
+          WHERE runs.task_id = tasks.id
+            AND runs.status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+        )
+    `,
+      [staleAfterSeconds]
     );
 
     return result.rowCount || 0;
@@ -245,7 +288,20 @@ export class RunRepository {
     return this.mapRow(res.rows[0]);
   }
 
-  public async updateStatus(runId: string, status: RunStatus, error?: string): Promise<Run> {
+  /**
+   * Writes a run's status.
+   *
+   * `workerId` is the lease guard: when it is supplied, a run that is currently owned by a
+   * DIFFERENT worker is left untouched and `null` is returned. Without it, a worker that
+   * merely failed to acquire the lease would still write a terminal status here, and because
+   * a terminal write clears `worker_id` / `heartbeat_at` / `lease_expires_at`, it would
+   * strip the lease from the worker that legitimately held the run. That worker's next
+   * heartbeat then returned false and it aborted a healthy run.
+   *
+   * A run with no lease owner (`worker_id IS NULL`) is always writable, so unleased runs and
+   * the approval-resume path keep working.
+   */
+  public async updateStatus(runId: string, status: RunStatus, error?: string, workerId?: string): Promise<Run | null> {
     const isTerminal = ['completed', 'failed', 'cancelled', 'timed_out'].includes(status);
     const query = `
       UPDATE runs
@@ -276,11 +332,16 @@ export class RunRepository {
           END,
           updated_at = NOW()
       WHERE id = $4
+        AND ($5::varchar IS NULL OR worker_id IS NULL OR worker_id = $5)
       RETURNING *;
     `;
 
-    const res = await this.db.query(query, [status, error || null, isTerminal, runId]);
+    const res = await this.db.query(query, [status, error || null, isTerminal, runId, workerId || null]);
     if (!res.rows[0]) {
+      // With a worker guard, an empty result is the expected outcome of losing the lease
+      // race; the caller must not treat it as a failure. Without a guard it means the run
+      // genuinely does not exist.
+      if (workerId) return null;
       throw new Error(`Run not found: ${runId}`);
     }
     return this.mapRow(res.rows[0]);
@@ -308,6 +369,34 @@ export class RunRepository {
     const row = result.rows[0];
     return {
       requested: Boolean(row?.cancel_requested),
+      reason: row?.cancel_reason || undefined
+    };
+  }
+
+  /**
+   * Task-level cancellation read, the counterpart to `requestCancellationForTask`.
+   *
+   * An orchestrator task drives a whole delegation graph but has no Run row of its own, so a
+   * cancel aimed at it is visible only through the runs of its child tasks (or a run created
+   * directly on the task). Both cases are covered by the join.
+   */
+  public async isCancellationRequestedForTask(taskId: string): Promise<{ requested: boolean; reason?: string }> {
+    const result = await this.db.query(
+      `
+      SELECT r.cancel_reason
+      FROM runs r
+      LEFT JOIN tasks t ON t.id = r.task_id
+      WHERE (r.task_id = $1 OR t.parent_id = $1)
+        AND r.cancel_requested = TRUE
+      ORDER BY r.updated_at DESC
+      LIMIT 1;
+    `,
+      [taskId]
+    );
+
+    const row = result.rows[0];
+    return {
+      requested: Boolean(row),
       reason: row?.cancel_reason || undefined
     };
   }

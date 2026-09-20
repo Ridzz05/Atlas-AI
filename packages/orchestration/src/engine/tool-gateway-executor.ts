@@ -5,7 +5,11 @@ import { ToolExecutor } from './agent-runner.js';
 
 export interface ToolGatewayExecutorOptions {
   registry: ToolRegistry;
-  baseContext?: Omit<ToolContext, 'taskId' | 'runId' | 'agentId' | 'signal'>;
+  /**
+   * `allowedTools` is omitted here on purpose: it is per-call, supplied from the calling
+   * agent's definition, never a property of the shared base context.
+   */
+  baseContext?: Omit<ToolContext, 'taskId' | 'runId' | 'agentId' | 'signal' | 'allowedTools'>;
 }
 
 export class ToolGatewayExecutor implements ToolExecutor {
@@ -18,7 +22,7 @@ export class ToolGatewayExecutor implements ToolExecutor {
       runId: string;
       agentId: string;
       grantedScopes?: string[];
-      allowedTools?: string[];
+      allowedTools: string[];
       approvalToken?: ApprovalToken;
       signal?: AbortSignal;
     }

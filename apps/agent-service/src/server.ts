@@ -36,6 +36,8 @@ import { registerRubricRoutes } from './routes/rubrics.js';
 import { registerModelProviderRoutes } from './routes/model-provider.js';
 import { registerSecondBrainRoutes, findVaultPath } from './routes/second-brain.js';
 import { registerAutomationRoutes } from './routes/automations.js';
+import { registerSDLCRoutes } from './routes/sdlc.js';
+import { SDLCEngine } from '@atlas/orchestration';
 import { InMemoryRateLimiter, RateLimiter, RedisRateLimiter } from './rate-limit.js';
 
 export interface ServerOptions {
@@ -58,6 +60,8 @@ export interface ServerOptions {
   modelProviderSettingsRepo?: ModelProviderSettingsRepository;
   scheduledJobRepo?: import('@atlas/database').ScheduledJobRepository;
   workflowCheckpointRepo?: import('@atlas/database').WorkflowCheckpointRepository;
+  sdlcRepo?: import('@atlas/database').SDLCRepository;
+  sdlcEngine?: import('@atlas/orchestration').SDLCEngine;
   provider?: ModelProvider;
   eventBus?: EventBus;
   registry?: AgentRegistry;
@@ -321,6 +325,22 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     auditRepo: options.auditRepo
   });
 
+  // The SDLC engine coordinates phases as ordinary tasks, so it needs the same task
+  // repository and queue the rest of the control plane uses. The composition root already
+  // builds one; it is reused here so the API and the worker share the same coordinator.
+  if (options.sdlcRepo) {
+    const sdlcEngine =
+      options.sdlcEngine ||
+      (options.taskRepo ? new SDLCEngine({ sdlcRepo: options.sdlcRepo, taskRepo: options.taskRepo, taskQueue, registry }) : undefined);
+
+    if (sdlcEngine) {
+      registerSDLCRoutes(app, {
+        sdlcRepo: options.sdlcRepo,
+        sdlcEngine
+      });
+    }
+  }
+
   const secondBrainService =
     options.secondBrainService ||
     new SecondBrainService(
@@ -345,11 +365,14 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   const defaultVaultPath = findVaultPath();
   if (defaultVaultPath) {
     rootLogger.info(`Auto-ingesting Second Brain vault from: ${defaultVaultPath}`);
-    void secondBrainService.ingestVaultDirectory(defaultVaultPath).then(res => {
-      rootLogger.info(`Second Brain vault auto-ingest completed: ${res.ingested} notes indexed.`);
-    }).catch(err => {
-      rootLogger.warn('Second Brain vault auto-ingest failed', { error: String(err) });
-    });
+    void secondBrainService
+      .ingestVaultDirectory(defaultVaultPath)
+      .then(res => {
+        rootLogger.info(`Second Brain vault auto-ingest completed: ${res.ingested} notes indexed.`);
+      })
+      .catch(err => {
+        rootLogger.warn('Second Brain vault auto-ingest failed', { error: String(err) });
+      });
   }
 
   registerAutomationRoutes(app, {
@@ -400,9 +423,18 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
   // Update Telegram Bot Configuration
   app.put('/api/v1/settings/telegram', async (req, reply) => {
+    // Values written here go straight into the .env file, so a line break in the payload
+    // would inject arbitrary environment lines (e.g. "API_AUTH_TOKEN=" to disable API
+    // authentication on the next boot). Reject line breaks outright.
+    const EnvValueSchema = z
+      .string()
+      .trim()
+      .max(512)
+      .refine(value => !/[\r\n]/.test(value), { message: 'must not contain line breaks' });
+
     const TelegramSettingsSchema = z.object({
-      botToken: z.string().trim().optional(),
-      allowedUserIds: z.string().trim().optional()
+      botToken: EnvValueSchema.optional(),
+      allowedUserIds: EnvValueSchema.optional()
     });
     const parse = TelegramSettingsSchema.safeParse(req.body);
     if (!parse.success) {

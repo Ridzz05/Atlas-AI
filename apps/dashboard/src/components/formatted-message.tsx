@@ -111,12 +111,7 @@ function parseTableCells(line: string): string[] {
     .map(cell => cell.trim());
 }
 
-export function FormattedMessage({
-  content,
-  defaultExpanded = false,
-  maxInitialHeight = 360,
-  collapsible = true
-}: FormattedMessageProps) {
+export function FormattedMessage({ content, defaultExpanded = false, maxInitialHeight = 360, collapsible = true }: FormattedMessageProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [copied, setCopied] = useState(false);
 

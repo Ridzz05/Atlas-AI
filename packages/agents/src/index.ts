@@ -1,4 +1,7 @@
 export * from './definitions/chief.js';
+export * from './definitions/ceo.js';
+export * from './definitions/cfo.js';
+export * from './definitions/cto.js';
 export * from './definitions/ned.js';
 export * from './definitions/layla.js';
 export * from './definitions/hermes.js';

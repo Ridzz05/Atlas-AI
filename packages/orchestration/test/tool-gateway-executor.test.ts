@@ -21,7 +21,8 @@ describe('ToolGatewayExecutor', () => {
       {
         taskId: 'task-1',
         runId: 'run-1',
-        agentId: 'hermes'
+        agentId: 'hermes',
+        allowedTools: ['communication.create_draft']
       }
     );
 

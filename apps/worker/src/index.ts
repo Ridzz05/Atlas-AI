@@ -21,6 +21,7 @@ async function main() {
     budgetRepo: runtime.budgetRepo,
     scheduledJobRepo: runtime.scheduledJobRepo,
     workflowCheckpointRepo: runtime.workflowCheckpointRepo,
+    sdlcEngine: runtime.sdlcEngine,
     eventBus: runtime.eventBus,
     provider: runtime.provider,
     researchProvider: runtime.researchProvider,

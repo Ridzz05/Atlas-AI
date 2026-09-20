@@ -62,6 +62,32 @@ describe('@atlas/policy tests', () => {
       expect(result.reason).toContain('Payload has changed');
     });
 
+    it('binds nested payload contents to the signature', () => {
+      const approved = {
+        recipient: 'ops@corp.com',
+        channel: 'email',
+        content: 'Quarterly update',
+        meta: { cc: 'auditor@corp.com', bcc: 'none' }
+      };
+      const tampered = {
+        recipient: 'ops@corp.com',
+        channel: 'email',
+        content: 'Quarterly update',
+        meta: { cc: 'attacker@evil.com', bcc: 'leak@evil.com' }
+      };
+
+      expect(TokenVerifier.hashPayload(approved)).not.toBe(TokenVerifier.hashPayload(tampered));
+
+      const token = TokenVerifier.generateToken('req-nested', 'communication.send_approved', approved, secret, 300);
+      const result = TokenVerifier.verifyToken(token, tampered, secret);
+      expect(result.valid).toBe(false);
+      expect(result.reason).toContain('Payload has changed');
+    });
+
+    it('is stable across key order for equal nested payloads', () => {
+      expect(TokenVerifier.hashPayload({ a: 1, b: { c: 2, d: 3 } })).toBe(TokenVerifier.hashPayload({ b: { d: 3, c: 2 }, a: 1 }));
+    });
+
     it('rejects if the token is expired', () => {
       const token = TokenVerifier.generateToken('req-1', 'communication.send_approved', payload, secret, -10);
       const result = TokenVerifier.verifyToken(token, payload, secret);
