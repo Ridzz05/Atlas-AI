@@ -61,6 +61,13 @@ describe('intake gate coverage', () => {
   const intakeRoutes: Array<{ method: 'POST'; url: string; payload?: unknown }> = [
     { method: 'POST', url: '/api/v1/tasks', payload: { title: 'T', goal: 'G', assignedAgent: 'chief' } },
     { method: 'POST', url: '/api/v1/automations/trigger', payload: { type: 'manual', jobType: 'daily_briefing' } },
+    // Creating a scheduled job is intake too: the worker's scheduler fires it on the next tick without
+    // consulting the control state, so during a stop it would accumulate work nobody asked for.
+    {
+      method: 'POST',
+      url: '/api/v1/automations/scheduled-jobs',
+      payload: { name: 'Nightly', jobType: 'daily_briefing', cronPattern: '0 7 * * *', assignedAgent: 'chief' }
+    },
     { method: 'POST', url: '/api/v1/automations/scheduled-jobs/sj_1/run' },
     { method: 'POST', url: '/api/v1/sdlc/initiatives', payload: { title: 'T', intent: 'I' } },
     { method: 'POST', url: '/api/v1/sdlc/initiatives/i1/advance' }

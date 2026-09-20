@@ -77,7 +77,11 @@ export function registerAutomationRoutes(app: FastifyInstance, options: Automati
     }
   });
 
-  app.post('/api/v1/automations/scheduled-jobs', async (req, reply) => {
+  // Creating a scheduled job is intake: the worker's scheduler fires it on the next tick without
+  // consulting the control state, so an operator who pressed emergency stop would still accumulate new
+  // automation work. The two sibling POST routes in this file carry the gate; this one was the only
+  // POST route in the API that created future work and did not.
+  app.post('/api/v1/automations/scheduled-jobs', { preHandler: intakeGate }, async (req, reply) => {
     if (!options.scheduledJobRepo) return reply.status(503).send({ error: 'Scheduled jobs unavailable' });
     const parsed = CreateScheduledJobSchema.safeParse(req.body);
     if (!parsed.success) return reply.status(400).send({ error: 'Invalid scheduled job input', details: parsed.error.errors });
