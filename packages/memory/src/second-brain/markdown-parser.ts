@@ -132,9 +132,24 @@ export class MarkdownParser {
     let currentHeading: string | null = null;
     let currentLevel = 0;
     let currentLines: string[] = [];
+    // A `#` line inside a fenced code block is a shell comment, not a heading. Without tracking the
+    // fence state, a block like ```bash / # install deps / npm install ``` was split in two and its
+    // tail relabelled with a heading the note never contained, so citations showed half a code
+    // block under a fabricated title.
+    let fenceMarker: string | null = null;
 
     for (const line of lines) {
-      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+      const fenceMatch = line.match(/^\s*(`{3,}|~{3,})/);
+      const fence = fenceMatch?.[1];
+      if (fence) {
+        const marker = fence[0] as string;
+        if (fenceMarker === null) fenceMarker = marker;
+        else if (fenceMarker === marker) fenceMarker = null;
+        currentLines.push(line);
+        continue;
+      }
+
+      const headingMatch = fenceMarker === null ? line.match(/^(#{1,6})\s+(.+)$/) : null;
       if (headingMatch && headingMatch[1] && headingMatch[2]) {
         if (currentLines.length > 0) {
           sections.push({

@@ -23,12 +23,21 @@ export class SecondBrainRetriever {
    * Perform hybrid search (dense vector cosine similarity + lexical matching) across the vault.
    */
   public async search(options: SecondBrainQueryOptions): Promise<SecondBrainSearchResult[]> {
-    const { query, scope, tag, limit = 5, minScore = 0.1 } = options;
+    const { query, scope, tag, limit = 5, minScore = 0.1, allowedScopes } = options;
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return [];
 
+    // Scope containment. `allowedScopes` was declared on the options type but never read, and
+    // `getAllChunks(undefined)` returns EVERY chunk, so an agent could read notes outside its
+    // granted data scopes by omitting the scope — or by naming a scope it was never granted.
+    // `global` stays readable because it is the shared scope by definition.
+    const readableScopes = allowedScopes && allowedScopes.length > 0 ? new Set([...allowedScopes, 'global']) : null;
+    if (readableScopes && scope && !readableScopes.has(scope)) {
+      return [];
+    }
+
     // 1. Get candidate chunks
-    const chunks = this.vault.getAllChunks(scope);
+    const chunks = this.vault.getAllChunks(scope).filter(chunk => !readableScopes || readableScopes.has(chunk.scope));
     if (chunks.length === 0) return [];
 
     // Filter by tag if specified

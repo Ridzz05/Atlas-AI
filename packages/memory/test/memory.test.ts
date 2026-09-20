@@ -121,6 +121,52 @@ describe('@atlas/memory tests', () => {
     expect(results.length).toBeLessThanOrEqual(2);
   });
 
+  // The budget loop `break`s on the first item that does not fit, but the list is score-ordered, so
+  // one large top-ranked item discarded every smaller item behind it — the retrieval context came
+  // back empty even though a short, specific fact would have fit.
+  it('keeps smaller items that fit when a larger ranked item does not', async () => {
+    const store = new InMemoryMemoryStore();
+    const retriever = new MemoryRetriever(store);
+
+    await store.save({
+      id: crypto.randomUUID(),
+      type: 'semantic',
+      status: 'verified',
+      content: `huge report ${'x'.repeat(4000)}`,
+      scope: 'global',
+      author: 'system',
+      source: 'manual',
+      confidence: 1,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+    await store.save({
+      id: crypto.randomUUID(),
+      type: 'semantic',
+      status: 'verified',
+      content: 'huge report short fact',
+      scope: 'global',
+      author: 'system',
+      source: 'manual',
+      confidence: 0.5,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const results = await retriever.retrieve({ query: 'huge report', tokenBudget: 50 });
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results.some(r => r.item.content === 'huge report short fact')).toBe(true);
+  });
+
   it('manages memory proposal, deduplication, verification, and deprecation lifecycle', async () => {
     const store = new InMemoryMemoryStore();
     const auditSink = { record: vi.fn().mockResolvedValue(undefined) };
@@ -423,5 +469,64 @@ describe('@atlas/memory tests', () => {
     const result = await tools.search({ query: 'customer claim' });
 
     expect(result.results).toEqual([]);
+  });
+
+  // The verified-only rule was enforced in search() but not in get(), and findById filters only on
+  // expiry — so an agent that knew (or guessed) an id could read the non-canonical proposal text
+  // that search had just refused to show it. An agent must not be able to reach unverified memory
+  // by a second route.
+  it('does not expose unverified memory through the agent direct-lookup tool either', async () => {
+    const store = new InMemoryMemoryStore();
+    const tools = new MemoryTools(new MemoryRetriever(store), new MemoryProposalService(store), store);
+    const id = crypto.randomUUID();
+
+    await store.save({
+      id,
+      type: 'semantic',
+      status: 'unverified',
+      content: 'UNVERIFIED CLAIM that must not surface',
+      scope: 'global',
+      author: 'ned',
+      source: 'research',
+      confidence: 0.2,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const direct = await tools.get({ id });
+
+    expect(direct.item).toBeNull();
+  });
+
+  it('still returns verified memory through the direct-lookup tool', async () => {
+    const store = new InMemoryMemoryStore();
+    const tools = new MemoryTools(new MemoryRetriever(store), new MemoryProposalService(store), store);
+    const id = crypto.randomUUID();
+
+    await store.save({
+      id,
+      type: 'semantic',
+      status: 'verified',
+      content: 'Canonical fact',
+      scope: 'global',
+      author: 'chief',
+      source: 'owner',
+      confidence: 0.9,
+      taskId: null,
+      artifactId: null,
+      metadata: {},
+      expiresAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    const direct = await tools.get({ id });
+
+    expect(direct.item).not.toBeNull();
+    expect(direct.item.content).toBe('Canonical fact');
   });
 });

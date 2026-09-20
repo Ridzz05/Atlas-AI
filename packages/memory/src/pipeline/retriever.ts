@@ -79,7 +79,10 @@ export class MemoryRetriever {
           accumulatedTokens += estTokens;
           withinBudget.push(res);
         } else {
-          break;
+          // `continue`, not `break`. The list is score-ordered, so breaking on the first item that
+          // does not fit dropped every smaller item after it: one large top-ranked memory emptied
+          // the whole retrieval context even when several small, specific facts would have fit.
+          continue;
         }
       }
       selected = withinBudget;

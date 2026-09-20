@@ -35,12 +35,16 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
     riskLevel: 'read',
     requiresApproval: false,
     timeoutMs: 5000,
-    async execute(_ctx, input) {
+    async execute(ctx, input) {
       const hits = await secondBrainService.search({
         query: input.query,
         scope: input.scope,
         tag: input.tag,
-        limit: input.limit
+        limit: input.limit,
+        // The agent's granted data scopes, not a model-supplied value. Without this the retriever
+        // returned every scope when `scope` was omitted, so an agent could read notes outside its
+        // grant. The memory tools already passed ctx.grantedScopes; this path did not.
+        allowedScopes: ctx.grantedScopes
       });
 
       return {
@@ -144,11 +148,12 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
     riskLevel: 'read',
     requiresApproval: false,
     timeoutMs: 3000,
-    async execute(_ctx, input) {
+    async execute(ctx, input) {
       const docs = secondBrainService.listDocuments({
         scope: input.scope,
         tag: input.tag,
-        limit: input.limit
+        limit: input.limit,
+        allowedScopes: ctx.grantedScopes
       });
 
       return {
@@ -197,10 +202,11 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
     riskLevel: 'read',
     requiresApproval: false,
     timeoutMs: 8000,
-    async execute(_ctx, input) {
+    async execute(ctx, input) {
       const result = await secondBrainService.queryGrounded(input.query, {
         scope: input.scope,
-        limit: input.limit
+        limit: input.limit,
+        allowedScopes: ctx.grantedScopes
       });
 
       return {

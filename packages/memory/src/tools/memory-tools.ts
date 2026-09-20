@@ -40,6 +40,12 @@ export class MemoryTools {
     if (item && isMemoryExpired(item)) {
       return { item: null };
     }
+    // search() filters to verified memory, but get() did not, and findById filters only on expiry.
+    // An agent that knew an id could therefore read the non-canonical proposal text that search had
+    // just refused to show it. The verified-only rule has to hold on every agent-facing route.
+    if (item && item.status !== 'verified') {
+      return { item: null };
+    }
     if (item && input.allowedScopes && item.scope !== 'global' && !input.allowedScopes.includes(item.scope)) {
       return { item: null };
     }

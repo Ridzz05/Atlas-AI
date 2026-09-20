@@ -156,6 +156,57 @@ All outbound messages require explicit human approval token before sending.`
       expect(doc1.contentHash).toBe(doc2.contentHash);
       expect(doc1.createdAt).toBe(doc2.createdAt);
     });
+
+    // A `#` line inside a fenced code block is a shell comment. extractSections matched it as a
+    // heading, so a code block was split across chunks and the tail carried a heading the note does
+    // not contain — citations then showed half a block under a fabricated title.
+    it('does not treat a comment inside a fenced code block as a heading', () => {
+      const parsed = MarkdownParser.parse('# Note\n\n```bash\n# install deps\nnpm install\n```\n\nDone.');
+
+      const headings = parsed.sections.map(section => section.heading);
+      expect(headings).toEqual(['Note']);
+      expect(parsed.sections[0]?.content).toContain('npm install');
+      expect(headings).not.toContain('install deps');
+    });
+
+    // `allowedScopes` was declared on SecondBrainQueryOptions but never read, and search() passed
+    // the caller-supplied `scope` straight to getAllChunks — which returns EVERY chunk when the
+    // scope is omitted. So an agent could read notes outside its granted data scopes either by
+    // omitting the scope or by naming one it was never granted. The memory tools pass
+    // ctx.grantedScopes; the second-brain path passed nothing.
+    it('never returns chunks outside the caller granted scopes', async () => {
+      const embeddingService = new VectorEmbeddingService({ provider: 'mock', dimension: 128 });
+      const vault = new VaultIngestionService(embeddingService);
+      const retriever = new SecondBrainRetriever(vault, embeddingService);
+
+      await vault.ingestDocument({
+        id: 'client-a-note',
+        filePath: 'clients/client_a.md',
+        content: '# Client A\nRestricted security finding about client A credentials.',
+        scope: 'restricted_security'
+      });
+      await vault.ingestDocument({
+        id: 'shared-note',
+        filePath: 'notes/shared.md',
+        content: '# Shared\nGeneral shared knowledge about credentials handling.',
+        scope: 'second_brain'
+      });
+
+      const granted = ['second_brain'];
+
+      // Omitting the scope must not widen the result set.
+      const withoutScope = await retriever.search({ query: 'credentials', allowedScopes: granted });
+      expect(withoutScope.every(hit => hit.chunk.scope === 'second_brain' || hit.chunk.scope === 'global')).toBe(true);
+      expect(withoutScope.some(hit => hit.chunk.documentId === 'client-a-note')).toBe(false);
+
+      // Naming a scope that was never granted must not be honoured either.
+      const foreignScope = await retriever.search({ query: 'credentials', scope: 'restricted_security', allowedScopes: granted });
+      expect(foreignScope).toEqual([]);
+
+      // A granted scope still works.
+      const ownScope = await retriever.search({ query: 'credentials', scope: 'second_brain', allowedScopes: granted });
+      expect(ownScope.some(hit => hit.chunk.documentId === 'shared-note')).toBe(true);
+    });
   });
 
   describe('SecondBrainService', () => {

@@ -54,8 +54,13 @@ export class SecondBrainService {
     return this.vault.getDocumentByPath(filePath);
   }
 
-  public listDocuments(options?: { scope?: string; tag?: string; limit?: number }): SecondBrainDocument[] {
-    return this.vault.listDocuments(options);
+  public listDocuments(options?: { scope?: string; tag?: string; limit?: number; allowedScopes?: string[] }): SecondBrainDocument[] {
+    const documents = this.vault.listDocuments(options);
+    // Same containment as the chunk retriever: omitting the scope must not widen the result set.
+    const allowed = options?.allowedScopes;
+    if (!allowed || allowed.length === 0) return documents;
+    const readable = new Set([...allowed, 'global']);
+    return documents.filter(document => readable.has(document.scope));
   }
 
   public deleteDocument(id: string): boolean {
@@ -75,13 +80,14 @@ export class SecondBrainService {
 
   public async queryGrounded(
     query: string,
-    options: { scope?: string; limit?: number; minScore?: number } = {}
+    options: { scope?: string; limit?: number; minScore?: number; allowedScopes?: string[] } = {}
   ): Promise<GroundedRAGResponse> {
     const results = await this.retriever.search({
       query,
       scope: options.scope,
       limit: options.limit || 4,
-      minScore: options.minScore || 0.15
+      minScore: options.minScore || 0.15,
+      allowedScopes: options.allowedScopes
     });
 
     const citations = results.map(r => r.citation);
