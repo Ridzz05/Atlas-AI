@@ -1,5 +1,5 @@
 import { SecondBrainDocument, SecondBrainSearchResult, SecondBrainCitation, SecondBrainStats } from '@atlas/shared';
-import { VaultIngestionService, IngestDocumentInput, IngestVaultResult } from './vault-ingestion-service.js';
+import { VaultIngestionService, IngestDocumentInput, IngestDocumentResult, IngestVaultResult } from './vault-ingestion-service.js';
 import { SecondBrainRetriever, SecondBrainQueryOptions } from './second-brain-retriever.js';
 import { VectorEmbeddingService, EmbeddingConfig } from './vector-embedding-service.js';
 import { rootLogger } from '@atlas/observability';
@@ -32,7 +32,7 @@ export class SecondBrainService {
     this.llmSynthesizer = llmSynthesizer;
   }
 
-  public async ingestDocument(input: IngestDocumentInput): Promise<SecondBrainDocument> {
+  public async ingestDocument(input: IngestDocumentInput): Promise<IngestDocumentResult> {
     return this.vault.ingestDocument(input);
   }
 

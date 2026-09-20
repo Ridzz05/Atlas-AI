@@ -21,6 +21,14 @@ export interface IngestVaultResult {
   errors: Array<{ filePath: string; error: string }>;
 }
 
+/** What an ingest actually did, so a caller never has to infer it. */
+export type IngestOutcome = 'created' | 'updated' | 'unchanged' | 'rescoped';
+
+export interface IngestDocumentResult {
+  document: SecondBrainDocument;
+  outcome: IngestOutcome;
+}
+
 export class VaultIngestionService {
   private documents = new Map<string, SecondBrainDocument>();
   private chunks = new Map<string, SecondBrainChunk>();
@@ -30,18 +38,38 @@ export class VaultIngestionService {
 
   /**
    * Ingest a single Markdown or text document.
+   *
+   * Returns the outcome alongside the document, because the caller needs to know whether anything was
+   * written: `ingestVaultDirectory` counts it, and a report that always says "skipped: 0" cannot be
+   * told apart from a full re-index.
    */
-  public async ingestDocument(input: IngestDocumentInput): Promise<SecondBrainDocument> {
+  public async ingestDocument(input: IngestDocumentInput): Promise<IngestDocumentResult> {
     const parsed = MarkdownParser.parse(input.content, input.title || path.basename(input.filePath, path.extname(input.filePath)));
     const contentHash = crypto.createHash('sha256').update(input.content).digest('hex');
     const docId = input.id || this.generateDocumentId(input.filePath);
     const scope = input.scope || (parsed.frontmatter.scope as string) || 'second_brain';
 
-    // Check if document already exists and has not changed
     const existing = this.documents.get(docId);
+
     if (existing && existing.contentHash === contentHash) {
+      // The content did not change, but the requested scope might have. Returning early here meant no
+      // write path could move a note into a narrower scope, while every one of them reported success.
+      // A scope change needs no re-embedding — the vectors are content-derived — so it is applied in
+      // place to the document and to its chunks, which carry the scope too.
+      if (existing.scope !== scope) {
+        const rescoped: SecondBrainDocument = { ...existing, scope, updatedAt: new Date().toISOString() };
+        this.documents.set(docId, rescoped);
+        for (const [id, chunk] of this.chunks.entries()) {
+          if (chunk.documentId === docId) {
+            this.chunks.set(id, { ...chunk, scope });
+          }
+        }
+        rootLogger.info('Re-scoped an unchanged Second Brain document', { docId, from: existing.scope, to: scope });
+        return { document: rescoped, outcome: 'rescoped' };
+      }
+
       rootLogger.debug('Document content unchanged, skipping re-indexing', { docId, filePath: input.filePath });
-      return existing;
+      return { document: existing, outcome: 'unchanged' };
     }
 
     // If existing, remove old chunks first
@@ -95,7 +123,7 @@ export class VaultIngestionService {
     this.lastSyncAt = new Date().toISOString();
 
     rootLogger.info('Indexed document into Second Brain', { docId, title: document.title, chunks: rawChunks.length });
-    return document;
+    return { document, outcome: existing ? 'updated' : 'created' };
   }
 
   /**
@@ -116,12 +144,18 @@ export class VaultIngestionService {
       try {
         const content = await fs.readFile(file, 'utf-8');
         const relPath = path.relative(dirPath, file);
-        await this.ingestDocument({
+        const { outcome } = await this.ingestDocument({
           filePath: relPath || file,
           content,
           scope: options.scope || 'second_brain'
         });
-        result.ingested++;
+        // `skipped` was never incremented, so every report claimed a full re-index and
+        // `totalFiles` never equalled `ingested + skipped + errors`.
+        if (outcome === 'unchanged') {
+          result.skipped++;
+        } else {
+          result.ingested++;
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         result.errors.push({ filePath: file, error: message });
@@ -204,13 +238,22 @@ export class VaultIngestionService {
     }
   }
 
+  /**
+   * A stable, collision-free id for a vault path.
+   *
+   * The slug alone was not unique: `notes/static.md` and `notes-static.md` both produced
+   * `notes-static-md`, so the second ingest deleted the first document's chunks and overwrote it — a
+   * note vanished from the index while its file still existed, and citations returned one note's
+   * content under the other's title. A short digest of the exact path keeps the id readable and
+   * stable across runs while making two distinct paths two distinct documents.
+   */
   private generateDocumentId(filePath: string): string {
-    return (
-      filePath
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') || crypto.randomUUID()
-    );
+    const slug = filePath
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const digest = crypto.createHash('sha256').update(filePath).digest('hex').slice(0, 10);
+    return slug ? `${slug}-${digest}` : digest;
   }
 
   private async findFilesRecursively(dir: string, extensions: string[], excludes: string[]): Promise<string[]> {

@@ -142,7 +142,7 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
     }
 
     try {
-      const doc = await service.ingestDocument({
+      const { document, outcome } = await service.ingestDocument({
         title,
         filePath: filePath || `note-${Date.now()}.md`,
         content,
@@ -152,7 +152,9 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
       return reply.status(201).send({
         type: 'document_ingest',
         status: 'success',
-        data: doc
+        // Reported so the operator can tell a write from a no-op; it used to be implied by 'success'.
+        outcome,
+        data: document
       });
     } catch (err) {
       return reply.status(500).send({

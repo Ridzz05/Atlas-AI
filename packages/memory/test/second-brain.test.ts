@@ -116,8 +116,8 @@ tags: [compliance, security]
 All outbound messages require explicit human approval token before sending.`
       });
 
-      expect(doc1.id).toBeDefined();
-      expect(doc2.id).toBeDefined();
+      expect(doc1.document.id).toBeDefined();
+      expect(doc2.document.id).toBeDefined();
 
       const stats = vault.getStats();
       expect(stats.totalDocuments).toBe(2);
@@ -158,8 +158,10 @@ All outbound messages require explicit human approval token before sending.`
         content
       });
 
-      expect(doc1.contentHash).toBe(doc2.contentHash);
-      expect(doc1.createdAt).toBe(doc2.createdAt);
+      expect(doc1.document.contentHash).toBe(doc2.document.contentHash);
+      expect(doc1.document.createdAt).toBe(doc2.document.createdAt);
+      // The second call wrote nothing, and says so.
+      expect(doc2.outcome).toBe('unchanged');
     });
 
     // A `#` line inside a fenced code block is a shell comment. extractSections matched it as a
