@@ -79,7 +79,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 369.5
   },
   "right": {
     "id": "0c920d52a9132224",
@@ -183,24 +183,32 @@
   },
   "active": "c9fca2b1832d9b6e",
   "lastOpenFiles": [
-    "03 - Operations & Runbooks/Database Migrations & pgvector Setup.md",
+    "02 - Agent Fleet/Argus - QA & Risk Gate Specialist.md",
+    "02 - Agent Fleet/Luna - Data & Market Analyst Specialist.md",
+    "02 - Agent Fleet/Ned - Research Specialist.md",
+    "02 - Agent Fleet/Layla - Lead Scoring Specialist.md",
+    "02 - Agent Fleet/Hermes - Content Specialist.md",
+    "02 - Agent Fleet/Chief - System Orchestrator.md",
     "05 - Workflows & Automations/Telegram Bot Command Reference.md",
     "05 - Workflows & Automations/Scheduled Jobs & Cron Automations.md",
+    "04 - Knowledge & Rubrics/Personal Knowledge & Memory Protocol.md",
+    "04 - Knowledge & Rubrics/Lead Qualification Rubric v1.md",
+    "04 - Knowledge & Rubrics/AI Model Provider Landscape.md",
+    "03 - Operations & Runbooks/Disaster Recovery & Lease Watchdog.md",
+    "03 - Operations & Runbooks/Production Deployment & Docker.md",
     "03 - Operations & Runbooks/Local Development Setup.md",
-    "02 - Agent Fleet/Chief - System Orchestrator.md",
+    "03 - Operations & Runbooks/Database Migrations & pgvector Setup.md",
+    "01 - System Architecture/Implementation Status & Known Gaps.md",
+    "00 - Index & Maps of Content (MOC)/000 - Home MOC.md",
+    "01 - System Architecture/ATLAS AI OS Blueprint.md",
     "Untitled 1.md",
     "Untitled.md",
     "00 - Index & Maps of Content (MOC)/030 - Operations & Runbooks MOC.md",
     "Untitled",
     "Untitled.base",
-    "02 - Agent Fleet/Luna - Data & Market Analyst Specialist.md",
     "01 - System Architecture/Policy, Security & Approval Gates.md",
     "00 - Index & Maps of Content (MOC)/040 - Knowledge Base & Rubrics MOC.md",
     "00 - Index & Maps of Content (MOC)/050 - Automations & Workflows MOC.md",
-    "02 - Agent Fleet/Argus - QA & Risk Gate Specialist.md",
-    "04 - Knowledge & Rubrics/Personal Knowledge & Memory Protocol.md",
-    "04 - Knowledge & Rubrics/Lead Qualification Rubric v1.md",
-    "00 - Index & Maps of Content (MOC)/000 - Home MOC.md",
     "00 - Index & Maps of Content (MOC)/020 - Agent Fleet MOC.md",
     "Untitled.canvas"
   ]

@@ -4,7 +4,7 @@ scope: "second_brain"
 category: "architecture"
 author: "Chief"
 tags: [atlas, status, gaps, defects, audit, verification]
-updated: "2026-09-16"
+updated: "2026-09-20"
 ---
 
 # 🚧 Implementation Status & Known Gaps
@@ -41,9 +41,28 @@ Distribusi run per agent: chief 54, argus 22, ned 15, hermes 13, layla 2, **luna
 
 ---
 
-## 2. 🔴 Cacat Boot-Blocker: Migrasi `012` Menggagalkan Seluruh Rantai
+## 2. ✅ DIPERBAIKI — Cacat Boot-Blocker: Migrasi `012` (ditemukan 16 Sep, diperbaiki 20 Sep 2026)
 
-### Bukti
+> **Status: sudah diperbaiki.** Berkas `012_scheduled_jobs.sql` kini berisi blok `DO $$`
+> yang menambahkan setiap kolom yang hilang (`enabled`, `job_type`, `cron_pattern`,
+> `timezone`, `assigned_agent`, `created_by`, `last_error`) **sebelum** index dibuat, jadi
+> `column "enabled" does not exist` tidak mungkin terjadi lagi.
+>
+> Perbaikan itu sendiri **belum cukup** dan sudah dilengkapi: `001_initial_schema.sql:257-258`
+> mendeklarasikan `cron_expression NOT NULL` dan `agent_id NOT NULL REFERENCES agents(id)`,
+> sedangkan `scheduled-job.repository.ts:17-34` tidak pernah mengisi keduanya. Artinya
+> kegagalan hanya berpindah dari boot ke penulisan pertama. Sekarang `012` melepas
+> `NOT NULL` pada kedua kolom itu.
+>
+> Dijaga oleh test baru `packages/database/test/scheduled-jobs-schema.test.ts`, yang
+> membandingkan kolom NOT NULL-tanpa-DEFAULT di `001`+`012`, kolom yang benar-benar di-INSERT
+> repository, dan kolom yang dilepas `012`. Tanpa `DROP NOT NULL`, test melaporkan
+> `["cron_expression","agent_id"]` sebagai tidak terisi.
+>
+> **Yang masih terbuka:** migrasi belum pernah dijalankan terhadap PostgreSQL kosong dari
+> working tree ini, jadi "host bersih bisa boot" masih kesimpulan statis, bukan hasil eksekusi.
+
+### Bukti (16 Sep 2026, sebelum perbaikan)
 Menjalankan `Migrator` asli (`packages/database/dist/migrator.js` + `DatabaseClient`)
 terhadap **schema bersih**:
 
@@ -84,9 +103,16 @@ selesai.
 
 ---
 
-## 3. 🟠 Cacat Eksekusi: Cron Menembak Berulang Setiap Tick
+## 3. ✅ DIPERBAIKI — Cacat Eksekusi: Cron Menembak Berulang Setiap Tick
 
-### Bukti
+> **Status: sudah diperbaiki (sebelum 20 Sep 2026).**
+> `packages/orchestration/src/scheduler/scheduled-job-scheduler.ts:1` sekarang memakai
+> `import cronParser from 'cron-parser'` statis dan `defaultNextRunCalculator` (:17-25)
+> memanggil `parser.parseExpression(...)`. `grep "(0, eval)"` di `packages/` dan `apps/`
+> mengembalikan 0 hasil, jadi `nextRunAt` tidak lagi `null` dan `isDue` tidak lagi
+> menganggap setiap job selalu jatuh tempo.
+
+### Bukti (16 Sep 2026, sebelum perbaikan)
 Memuat `packages/orchestration/dist/scheduler/scheduled-job-scheduler.js` dengan repo palsu,
 satu job, `cronPattern: '0 9 * * *'`, `nextRunAt: null`:
 
@@ -198,15 +224,36 @@ Lihat [[Second Brain & Grounded RAG]].
 | `modelPolicy.temperature` | Tidak pernah diteruskan ke provider; semua agent efektif memakai default provider 0.2 |
 | `modelPolicy.fallbackTier` | Tidak dibaca kode mana pun — **tidak ada rantai fallback antar model/provider** |
 | `modelPolicy.preferredTier` hasil seeding | Dipersistensi ke kolom `model_policy` (`packages/database/src/agent-seeder.ts:7`), tetapi tidak dibaca saat eksekusi. `ModelPolicySchema` hanya punya `preferredTier`, `fallbackTier`, `temperature` — tidak ada field `model` (`packages/shared/src/schemas/agent.ts:6-10`) |
-| `MAX_DELEGATION_DEPTH` | `DepthGuard` ada, tetapi `depth` tidak pernah dipersistensi → praktis no-op |
+| `MAX_DELEGATION_DEPTH` | ✅ **DIPERBAIKI** — `task.repository.ts:24-33` sekarang menulis `input.depth ?? 0` dan `task-delegator.ts:222-223` menghitung `depth = parent.depth + 1`, jadi `DepthGuard` punya nilai nyata untuk ditegakkan. (Catatan terpisah: limit per-agen `limits.maxDelegationDepth` masih tidak pernah dibaca — delegator memakai env global.) |
+
+### 6.1 Invariant orkestrasi yang sudah diperbaiki (20 Sep 2026)
+
+| Butir | Anchor | Status |
+| :--- | :--- | :--- |
+| **Lease steal** — worker yang gagal `acquireLease` tetap menulis status terminal; `updateStatus` cocok pada `id` saja dan mengosongkan kolom lease, sehingga run milik worker sah ditandai gagal | `run.repository.ts:266-305` vs `agent-runner.ts:532-536` | ✅ diperbaiki: `updateStatus(..., workerId?)` dengan guard `worker_id IS NULL OR worker_id = $5`; runner mengirim `this.workerId` |
+| **Double execution** — handler worker tanpa precondition status task; tiap retry BullMQ membuat `runId` baru sehingga lease tidak bisa mendeduplikasi | `apps/worker/src/worker.ts:266-305`, `agent-runner.ts:129` | ✅ diperbaiki: `checkTaskRunnable` — hanya `queued`/`approval_pending` boleh jalan |
+| **Budget leak** — `recoverStaleReservations` hanya dipanggil saat bootstrap runtime, jadi reservasi yatim menahan plafon harian sampai proses restart | `runtime/src/index.ts:124` | ✅ diperbaiki: sapuan menumpang interval recovery 30 detik di worker |
+| **Cancel tidak sampai ke graf** — worker memanggil `executePlan` tanpa signal dan delegator tidak pernah membaca store pembatalan durabel; emergency stop meninggalkan planner/spesialis/QA/sintesis berjalan sampai selesai | `apps/worker/src/worker.ts:295`, `task-delegator.ts:111` | ✅ diperbaiki: `isCancellationRequestedForTask` (join ke `tasks.parent_id`) + `AbortController` internal yang dipoll sebelum perencanaan dan tiap batch |
+| **Argus tidak bisa memanggil tool** — `stageRunner` dibangun tanpa `toolExecutor`, jadi `policy.verify` di allowlist Argus tidak pernah bisa dipanggil | `task-delegator.ts:71-82` | ✅ diperbaiki: `stageRunner` menerima `toolExecutor`, `cancellationStore`, `approvalExecutionStore`, `toolCallRepo` |
+| **Task `running` yatim permanen** — sweep run mensyaratkan `lease_expires_at IS NOT NULL`, sehingga run `active` tanpa lease abadi dan task-nya ikut tidak pernah dipulihkan; sweep juga hanya jalan saat boot | `run.repository.ts:207-245` | ✅ diperbaiki: cabang `lease_expires_at IS NULL` + penjaga waktu `staleAfterSeconds`, dan sapuan menumpang interval recovery worker |
+| **Budget bypass senyap** — reservasi dilewati total bila salah satu dari `budgetRepo`/`runRepo`/`globalDailyBudgetUsd` tidak ada | `agent-runner.ts:260` | ✅ diperbaiki: `warn` sekali menyebut repo mana yang hilang |
+
+Test karakterisasi: `packages/orchestration/test/agent-runner-lease.test.ts`,
+`packages/orchestration/test/delegation-cancellation.test.ts`,
+`apps/worker/test/worker-idempotency.test.ts`, `apps/worker/test/worker.test.ts`,
+`packages/database/test/run.repository.test.ts`.
+
+Semua item di atas sudah ditutup. Yang **belum** hanya yang menunggu keputusanmu: siklus
+status task/run, visibilitas memori, plafon biaya, dan vokabulari verdict QA.
 
 **Yang benar-benar ditegakkan**: `limits.maxTurns`
 (`agent-runner.ts:298`), `limits.timeoutSeconds` (`:142-147`), dan `limits.maxCostUsd`
 (`:361-364`).
 
-**Dimensi yang hilang di data**: seluruh 55 task berstatus `depth = 0` — termasuk 42 task
-yang punya `parent_id`. `task-delegator.ts:203` menghitung depth anak, tetapi
-`taskRepo.create` tidak menyimpannya.
+**Dimensi `depth` sudah diperbaiki**: `task.repository.ts:24-33` menulis `input.depth ?? 0`
+dan `task-delegator.ts:222-223` menghitung depth anak, sehingga `DepthGuard` aktif. Yang
+masih salah adalah sumber limitnya — delegator memakai `MAX_DELEGATION_DEPTH` dari env dan
+mengabaikan `limits.maxDelegationDepth` milik agen tujuan.
 
 ---
 
@@ -282,6 +329,25 @@ indikasi deskripsi tool perlu dipertegas.
 | `registerLegacy` menandai tool jaringan sebagai `sideEffects: ['none']` | `packages/tools/src/registry.ts:86-110` |
 | Redaksi log berbasis nama kunci saja | `packages/observability/src/logger.ts:11` |
 
+### 10.1 Temuan baru (recon 20 Sep 2026) — sudah diperbaiki
+
+| Butir | Anchor | Status |
+| :--- | :--- | :--- |
+| Hash approval token tidak mengikat payload bersarang — `JSON.stringify(payload, Object.keys(payload).sort())` memakai replacer array (daftar-putih), sehingga objek bersarang jadi `{}` dan dua payload berbeda menghasilkan hash identik | `packages/policy/src/token-verifier.ts:6` | ✅ diperbaiki: serialisasi kanonik rekursif + test regresi |
+| Manifest tool boleh **menurunkan** gerbang approval — `approval: 'auto'` memaksa `requiresApproval=false`, menimpa `ApprovalMatrix`; `registerLegacy` memberi `'auto'` secara default | `packages/tools/src/registry.ts:184-187`, `:105` | ✅ diperbaiki: manifest hanya boleh menaikkan; keputusan "tanpa approval" pindah ke `ApprovalMatrix.NO_APPROVAL_ACTIONS` |
+| Tiga gerbang SDLC gagal-terbuka — fallback `extractJSON` mengembalikan `technicalFeasibility:'approved'`, `financialApproval:'approved'`, `verdict:'PASS'`, jadi satu respons LLM yang tidak bisa di-parse = budget disetujui otomatis | `packages/orchestration/src/sdlc/sdlc-engine.ts:126-135`, `:183-191`, `:365-377` | ✅ diperbaiki: `needs_revision` / `escalated_to_human` / `REVISE` + test |
+| `PUT /api/v1/settings/telegram` menulis nilai klien ke `.env` tanpa menolak newline → injeksi baris env (mis. `API_AUTH_TOKEN=` untuk mematikan autentikasi) | `apps/agent-service/src/server.ts:421-463` | ✅ diperbaiki: schema menolak `\r`/`\n` + test |
+| `POST /api/v1/brain/ingest` menerima `vaultPath` absolut sembarang → pembacaan berkas arbitrer yang bisa dibaca balik via `/brain/search` | `apps/agent-service/src/routes/second-brain.ts:93-141` | ✅ diperbaiki: `vaultPath` wajib resolve ke root vault terkonfigurasi + test |
+
+Masih terbuka dari temuan yang sama: `x-actor-id` pada approval dikendalikan pemanggil,
+proxy dashboard tidak punya autentikasi pemanggil (kini digerbangi basic auth di Caddy),
+dan SSRF jalur Chromium tidak memeriksa hasil DNS.
+
+✅ **Allowlist gagal-terbuka sudah diperbaiki** (20 Sep 2026): `ToolContext.allowedTools`
+kini **wajib** di `packages/tools/src/types.ts`, dan `registry.ts:151` menolak tool yang
+tidak ada di daftar tanpa syarat. Lubang "allowlist tidak diset berarti izinkan semua"
+menjadi error kompilasi, bukan bug runtime.
+
 Rincian ada di [[Policy, Security & Approval Gates]].
 
 ---
@@ -341,14 +407,18 @@ Agar penilaian tetap seimbang, ini daftar yang **benar-benar berfungsi**:
 
 | Prioritas | Tindakan | Alasan |
 | :--- | :--- | :--- |
-| 1 | Perbaiki migrasi `012` agar host bersih bisa boot | 🔴 memblokir instalasi baru |
-| 2 | Ganti `(0, eval)('require')` dengan import statis di scheduler | 🟠 akan membanjiri antrian begitu cron dipakai |
+| ~~1~~ | ~~Perbaiki migrasi `012` agar host bersih bisa boot~~ | ✅ selesai 20 Sep 2026 (lihat §2). Sisa: jalankan migrasi di DB kosong untuk membuktikan |
+| ~~2~~ | ~~Ganti `(0, eval)('require')` dengan import statis di scheduler~~ | ✅ selesai (lihat §3) |
 | 3 | Isi tarif OpenRouter yang sebenarnya | 🟡 tanpa ini pengaman anggaran tidak berarti |
-| 4 | Persistensi `depth` pada `taskRepo.create` | 🟡 mengaktifkan `DepthGuard` |
+| ~~4~~ | ~~Persistensi `depth` pada `taskRepo.create`~~ | ✅ selesai (lihat §6) |
 | 5 | Pindahkan indeks Second Brain ke penyimpanan bersama + daftarkan toolnya di worker | 🟠 mewujudkan grounding |
 | 6 | Tambahkan sweeper approval kedaluwarsa + pemulihan task `running` yatim | 🟠 membersihkan pekerjaan macet |
 | 7 | Teruskan `temperature`/`model` ke provider, atau hapus dari definisi agent | 🔵 hilangkan konfigurasi palsu |
 | 8 | Buat notifikasi approval keluar (Telegram) | 🔵 hilangkan kebutuhan polling |
+| 9 | ~~jadikan `ToolContext.allowedTools` wajib lalu gagal-tertutup di `registry.ts:151`~~ | ✅ selesai 20 Sep 2026 (lihat §10.1) |
+| ~~10~~ | ~~Putuskan apakah SDLC dijalankan di atas `TaskDelegator` atau tetap proses sendiri~~ | ✅ diputuskan + dieksekusi: SDLC kini task biasa di atas pipeline (lihat §6.1) |
+| 11 | ~~teruskan `AbortSignal` ke `executePlan` dan beri `stageRunner` sebuah `cancellationStore`~~ | ✅ selesai 20 Sep 2026 (lihat §6.1) |
+| 12 | ~~jangan lewati reservasi anggaran secara senyap saat salah satu repo tidak ada~~ | ✅ selesai 20 Sep 2026 (peringatan sekali; lihat §6.1) |
 
 ---
 

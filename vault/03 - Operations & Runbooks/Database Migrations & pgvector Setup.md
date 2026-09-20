@@ -66,12 +66,12 @@ Semua migrasi dijalankan oleh `Migrator` di `packages/database/src/migrator.ts`,
 
 **Pada host bersih, migrasi gagal dan semua service menolak boot.** Ini terverifikasi dengan menjalankan `Migrator` asli (`packages/database/dist/migrator.js`) terhadap schema kosong:
 
-| Langkah | Hasil |
-|---|---|
-| `001` … `011` | ✅ sukses |
-| `012_scheduled_jobs.sql` | ❌ error `column "enabled" does not exist` → `runMigrations` melempar |
-| `013_idempotency_keys.sql` | ⛔ tidak pernah dijalankan |
-| `014_workflow_checkpoints.sql` | ⛔ tidak pernah dijalankan |
+| Langkah                        | Hasil                                                                |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `001` … `011`                  | ✅ sukses                                                             |
+| `012_scheduled_jobs.sql`       | ❌ error `column "enabled" does not exist` → `runMigrations` melempar |
+| `013_idempotency_keys.sql`     | ⛔ tidak pernah dijalankan                                            |
+| `014_workflow_checkpoints.sql` | ⛔ tidak pernah dijalankan                                            |
 
 Akibatnya, pada host bersih **tidak ada tabel `idempotency_keys` maupun `workflow_checkpoints`**. Karena `packages/runtime/src/index.ts:73-76` tidak menangkap error itu, `createAtlasRuntime` gagal ⇒ **semua service menolak boot**.
 

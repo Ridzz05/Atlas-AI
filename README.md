@@ -13,29 +13,41 @@ human approval gates, an Obsidian-based Second Brain, and real-time observabilit
 The core path works end to end: `task → plan → delegate → execute → QA → synthesize`, with
 leases, budget reservations, audit, and SSE streaming all live.
 
-It is **not yet installable from a clean host**. Migration
-`packages/database/src/migrations/012_scheduled_jobs.sql:4-25` re-declares a
-`CREATE TABLE IF NOT EXISTS scheduled_jobs` (a no-op, the table already exists from
-`001_initial_schema.sql:254-265`) and then indexes a column that only its own declaration
-would have created — `enabled` at `:23-25`. The migration throws, `runMigrations` rolls back
-(`packages/database/src/migrator.ts:78-89`), and the failure propagates out of
-`createAtlasRuntime` (`packages/runtime/src/index.ts:73-76`), so every service refuses to boot.
-Migrations `013` and `014` never apply, which means no `idempotency_keys` and no
-`workflow_checkpoints`.
+**Clean-host install — fixed in the migration chain, still unverified by execution.** The
+migration `012_scheduled_jobs.sql` no longer re-declares `scheduled_jobs` with a shape that
+conflicts with `001_initial_schema.sql:254-265`, and it now relaxes the two legacy columns
+that `ScheduledJobRepository.create` never populates (`cron_expression`, `agent_id`), so the
+chain no longer aborts and the first insert no longer fails on a not-null constraint.
+`packages/database/test/scheduled-jobs-schema.test.ts` compares the two sides statically and
+fails if a required column is left unwritten. What is still missing is the execution proof:
+`runMigrations` has never been run against an empty PostgreSQL from this working tree, so
+"a clean host boots" remains a static conclusion.
 
 Full defect register with `path:line` anchors, including the scheduler, budget, and delegation
 defects summarized under *Known Limitations* below:
-`vault/01 - System Architecture/Implementation Status & Known Gaps.md`.
+`vault/01 - System Architecture/Implementation Status & Known Gaps.md` (last verified
+16 Sep 2026 — several of its findings have since been fixed and are marked below).
+
+The **Enterprise SDLC** slice (7-phase C-suite lifecycle, `/board`, the `/api/v1/sdlc/*`
+routes, migrations 015 + 016) is documented in
+`vault/01 - System Architecture/Enterprise SDLC Operating System.md`. Each phase runs as an
+ordinary task through the task pipeline, so it inherits the budget reservation, run lease,
+cancellation, audit trail and tool gating — see *Enterprise SDLC* below.
 
 ---
 
 ## Agent Fleet
 
-Six agents are registered (`packages/agents/src/registry.ts:12-19`). **Chief** is the single
-entry point: it plans, decomposes, delegates to specialists, and synthesizes the final answer.
+Nine agents are registered (`packages/agents/src/registry.ts:15-25`). **Chief** is the single
+entry point for human requests: it plans, decomposes, delegates to specialists, and
+synthesizes the final answer. The C-suite trio (CEO, CFO, CTO) is currently reachable only
+through the SDLC engine.
 
 | Agent | Role (`role`) | Focus |
 | :--- | :--- | :--- |
+| **CEO** | `ceo` | Strategic brief and OKRs for an initiative (SDLC phase 1) |
+| **CFO** | `cfo` | Budget envelope and unit economics (SDLC phase 3) |
+| **CTO** | `cto` | Technical spec and tool policy (SDLC phase 2) |
 | **Chief** | `orchestrator` | Goal intake, structured planning, delegation, oversight, synthesis |
 | **Ned** | `researcher` | External and internal research with strict source tracking |
 | **Luna** | `data_analyst` | Datasets, pricing metrics, market opportunities, quantitative reports |
@@ -79,15 +91,16 @@ cost ceiling) and a **tool allowlist** — for example Chief at
   hints, and cap the wait at 45 s (`packages/providers/src/openai.ts:124-149`). Model provider
   selection, encrypted key storage, and fingerprinting are managed at runtime through
   `PUT /api/v1/settings/model-provider`.
-- **Operator dashboard** — Next.js 15 App Router with nine pages (`/`, `/tasks`, `/agents`,
-  `/approvals`, `/artifacts`, `/audit`, `/brain`, `/communications`, `/settings`), Material UI
-  + Tailwind, the **Valley Sans** typeface, and Circum Icons (`react-icons/ci`).
+- **Operator dashboard** — Next.js 15 App Router with ten pages (`/`, `/tasks`, `/board`,
+  `/agents`, `/approvals`, `/artifacts`, `/audit`, `/brain`, `/communications`, `/settings`),
+  Material UI + Tailwind, the **Valley Sans** typeface, and Circum Icons (`react-icons/ci`).
+  `/board` is part of the uncommitted SDLC slice.
 
 ---
 
 ## Second Brain & Knowledge Vault
 
-`vault/` holds **28 Obsidian notes** with YAML frontmatter, wikilinks, and Mermaid diagrams.
+`vault/` holds **32 Obsidian notes** with YAML frontmatter, wikilinks, and Mermaid diagrams.
 It is the system's shared knowledge corpus and the canonical technical record of this repo.
 
 Ingestion and retrieval are real, and so are the current limits:
@@ -127,20 +140,20 @@ atlas-ai-os/
 │   └── telegram-bot/             # Telegram interface, getUpdates polling (health :8082)
 ├── packages/
 │   ├── shared/                   # Zod schemas + centralized config loader
-│   ├── database/                 # pg client, SQL migrations, 15 repositories, seeder
+│   ├── database/                 # pg client, SQL migrations, 16 repositories, seeder
 │   ├── events/                   # event_outbox + pg_notify event bus
 │   ├── policy/                   # ApprovalMatrix, execution tokens, DepthGuard
 │   ├── observability/            # Hand-rolled JSON logger, redaction, audit repository
-│   ├── agents/                   # Six agent definitions + registry
+│   ├── agents/                   # Nine agent definitions + registry
 │   ├── orchestration/            # Planner, delegator, runner, QA gate, synthesizer, scheduler
 │   ├── memory/                   # Memory store + Second Brain ingestion/retrieval
 │   ├── tools/                    # Tool gateway, registry, and tool implementations
-│   ├── providers/                # LLM adapters (openai, openrouter, groq, ollama, deepseek, mock)
+│   ├── providers/                # LLM adapters (openai, openai-compatible, openrouter, groq, ollama, deepseek, zrouter, mock)
 │   └── runtime/                  # Composition root: createAtlasRuntime
-├── vault/                        # Second Brain: 28 Obsidian notes
+├── vault/                        # Second Brain: 32 Obsidian notes
 ├── scripts/                      # dev.mjs, verify.mjs, lint.mjs, sync-vault.mjs, check-secrets.mjs,
-│                                 # native-dev.test.mjs, backup-db.sh, restore-db.sh, healthcheck.sh,
-│                                 # ci-compose-smoke.sh
+│                                 # native-dev.test.mjs, playwright-audit.mjs, backup-db.sh,
+│                                 # restore-db.sh, healthcheck.sh, ci-compose-smoke.sh
 ├── docker-compose.yml            # Local Postgres + Redis
 ├── docker-compose.prod.yml       # Production stack (7 apps/services + Caddy)
 └── Caddyfile                     # TLS termination and reverse proxy
@@ -149,6 +162,44 @@ atlas-ai-os/
 `createAtlasRuntime` (`packages/runtime/src/index.ts:69`) is the single boot path, shared by
 `agent-service`, `worker`, and `telegram-bot`. The dashboard does **not** run it, so it never
 migrates or seeds.
+
+---
+
+## Enterprise SDLC
+
+A 7-phase executive lifecycle (`inception → architecture → budget_gate → sprint_planning →
+implementation → qa_compliance → release_signoff → completed`) driven from `/board` or the
+`/api/v1/sdlc/*` routes.
+
+Each phase is an **ordinary task**, not an inline model call:
+
+| Phase | Owning agent | Result |
+| :--- | :--- | :--- |
+| `inception` | `ceo` | `StrategicBrief` |
+| `architecture` | `cto` | `TechnicalSpec` |
+| `budget_gate` | `cfo` | `BudgetEnvelope` |
+| `sprint_planning` | `chief` | `SprintPlan` (delegator expands it) |
+| `implementation` | `chief` | the delegated specialist work |
+| `qa_compliance` | `argus` | `QAReport` |
+| `release_signoff` | `chief` | release package |
+
+- `packages/orchestration/src/sdlc/sdlc-engine.ts` is a **coordinator**: `startPhase` creates
+  and enqueues the phase task (reserving the task id and claiming it with a compare-and-set
+  on `current_phase`, so a phase cannot run twice), and `recordPhaseResult` reads the finished
+  task and moves the initiative on.
+- `apps/worker` calls `recordPhaseResult` after every job, so an initiative advances as a
+  side effect of real task execution. A restart mid-lifecycle no longer strands an initiative.
+- Phase prompts and result parsing live in `packages/orchestration/src/sdlc/phase-prompts.ts`.
+  Parsing is strict and fail-closed: an unparsable phase output **pauses** the initiative for
+  human review instead of substituting a default verdict.
+- Because phases are tasks, they inherit the budget ledger, run lease, cancellation, audit
+  trail, event stream and tool gating. `sprint_planning` and `implementation` belong to
+  `chief`, so the delegator expands them into specialist subtasks.
+- `sdlc_initiatives.phase_task_id` (migration `016`) is the link the worker uses to map a
+  finished task back to its initiative.
+
+The `/board` page reads initiative state but has no realtime channel, so it needs a manual
+refresh while a lifecycle is running.
 
 ---
 
@@ -237,8 +288,15 @@ curl -f https://${ATLAS_DOMAIN:-localhost}/ready
 ```
 
 See `vault/03 - Operations & Runbooks/Production Deployment & Docker.md` for the full
-runbook, including the mandatory `API_AUTH_TOKEN`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`, and
-`ENCRYPTION_KEY` settings that the config loader enforces in production.
+runbook, including the mandatory `API_AUTH_TOKEN`, `POSTGRES_PASSWORD`, `REDIS_PASSWORD`,
+and `ENCRYPTION_KEY` settings that the config loader enforces in production.
+
+Caddy also gates the whole site with HTTP basic auth (`ATLAS_BASIC_AUTH_USER`,
+`ATLAS_BASIC_AUTH_HASH`), because the dashboard proxy injects the real API bearer token for
+every request it forwards — reaching the dashboard is equivalent to holding operator
+credentials. `/health` and `/ready` stay public so container healthchecks work. Generate the
+hash with `docker run --rm caddy:2-alpine caddy hash-password --plaintext 'your-password'`;
+both variables are required by `docker-compose.prod.yml`.
 
 ---
 
@@ -261,12 +319,17 @@ Verified on 16 Sep 2026; each row is documented in detail in
 
 | Area | Limitation |
 | :--- | :--- |
-| Migrations | `012_scheduled_jobs.sql` aborts a clean install; `013`/`014` never apply |
-| Scheduler | `(0, eval)('require')` loses module scope, so `nextRunAt` stays `null` and every due-check treats a job as due — cron jobs would fire on every tick |
+| Migrations | ~~`012_scheduled_jobs.sql` aborts a clean install; `013`/`014` never apply~~ — fixed; the chain applies and the first insert no longer hits the legacy not-null columns. Execution proof on an empty database is still outstanding |
+| Scheduler | ~~`(0, eval)('require')` loses module scope, so `nextRunAt` stays `null`~~ — fixed; `scheduled-job-scheduler.ts:1` imports `cron-parser` statically |
 | Vector search | No pgvector extension, no `vector` columns; embeddings are `JSONB` and the Second Brain index is in-process |
-| Budget | OpenRouter adapter hardcodes `0` cost per million tokens (`packages/providers/src/openrouter.ts:18-19`), so the ledger stays at `$0` and the daily cap never trips |
+| Budget | OpenRouter adapter hardcodes `0` cost per million tokens (`packages/providers/src/openrouter.ts:18-19`), so the ledger stays at `$0` and the daily cap never trips. A reservation abandoned by a dead worker is now swept on the worker's recovery interval instead of only at boot |
 | Grounding | `second_brain.*` tools are unregistered in the worker, so agents cannot query the vault |
-| Delegation | `depth` is not persisted on `taskRepo.create`, so `DepthGuard` cannot enforce `MAX_DELEGATION_DEPTH` |
+| Delegation | ~~`depth` is not persisted on `taskRepo.create`~~ — fixed; `task.repository.ts:24-33` writes `input.depth ?? 0`. ~~A retried job re-ran the whole task~~ — fixed; the worker refuses a job whose task is not `queued`/`approval_pending`, and a terminal run write is now guarded by `worker_id` so a worker that lost the lease cannot clobber the owner |
+| Cancellation | ~~A cancel does not reach the delegation graph~~ — fixed; `executePlan` owns an `AbortController`, polls the durable task-level cancel before planning and at every batch, and passes the signal to subtasks, the QA gate and the synthesiser |
+| Budget bypass | ~~The durable reservation is skipped silently~~ — a one-time warning now names which repository or limit is missing, so a caller that omits one does not believe the daily cap is in force |
+| Stage tools | ~~The planner/QA/synthesis stage runner had no tool gateway~~ — fixed; Argus can reach `policy.verify` again |
+| Orphaned tasks | ~~A task stuck `running` was recovered only at worker boot, and a run that never acquired a lease was immortal~~ — fixed; the run sweep also catches a lease-less run once stale, the task sweep has a staleness guard, and both run on the worker's recovery interval |
+| SDLC engine | Phases run as ordinary tasks through the task pipeline (budget, lease, cancellation, audit and tool gating all apply). `implementation` and `sprint_planning` are owned by `chief`, so the delegator expands them into specialist subtasks |
 
 ---
 

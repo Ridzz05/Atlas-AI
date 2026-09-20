@@ -17,18 +17,19 @@ Sumber kebenaran roster: `packages/agents/src/registry.ts:12-19` — **6 agent**
 
 ---
 
-## 👥 Profil Armada Agent
+## 👥 Profil Armada Agent (Enterprise 3-Tier Roster)
 
-| Agent | Peran (`role`) | Spesialisasi | Batas eksekusi | Run nyata | Detail |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **Chief** | `orchestrator` | Perencanaan, pemecahan goal, delegasi DAG, sintesis akhir | 15 turn / 180 s / $1.00 | 54 | [[Chief - System Orchestrator]] |
-| **Ned** | `researcher` | Riset web, enrichment prospek/perusahaan, pengumpulan bukti | 10 turn / 180 s / $0.75 | 15 | [[Ned - Research Specialist]] |
-| **Luna** | `data_analyst` | Analisis dataset, perbandingan tarif/pasar, pemodelan tren | 10 turn / 180 s / $0.75 | **0** | [[Luna - Data & Market Analyst Specialist]] |
-| **Layla** | `lead_scoring` | Kualifikasi prospek berbasis rubrik deterministik, peringkat lead | 8 turn / 180 s / $0.50 | 2 | [[Layla - Lead Scoring Specialist]] |
-| **Hermes** | `content_creator` | Draf komunikasi, agenda rapat, copywriting outreach, dokumentasi | 8 turn / 180 s / $0.50 | 13 | [[Hermes - Content Specialist]] |
-| **Argus** | `qa_verifier` | Verifikasi mutu & risiko **setelah** eksekusi, penentu lulus/tidak | 6 turn / 120 s / $0.35 | 22 | [[Argus - QA & Risk Gate Specialist]] |
-
-Angka "Run nyata" adalah snapshot database 16 Sep 2026 dari total 106 run.
+| Agent | Peran (`role`) | Spesialisasi | Batas eksekusi | Detail |
+| :--- | :--- | :--- | :--- | :--- |
+| **CEO** | `ceo` | Penyelarasan visi bisnis, perumusan Strategic Brief & OKRs | 10 turn / 180 s / $0.80 | [[CEO - Chief Executive Officer]] |
+| **CTO** | `cto` | Arsitektur teknis, evaluasi alat, kebijakan keamanan | 10 turn / 150 s / $0.60 | [[CTO - Chief Technology Officer]] |
+| **CFO** | `cfo` | Kelayakan modal, unit economics, Budget Envelope, hak veto | 8 turn / 120 s / $0.50 | [[CFO - Chief Financial Officer]] |
+| **Chief (COO)** | `orchestrator` | Perencanaan operasional, penjadwalan DAG, sintesis akhir | 15 turn / 180 s / $1.00 | [[Chief - System Orchestrator]] |
+| **Ned** | `researcher` | Riset web, enrichment prospek/perusahaan, pengumpulan bukti | 10 turn / 180 s / $0.75 | [[Ned - Research Specialist]] |
+| **Luna** | `data_analyst` | Analisis dataset, perbandingan tarif/pasar, pemodelan tren | 10 turn / 180 s / $0.75 | [[Luna - Data & Market Analyst Specialist]] |
+| **Layla** | `lead_scoring` | Kualifikasi prospek berbasis rubrik deterministik, peringkat lead | 8 turn / 180 s / $0.50 | [[Layla - Lead Scoring Specialist]] |
+| **Hermes** | `content_creator` | Draf komunikasi, agenda rapat, copywriting outreach, dokumentasi | 8 turn / 180 s / $0.50 | [[Hermes - Content Specialist]] |
+| **Argus (CRO)** | `qa_verifier` | Verifikasi kepatuhan & risiko, penentu kelulusan QA Gate | 6 turn / 120 s / $0.35 | [[Argus - QA & Risk Gate Specialist]] |
 
 ---
 
