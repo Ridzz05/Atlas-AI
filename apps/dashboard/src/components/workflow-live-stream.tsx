@@ -25,7 +25,7 @@ import {
   CiViewList
 } from 'react-icons/ci';
 import { atlasFetch } from '../lib/atlas-api';
-import { subscribeToAtlasEvents } from '../lib/event-stream';
+import { createAtlasEventStream } from '../lib/event-stream';
 import { FormattedMessage } from './formatted-message';
 
 export interface WorkflowMessage {
@@ -170,18 +170,18 @@ export function WorkflowLiveStream({
     void loadWorkflowData();
   }, [selectedTaskId]);
 
-  // Real-time EventSource listener
+  // Real-time EventSource listener. The handle owns reconnection, so a failed connection no longer
+  // leaves this panel frozen on stale data for the rest of the session.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const stream = new EventSource('/api/atlas/events/stream');
-    const unsubscribe = subscribeToAtlasEvents(stream, () => {
-      void loadWorkflowData();
+    const stream = createAtlasEventStream({
+      url: '/api/atlas/events/stream',
+      onEvent: () => {
+        void loadWorkflowData();
+      }
     });
 
-    return () => {
-      unsubscribe();
-      stream.close();
-    };
+    return () => stream.close();
   }, [selectedTaskId]);
 
   // Build Unified Chronological Feed

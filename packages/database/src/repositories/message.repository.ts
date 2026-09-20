@@ -53,7 +53,18 @@ export class MessageRepository {
     return this.mapRow(result.rows[0]);
   }
 
-  public async list(options: { taskId?: string; runId?: string; limit?: number } = {}): Promise<MessageRecord[]> {
+  /**
+   * List messages, oldest-first by default.
+   *
+   * The default suits a thread: a task's or a run's messages read from where the conversation began.
+   * A feed wants the opposite end — `order: 'newest'` returns the most recent window — and the
+   * direction is an argument because it used to be implied by the SQL alone: the dashboard asked for
+   * `limit=100` against an always-ascending query, so it received the first 100 messages ever written
+   * and could never show new activity no matter how often it re-fetched.
+   */
+  public async list(
+    options: { taskId?: string; runId?: string; limit?: number; order?: 'oldest' | 'newest' } = {}
+  ): Promise<MessageRecord[]> {
     const limit = Math.min(200, Math.max(1, Math.trunc(options.limit || 100)));
     const values: unknown[] = [];
     const filters: string[] = [];
@@ -70,7 +81,9 @@ export class MessageRepository {
     let sql = 'SELECT * FROM messages';
     if (filters.length > 0) sql += ` WHERE ${filters.join(' AND ')}`;
     values.push(limit);
-    sql += ` ORDER BY created_at ASC, id ASC LIMIT $${values.length}`;
+    // `id` breaks ties so the window is deterministic when several messages share a millisecond.
+    const direction = options.order === 'newest' ? 'DESC' : 'ASC';
+    sql += ` ORDER BY created_at ${direction}, id ${direction} LIMIT $${values.length}`;
 
     const result = await this.db.query(sql, values);
     return result.rows.map(row => this.mapRow(row));

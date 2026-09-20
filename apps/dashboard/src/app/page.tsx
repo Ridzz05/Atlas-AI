@@ -17,7 +17,7 @@ import { AgentGraph, AgentNodeData } from '../components/agent-graph';
 import { WorkflowLiveStream } from '../components/workflow-live-stream';
 import { ChiefVoiceAssistant } from '../components/chief-voice-assistant';
 import { atlasFetch } from '../lib/atlas-api';
-import { subscribeToAtlasEvents } from '../lib/event-stream';
+import { createAtlasEventStream } from '../lib/event-stream';
 
 interface ApiTask {
   id: string;
@@ -177,15 +177,15 @@ export default function CommandCenterPage() {
   }, []);
 
   useEffect(() => {
-    const stream = new EventSource('/api/atlas/events/stream');
-    const refresh = () => {
-      void loadOverview();
-    };
-    const unsubscribe = subscribeToAtlasEvents(stream, refresh);
-    return () => {
-      unsubscribe();
-      stream.close();
-    };
+    // Re-creates itself after a failure; it used to be one EventSource that was never replaced.
+    const stream = createAtlasEventStream({
+      url: '/api/atlas/events/stream',
+      onEvent: () => {
+        void loadOverview();
+      }
+    });
+
+    return () => stream.close();
   }, []);
 
   const activeCount = tasks.filter(task => ['running', 'planning', 'review_pending', 'approval_pending'].includes(task.status)).length;

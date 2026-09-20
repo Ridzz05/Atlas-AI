@@ -24,6 +24,18 @@ export interface MetadataRouteOptions {
   budgetRepo?: BudgetRepository;
 }
 
+/**
+ * The window direction for a list read: `oldest` (a thread, from its beginning) or `newest` (a feed).
+ *
+ * Absent means oldest, matching the repository default. Anything else is rejected rather than ignored,
+ * because a caller that asks for an order it does not get has no way to tell.
+ */
+function parseOrder(value?: string): 'oldest' | 'newest' | { error: string } {
+  if (value === undefined || value === '') return 'oldest';
+  if (value === 'oldest' || value === 'newest') return value;
+  return { error: `Invalid order '${value}'. Expected 'oldest' or 'newest'.` };
+}
+
 function parseLimit(value: string | undefined, label: string): number | { error: string } {
   const limit = value ? Number(value) : 50;
   if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
@@ -119,9 +131,11 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
   });
 
   app.get('/api/v1/messages', async (req, reply) => {
-    const query = req.query as { taskId?: string; runId?: string; limit?: string };
+    const query = req.query as { taskId?: string; runId?: string; limit?: string; order?: string };
     const limit = parseLimit(query.limit, 'Message');
     if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const order = parseOrder(query.order);
+    if (isValidationError(order)) return reply.status(400).send(order);
     const taskId = parseOptionalUuid(query.taskId, 'taskId');
     if (isValidationError(taskId)) return reply.status(400).send(taskId);
     const runId = parseOptionalUuid(query.runId, 'runId');
@@ -131,15 +145,18 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     const data = await options.messageRepo.list({
       taskId,
       runId,
-      limit
+      limit,
+      order
     });
     return reply.status(200).send({ data, count: data.length, durable: true });
   });
 
   app.get('/api/v1/tool-calls', async (req, reply) => {
-    const query = req.query as { taskId?: string; runId?: string; limit?: string };
+    const query = req.query as { taskId?: string; runId?: string; limit?: string; order?: string };
     const limit = parseLimit(query.limit, 'Tool call');
     if (typeof limit !== 'number') return reply.status(400).send(limit);
+    const order = parseOrder(query.order);
+    if (isValidationError(order)) return reply.status(400).send(order);
     const taskId = parseOptionalUuid(query.taskId, 'taskId');
     if (isValidationError(taskId)) return reply.status(400).send(taskId);
     const runId = parseOptionalUuid(query.runId, 'runId');
@@ -149,7 +166,8 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     const data = await options.toolCallRepo.list({
       taskId,
       runId,
-      limit
+      limit,
+      order
     });
     return reply.status(200).send({ data, count: data.length, durable: true });
   });

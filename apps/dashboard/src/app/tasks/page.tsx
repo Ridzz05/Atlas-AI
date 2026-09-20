@@ -18,7 +18,7 @@ import TextField from '@mui/material/TextField';
 import Collapse from '@mui/material/Collapse';
 import { CiCirclePlus, CiLocationArrow1, CiRedo, CiPlay1, CiChat1 } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
-import { subscribeToAtlasEvents } from '../../lib/event-stream';
+import { AtlasStreamStatus, createAtlasEventStream, streamStatusLabel } from '../../lib/event-stream';
 import { WorkflowLiveStream } from '../../components/workflow-live-stream';
 
 interface ApiTask {
@@ -41,7 +41,7 @@ export default function TasksPage() {
   const [newGoal, setNewGoal] = useState('');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [realtime, setRealtime] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<AtlasStreamStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
   const [expandedTaskIds, setExpandedTaskIds] = useState<Record<string, boolean>>({});
 
@@ -60,19 +60,16 @@ export default function TasksPage() {
 
   useEffect(() => {
     void loadTasks();
-    const stream = new EventSource('/api/atlas/events/stream');
-    const unsubscribe = subscribeToAtlasEvents(stream, () => void loadTasks());
-    const handleOpen = () => setRealtime(true);
-    const handleError = () => setRealtime(false);
-    stream.addEventListener('open', handleOpen);
-    stream.addEventListener('error', handleError);
+    // The stream owns its own reconnection now: the source is re-created with a capped backoff after a
+    // failure, and `status` is what the indicator shows. Previously one EventSource was created here and
+    // never re-created, so a single failed connection left this page printing 'reconnecting' forever.
+    const stream = createAtlasEventStream({
+      url: '/api/atlas/events/stream',
+      onEvent: () => void loadTasks(),
+      onStatus: setStreamStatus
+    });
 
-    return () => {
-      unsubscribe();
-      stream.removeEventListener('open', handleOpen);
-      stream.removeEventListener('error', handleError);
-      stream.close();
-    };
+    return () => stream.close();
   }, [loadTasks]);
 
   const handleCreate = async (event: React.FormEvent) => {
@@ -134,11 +131,11 @@ export default function TasksPage() {
                   width: 8,
                   height: 8,
                   borderRadius: '50%',
-                  bgcolor: realtime ? '#ff4f00' : '#a8a29e'
+                  bgcolor: streamStatus === 'open' ? '#ff4f00' : '#a8a29e'
                 }}
               />
               <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: '#666155', fontWeight: 600 }}>
-                {realtime ? 'live stream' : 'reconnecting'}
+                {streamStatusLabel(streamStatus)}
               </Typography>
             </Box>
           </Box>

@@ -74,7 +74,12 @@ export class ToolCallRepository {
     return result.rows[0] ? this.mapRow(result.rows[0]) : null;
   }
 
-  public async list(options: { taskId?: string; runId?: string; limit?: number } = {}): Promise<ToolCall[]> {
+  /**
+   * List tool calls, oldest-first by default (a run's or a task's own history reads forwards).
+   * `order: 'newest'` is what a feed wants; see MessageRepository.list for why the direction is an
+   * explicit argument rather than something implied by the SQL alone.
+   */
+  public async list(options: { taskId?: string; runId?: string; limit?: number; order?: 'oldest' | 'newest' } = {}): Promise<ToolCall[]> {
     const limit = Math.min(200, Math.max(1, Math.trunc(options.limit || 100)));
     const values: unknown[] = [];
     const filters: string[] = [];
@@ -91,7 +96,8 @@ export class ToolCallRepository {
     let sql = 'SELECT * FROM tool_calls';
     if (filters.length > 0) sql += ` WHERE ${filters.join(' AND ')}`;
     values.push(limit);
-    sql += ` ORDER BY created_at ASC, id ASC LIMIT $${values.length}`;
+    const direction = options.order === 'newest' ? 'DESC' : 'ASC';
+    sql += ` ORDER BY created_at ${direction}, id ${direction} LIMIT $${values.length}`;
 
     const result = await this.db.query(sql, values);
     return result.rows.map(row => this.mapRow(row));

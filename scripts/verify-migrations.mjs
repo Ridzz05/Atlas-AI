@@ -16,6 +16,7 @@
  * Exits non-zero if any check fails.
  */
 import { readFileSync } from 'node:fs';
+import { readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -86,7 +87,14 @@ try {
   check('migration chain applies end to end', applied.length > 0, `${applied.length} applied`);
 
   const versions = await db.query(`SELECT version FROM "${schemaName}".schema_migrations ORDER BY version`);
-  check('every migration is recorded', versions.rows.length >= 17, `${versions.rows.length} version(s)`);
+  // Derived from the directory, not a literal: a hardcoded floor stops noticing a migration that is
+  // added but never applied.
+  const migrationFiles = (await readdir(getDefaultMigrationsDir())).filter(name => name.endsWith('.sql'));
+  check(
+    'every migration file is recorded as applied',
+    versions.rows.length === migrationFiles.length,
+    `${versions.rows.length} applied of ${migrationFiles.length} file(s)`
+  );
 
   const tables = await db.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = $1 ORDER BY table_name`, [
     schemaName
@@ -119,6 +127,24 @@ try {
     indexes.rows.some(r => /occurred_at/.test(r.indexdef)),
     indexes.rows.map(r => r.indexname).join(', ')
   );
+
+  // The list reads sort on a timestamp no index covered, so each one was a sequential scan plus a
+  // sort over an append-only table. This asserts the index exists on a real server after the chain
+  // has run, rather than only that a CREATE INDEX statement is present in a file.
+  const listSortIndexes = await db.query(
+    `SELECT tablename, indexdef FROM pg_indexes
+     WHERE schemaname = $1 AND tablename = ANY($2::text[])`,
+    [schemaName, ['messages', 'tool_calls', 'audit_events']]
+  );
+  const sortColumns = { messages: 'created_at', tool_calls: 'created_at', audit_events: 'timestamp' };
+  for (const [table, column] of Object.entries(sortColumns)) {
+    const defs = listSortIndexes.rows.filter(r => r.tablename === table).map(r => r.indexdef);
+    check(
+      `${table} has an index for its list sort (${column})`,
+      defs.some(def => new RegExp(`${column}[^)]*\\bid\\b`, 'i').test(def)),
+      defs.length > 0 ? defs.map(d => d.replace(/^CREATE INDEX \S+ ON /, '')).join(' | ') : 'no index on this table'
+    );
+  }
 
   const uuidDefault = await db.query(
     `SELECT pg_get_expr(d.adbin, d.adrelid) AS expr FROM pg_attrdef d

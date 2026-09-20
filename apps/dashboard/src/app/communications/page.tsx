@@ -13,7 +13,7 @@ import CircularProgress from '@mui/material/CircularProgress';
 import TextField from '@mui/material/TextField';
 import { CiChat1, CiRedo, CiPaperplane, CiMicrochip, CiUser, CiPlay1, CiSettings } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
-import { subscribeToAtlasEvents } from '../../lib/event-stream';
+import { AtlasStreamStatus, createAtlasEventStream, streamStatusLabel } from '../../lib/event-stream';
 import {
   buildCommunicationFeed,
   CommunicationFeedItem,
@@ -186,7 +186,7 @@ export default function CommunicationsPage() {
   const [taskIdFilter, setTaskIdFilter] = useState('');
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [loading, setLoading] = useState(true);
-  const [realtime, setRealtime] = useState(false);
+  const [streamStatus, setStreamStatus] = useState<AtlasStreamStatus>('connecting');
   const [error, setError] = useState<string | null>(null);
   const loadFeedRef = useRef<() => Promise<void>>(async () => undefined);
 
@@ -202,9 +202,13 @@ export default function CommunicationsPage() {
     setLoading(true);
     try {
       const suffix = trimmedTaskId ? `&taskId=${encodeURIComponent(trimmedTaskId)}` : '';
+      // `order=newest` because this page is a feed: it renders newest-first, and the API's default
+      // window is the *oldest* rows (right for a thread, wrong here). Without it the page received the
+      // first 100 messages ever written and re-fetched that same page on every stream event, so new
+      // activity could never appear no matter how often it refreshed.
       const [messages, toolCalls] = await Promise.all([
-        atlasFetch<RecordListResponse<CommunicationMessageRecord>>(`/messages?limit=100${suffix}`),
-        atlasFetch<RecordListResponse<CommunicationToolCallRecord>>(`/tool-calls?limit=100${suffix}`)
+        atlasFetch<RecordListResponse<CommunicationMessageRecord>>(`/messages?limit=100&order=newest${suffix}`),
+        atlasFetch<RecordListResponse<CommunicationToolCallRecord>>(`/tool-calls?limit=100&order=newest${suffix}`)
       ]);
       setFeed(buildCommunicationFeed(messages.data, toolCalls.data));
       setError(null);
@@ -224,22 +228,18 @@ export default function CommunicationsPage() {
   }, [loadFeed]);
 
   useEffect(() => {
-    const stream = new EventSource('/api/atlas/events/stream');
-    const refresh = () => {
-      void loadFeedRef.current();
-    };
-    const unsubscribe = subscribeToAtlasEvents(stream, refresh);
-    const handleOpen = () => setRealtime(true);
-    const handleError = () => setRealtime(false);
-    stream.addEventListener('open', handleOpen);
-    stream.addEventListener('error', handleError);
+    // The stream re-creates itself after a failure now, so the indicator can report what is true.
+    // It used to be one EventSource that was never re-created: on error this page set `realtime` false
+    // and printed 'reconnecting' over a connection that was never coming back.
+    const stream = createAtlasEventStream({
+      url: '/api/atlas/events/stream',
+      onEvent: () => {
+        void loadFeedRef.current();
+      },
+      onStatus: setStreamStatus
+    });
 
-    return () => {
-      unsubscribe();
-      stream.removeEventListener('open', handleOpen);
-      stream.removeEventListener('error', handleError);
-      stream.close();
-    };
+    return () => stream.close();
   }, []);
 
   const filteredFeed = useMemo(() => {
@@ -268,12 +268,12 @@ export default function CommunicationsPage() {
                   width: 8,
                   height: 8,
                   borderRadius: '50%',
-                  bgcolor: realtime ? '#ff4f00' : '#a8a29e',
-                  boxShadow: realtime ? '0 0 8px rgba(255, 79, 0, 0.6)' : 'none'
+                  bgcolor: streamStatus === 'open' ? '#ff4f00' : '#a8a29e',
+                  boxShadow: streamStatus === 'open' ? '0 0 8px rgba(255, 79, 0, 0.6)' : 'none'
                 }}
               />
               <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: '0.68rem', color: '#666155', fontWeight: 600 }}>
-                {realtime ? 'live bus' : 'reconnecting'}
+                {streamStatusLabel(streamStatus)}
               </Typography>
             </Box>
           </Box>
