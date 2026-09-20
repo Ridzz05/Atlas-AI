@@ -148,6 +148,12 @@ export class BudgetRepository {
         FROM budget_reservations
         WHERE status = 'reserved'
           AND created_at < $1
+          AND NOT EXISTS (
+            SELECT 1 FROM runs r
+            WHERE r.id = budget_reservations.run_id
+              AND r.status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+              AND (r.lease_expires_at IS NULL OR r.lease_expires_at > NOW())
+          )
         FOR UPDATE SKIP LOCKED`,
         [cutoff.toISOString()]
       );
@@ -180,12 +186,20 @@ export class BudgetRepository {
       const result = await client.query('SELECT * FROM budget_reservations WHERE id = $1 FOR UPDATE', [reservationId]);
       const row = result.rows[0];
       if (!row) return null;
-      if (row.status !== 'reserved') return this.mapReservation(row);
+
+      // A reservation already settled with a cost is returned untouched: settle is idempotent.
+      if (row.status === 'committed' || row.status === 'failed') return this.mapReservation(row);
+
+      // A reservation the stale sweep already released has had its reserved amount returned to the
+      // pool, so only the actual cost is applied here — but it MUST be applied. Returning early
+      // made every run that outlived the 900s sweep free: its spend never reached used_usd, so
+      // neither the per-run ceiling nor the global daily cap could ever see it.
+      const reservedToReturn = row.status === 'reserved' ? -Number(row.amount_usd || 0) : 0;
 
       const scopes = this.reservationScopes(row);
       for (const scope of scopes) {
         await this.lockScope(client, scope);
-        await this.adjustReservation(client, scope, -Number(row.amount_usd || 0), actualCostUsd);
+        await this.adjustReservation(client, scope, reservedToReturn, actualCostUsd);
       }
 
       const updated = await client.query(

@@ -115,7 +115,36 @@ export class TaskDelegator {
     this.maxConcurrency = options.maxConcurrency || 3;
   }
 
+  /**
+   * Run the delegation graph, and make sure a failure lands on the parent task row.
+   *
+   * A failing subtask used to throw straight out of here. The parent row had already been set to
+   * 'running' by `updatePlan`, so nothing wrote its failure: the next BullMQ attempt hit the
+   * at-most-once precondition ('task_already_running'), was skipped, and the parent stayed
+   * 'running' until the 15-minute orphan sweep, which reports a generic lease-expired reason and
+   * discards the real error. All three retries were wasted and the SDLC phase reporting never ran.
+   */
   public async executePlan(parentTask: Task, signal?: AbortSignal, approvalResume?: ApprovalResumeContext): Promise<DelegationResult> {
+    try {
+      return await this.runDelegation(parentTask, signal, approvalResume);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      rootLogger.error(`Delegation for task ${parentTask.id} failed`, { error: message });
+
+      if (this.options.taskRepo) {
+        await this.options.taskRepo
+          .updateStatus(parentTask.id, 'failed', { error: message })
+          .catch((writeError: unknown) =>
+            rootLogger.error('Failed to record the parent task failure', { taskId: parentTask.id, error: String(writeError) })
+          );
+        await this.publishTaskState(parentTask.id, parentTask.assignedAgent, 'failed', { error: message }, 'task.failed');
+      }
+
+      throw error;
+    }
+  }
+
+  private async runDelegation(parentTask: Task, signal?: AbortSignal, approvalResume?: ApprovalResumeContext): Promise<DelegationResult> {
     rootLogger.info(`Starting multi-agent delegation for parent task ${parentTask.id}`);
     let totalCostUsd = 0;
     const addCost = (costUsd: number): void => {
@@ -318,7 +347,13 @@ export class TaskDelegator {
         };
       });
 
-      const batchResults = await Promise.all(batchPromises);
+      const batchResults = await Promise.all(batchPromises).catch((error: unknown) => {
+        // One subtask failed, so stop its siblings instead of letting them finish and spend:
+        // `Promise.all` rejects immediately but the other runs keep going unless the graph signal
+        // is aborted. Their results would never reach the parent anyway.
+        controller.abort(error instanceof Error ? error.message : String(error));
+        throw error;
+      });
       const waitingResult = batchResults.find(result => result.status === 'waiting_approval');
       if (waitingResult) {
         const finalSynthesis = `Task is waiting for human approval${waitingResult.approvalId ? ` (${waitingResult.approvalId})` : ''} before continuing.`;

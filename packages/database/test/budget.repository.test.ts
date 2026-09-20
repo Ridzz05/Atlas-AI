@@ -198,4 +198,72 @@ describe('BudgetRepository', () => {
     expect(committed).toMatchObject({ id: reservationId, status: 'committed', committedCostUsd: 0.12 });
     expect(client.query).toHaveBeenCalledWith(expect.stringContaining('used_usd = used_usd + $2'), expect.arrayContaining([-0.25, 0.12]));
   });
+
+  // The sweep selected `status='reserved' AND created_at < now-900s` with no check that the run was
+  // still alive, and the worker calls it on its 30s recovery interval. Any run legitimately longer
+  // than 15 minutes therefore had its reservation released while it kept spending — and because
+  // settle() returns early for a row that is no longer 'reserved', the run's real cost was never
+  // added to used_usd either. Every long run was invisible to both the per-run and the daily cap.
+  it('does not release the reservation of a run that is still alive', async () => {
+    const { db, client } = createTransactionalDb(async () => ({ rows: [] }));
+    const repository = new BudgetRepository(db);
+
+    await repository.recoverStaleReservations();
+
+    const sweepSql = client.query.mock.calls.map(call => String(call[0])).find(sql => sql.includes('FROM budget_reservations'));
+    expect(sweepSql).toBeDefined();
+    // The sweep must consult the run's liveness, not just the reservation's age.
+    expect(sweepSql).toContain('runs');
+    expect(sweepSql).toContain('lease_expires_at');
+  });
+
+  it('still records the real cost when the reservation was already released', async () => {
+    const reservationId = '123e4567-e89b-12d3-a456-426614174003';
+    const { db, client } = createTransactionalDb(async sql => {
+      if (sql.includes('FROM budget_reservations')) {
+        return {
+          rows: [
+            {
+              id: reservationId,
+              run_id: runId,
+              task_id: taskId,
+              agent_id: 'chief',
+              amount_usd: '0.2500',
+              global_reset_at: '2026-08-27T00:00:00.000Z',
+              status: 'released',
+              committed_cost_usd: 0,
+              created_at: '2026-08-26T10:00:00.000Z',
+              updated_at: '2026-08-26T10:05:00.000Z'
+            }
+          ]
+        };
+      }
+      if (sql.includes('UPDATE budget_reservations')) {
+        return {
+          rows: [
+            {
+              id: reservationId,
+              run_id: runId,
+              task_id: taskId,
+              agent_id: 'chief',
+              amount_usd: '0.2500',
+              global_reset_at: '2026-08-27T00:00:00.000Z',
+              status: 'committed',
+              committed_cost_usd: '0.3100',
+              created_at: '2026-08-26T10:00:00.000Z',
+              updated_at: '2026-08-26T10:06:00.000Z'
+            }
+          ]
+        };
+      }
+      return { rows: [] };
+    });
+    const repository = new BudgetRepository(db);
+
+    await repository.commit(reservationId, 0.31);
+
+    // The released amount was already returned to the pool, so only the actual cost is applied —
+    // but it must be applied, or a late-finishing run is free.
+    expect(client.query).toHaveBeenCalledWith(expect.stringContaining('used_usd = used_usd + $2'), expect.arrayContaining([0, 0.31]));
+  });
 });

@@ -189,4 +189,59 @@ describe('TaskDelegator cancellation and stage tool access', () => {
     expect(toolExecutor.execute).toHaveBeenCalled();
     expect(toolExecutor.execute.mock.calls[0][0]).toMatchObject({ name: 'policy.verify' });
   });
+
+  // A failing subtask threw straight out of executePlan. The parent row had already been set to
+  // 'running' by updatePlan, so nothing ever wrote its failure: the next BullMQ attempt hit the
+  // at-most-once precondition ('task_already_running'), was skipped, and the parent sat in
+  // 'running' until the 15-minute orphan sweep, which reports a generic lease-expired reason and
+  // throws away the real error. All three retries were wasted and SDLC phase reporting never ran.
+  it('marks the parent task failed when a subtask fails, instead of leaving it running', async () => {
+    const provider = buildProvider();
+    let calls = 0;
+    const original = provider.run.bind(provider);
+    vi.spyOn(provider, 'run').mockImplementation(async (request: any) => {
+      calls++;
+      // Call 1 is the planner; call 2 is the specialist, which fails.
+      if (calls === 2) throw new Error('provider exploded');
+      return original(request);
+    });
+
+    const updateStatus = vi.fn(async () => undefined);
+    const taskRepo = {
+      updatePlan: vi.fn(async () => undefined),
+      updateStatus,
+      findChildren: vi.fn(async () => []),
+      create: vi.fn(async (input: any) => ({
+        id: crypto.randomUUID(),
+        parentId: parentTask.id,
+        title: input.title,
+        goal: input.goal,
+        assignedAgent: input.assignedAgent,
+        depth: 1,
+        status: 'queued',
+        priority: 'normal',
+        context: {},
+        plan: null,
+        result: null,
+        error: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        completedAt: null
+      }))
+    };
+
+    const delegator = new TaskDelegator({
+      provider,
+      registry: defaultAgentRegistry,
+      eventBus: new InMemoryEventBus(),
+      taskRepo: taskRepo as any
+    });
+
+    await expect(delegator.executePlan(parentTask)).rejects.toThrow();
+
+    const parentFailure = updateStatus.mock.calls.find(call => call[0] === parentTask.id && call[1] === 'failed');
+    expect(parentFailure).toBeDefined();
+    // The real cause must survive into the durable row.
+    expect(JSON.stringify(parentFailure?.[2])).toContain('provider exploded');
+  });
 });
