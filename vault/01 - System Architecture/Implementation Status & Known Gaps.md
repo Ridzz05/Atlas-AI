@@ -255,6 +255,30 @@ dan `task-delegator.ts:222-223` menghitung depth anak, sehingga `DepthGuard` akt
 masih salah adalah sumber limitnya — delegator memakai `MAX_DELEGATION_DEPTH` dari env dan
 mengabaikan `limits.maxDelegationDepth` milik agen tujuan.
 
+### 6.2 ✅ Gerbang CI hijau menyeluruh (20 Sep 2026)
+
+Sebelum ini **tidak satu pun langkah setelah "Setup pnpm" pernah berjalan**. Job `validate`
+mati di langkah kedua, dan `compose-smoke` (`needs: validate`) selalu ter-skip — jadi
+seluruh rangkaian gerbang di belakangnya belum pernah dieksekusi sekali pun, dan cacatnya
+tersembunyi berlapis di balik langkah pertama yang rusak.
+
+Empat cacat yang menutupinya, semuanya diperbaiki:
+
+| Cacat | Sebab | Perbaikan |
+| --- | --- | --- |
+| `Setup pnpm` gagal | `version: 11` di `pnpm/action-setup` bentrok dengan `packageManager: pnpm@11.23.0` | input `version` dihapus; `packageManager` jadi sumber tunggal |
+| `Dependency audit` gagal | `next>sharp` di-pin `0.35.3`, satu patch di bawah rilis yang dipatch (GHSA-rgj7-g3m4-5g8c) | override dinaikkan ke `0.35.4`; `pnpm build` tetap lolos dan binding native-nya terbukti merender PNG |
+| `Secret scan` gagal | grep inline mencari `8669353401` telanjang, yang ada di dalam `ci.yml` sendiri **dan** di `scripts/check-secrets.mjs` — langkah itu mencocokkan dirinya sendiri | pola dipindah ke `scripts/check-secrets.mjs` sebagai pemilik tunggal, `lint.mjs` mengimpornya, CI memanggil skripnya |
+| `Run Tests` gagal | `scripts/native-dev.test.mjs` menjalankan `pnpm.cmd`, shim khusus Windows, di runner Linux | nama perintah mengikuti platform; cabang ComSpec tetap diuji di Windows |
+
+Dua cacat terakhir hanya terlihat setelah cacat sebelumnya diperbaiki, dan keduanya
+membutuhkan bukti dua arah: pola secret-scan diuji dengan berkas probe agar terbukti masih
+menangkap (bukan sekadar lolos), dan pola anotasi kegagalan test diuji terhadap keluaran
+turbo yang gagal sungguhan sebelum dipakai.
+
+Status terverifikasi pada `7ebc653`: `validate` 15/15 langkah lolos, dan `compose-smoke`
+berjalan untuk **pertama kali** — boot compose, readiness, serta backup/restore — dan lolos.
+
 ---
 
 ## 7. 🟠 Tool yang Dideklarasikan di Allowlist Agent Tetapi Tidak Terdaftar
@@ -412,13 +436,14 @@ Agar penilaian tetap seimbang, ini daftar yang **benar-benar berfungsi**:
 | 3 | Isi tarif OpenRouter yang sebenarnya | 🟡 tanpa ini pengaman anggaran tidak berarti |
 | ~~4~~ | ~~Persistensi `depth` pada `taskRepo.create`~~ | ✅ selesai (lihat §6) |
 | 5 | Pindahkan indeks Second Brain ke penyimpanan bersama + daftarkan toolnya di worker | 🟠 mewujudkan grounding |
-| 6 | Tambahkan sweeper approval kedaluwarsa + pemulihan task `running` yatim | 🟠 membersihkan pekerjaan macet |
+| 6 | Tambahkan sweeper approval kedaluwarsa + pemulihan task `running` yatim | 🟠 pemulihan task `running` yatim ✅ selesai 20 Sep 2026 (lihat §6.1); sweeper approval kedaluwarsa belum |
 | 7 | Teruskan `temperature`/`model` ke provider, atau hapus dari definisi agent | 🔵 hilangkan konfigurasi palsu |
 | 8 | Buat notifikasi approval keluar (Telegram) | 🔵 hilangkan kebutuhan polling |
 | 9 | ~~jadikan `ToolContext.allowedTools` wajib lalu gagal-tertutup di `registry.ts:151`~~ | ✅ selesai 20 Sep 2026 (lihat §10.1) |
 | ~~10~~ | ~~Putuskan apakah SDLC dijalankan di atas `TaskDelegator` atau tetap proses sendiri~~ | ✅ diputuskan + dieksekusi: SDLC kini task biasa di atas pipeline (lihat §6.1) |
 | 11 | ~~teruskan `AbortSignal` ke `executePlan` dan beri `stageRunner` sebuah `cancellationStore`~~ | ✅ selesai 20 Sep 2026 (lihat §6.1) |
 | 12 | ~~jangan lewati reservasi anggaran secara senyap saat salah satu repo tidak ada~~ | ✅ selesai 20 Sep 2026 (peringatan sekali; lihat §6.1) |
+| ~~13~~ | ~~Buat gerbang CI benar-benar berjalan sampai langkah terakhir~~ | ✅ selesai 20 Sep 2026: `validate` 15/15 dan `compose-smoke` pertama kali berjalan (lihat §6.2) |
 
 ---
 
