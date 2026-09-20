@@ -4,6 +4,85 @@ import { createSecondBrainTools } from '../src/tools/second-brain-tools.js';
 import { ToolRegistry } from '../src/registry.js';
 import { ToolContext } from '../src/types.js';
 
+describe('Second Brain tool containment', () => {
+  /**
+   * `second_brain.read_note` used to ignore its context entirely and call
+   * `getDocument`/`getDocumentByPath`, neither of which took a scope — so an agent granted
+   * `approved_research` could read a `financials` note while `second_brain.search` refused the same
+   * note. Six agents list this tool.
+   */
+  async function build() {
+    const service = new SecondBrainService({ provider: 'mock', dimension: 128 });
+    await service.ingestDocument({
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      title: 'Approved research',
+      filePath: 'research/approved.md',
+      scope: 'approved_research',
+      content: 'Mega Gym Palembang has 500 active members.'
+    });
+    await service.ingestDocument({
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      title: 'Financials',
+      filePath: 'finance/secret.md',
+      scope: 'financials',
+      content: 'Gross margin for the quarter is 42 percent.'
+    });
+
+    const registry = new ToolRegistry();
+    for (const tool of createSecondBrainTools(service)) registry.registerLegacy(tool);
+    return registry;
+  }
+
+  function context(scopes: string[]): ToolContext {
+    return {
+      agentId: 'ned',
+      taskId: '123e4567-e89b-12d3-a456-426614174000',
+      runId: '123e4567-e89b-12d3-a456-426614174001',
+      allowedTools: ['second_brain.read_note', 'second_brain.list_notes', 'second_brain.sync_vault'],
+      grantedScopes: scopes
+    };
+  }
+
+  it('refuses a note outside the agent grant', async () => {
+    const registry = await build();
+
+    const result = await registry.execute(
+      'second_brain.read_note',
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+      context(['approved_research'])
+    );
+
+    expect(result.success).toBe(true);
+    expect((result.output as { note: unknown }).note).toBeNull();
+  });
+
+  it('reads a note inside the agent grant', async () => {
+    const registry = await build();
+
+    const result = await registry.execute(
+      'second_brain.read_note',
+      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      context(['approved_research'])
+    );
+
+    expect((result.output as { note: { title: string } | null }).note?.title).toBe('Approved research');
+  });
+
+  it('refuses to index vault content into a scope the agent was not granted', async () => {
+    const registry = await build();
+
+    const result = await registry.execute(
+      'second_brain.sync_vault',
+      { vaultPath: process.cwd(), scope: 'financials' },
+      context(['approved_research'])
+    );
+
+    // The scope check runs before the path guard, so the refusal is about the scope.
+    expect(result.success).toBe(false);
+    expect(String(result.error)).toMatch(/not granted/i);
+  });
+});
+
 describe('Second Brain Tools Tests', () => {
   const service = new SecondBrainService({ provider: 'mock', dimension: 128 });
   const tools = createSecondBrainTools(service);

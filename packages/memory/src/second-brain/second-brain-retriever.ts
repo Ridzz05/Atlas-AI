@@ -2,11 +2,18 @@ import { SecondBrainSearchResult, SecondBrainCitation } from '@atlas/shared';
 import { VaultIngestionService } from './vault-ingestion-service.js';
 import { VectorEmbeddingService } from './vector-embedding-service.js';
 import { rootLogger } from '@atlas/observability';
+import { agentScopeGrant, filterByScopeGrant, GLOBAL_ONLY_GRANT, isScopeReadable, ScopeGrant } from './vault-root.js';
 
 export interface SecondBrainQueryOptions {
   query: string;
   scope?: string;
+  /** The agent's granted data scopes. An empty list means global-only, never everything. */
   allowedScopes?: string[];
+  /**
+   * Who is asking. Takes precedence over `allowedScopes`; when neither is given the caller is treated
+   * as having no grant, so it reads global notes only.
+   */
+  grant?: ScopeGrant;
   tag?: string;
   limit?: number;
   minScore?: number;
@@ -23,21 +30,22 @@ export class SecondBrainRetriever {
    * Perform hybrid search (dense vector cosine similarity + lexical matching) across the vault.
    */
   public async search(options: SecondBrainQueryOptions): Promise<SecondBrainSearchResult[]> {
-    const { query, scope, tag, limit = 5, minScore = 0.1, allowedScopes } = options;
+    const { query, scope, tag, limit = 5, minScore = 0.1, allowedScopes, grant } = options;
     const trimmedQuery = query.trim();
     if (!trimmedQuery) return [];
 
-    // Scope containment. `allowedScopes` was declared on the options type but never read, and
-    // `getAllChunks(undefined)` returns EVERY chunk, so an agent could read notes outside its
-    // granted data scopes by omitting the scope — or by naming a scope it was never granted.
-    // `global` stays readable because it is the shared scope by definition.
-    const readableScopes = allowedScopes && allowedScopes.length > 0 ? new Set([...allowedScopes, 'global']) : null;
-    if (readableScopes && scope && !readableScopes.has(scope)) {
+    // Scope containment, from the single owner in vault-root.ts.
+    //
+    // This used to be fail-open: `readableScopes` was null unless `allowedScopes` was non-empty, and
+    // null meant no filter at all, so `getAllChunks(undefined)` returned every chunk in the vault. An
+    // agent with no `dataScopes` (the default) read everything.
+    const effectiveGrant: ScopeGrant = grant ?? (allowedScopes ? agentScopeGrant(allowedScopes) : GLOBAL_ONLY_GRANT);
+    if (scope && !isScopeReadable(scope, effectiveGrant)) {
       return [];
     }
 
     // 1. Get candidate chunks
-    const chunks = this.vault.getAllChunks(scope).filter(chunk => !readableScopes || readableScopes.has(chunk.scope));
+    const chunks = filterByScopeGrant(this.vault.getAllChunks(scope), effectiveGrant);
     if (chunks.length === 0) return [];
 
     // Filter by tag if specified

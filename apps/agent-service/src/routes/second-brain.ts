@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { SecondBrainService, resolveVaultRoot, isInsideVaultRoot } from '@atlas/memory';
+import { SecondBrainService, resolveVaultRoot, isInsideVaultRoot, ScopeGrant } from '@atlas/memory';
 import { z } from 'zod';
 
 /**
@@ -27,6 +27,18 @@ export interface SecondBrainRouteOptions {
   secondBrainService: SecondBrainService;
 }
 
+/**
+ * The principal behind every route in this file.
+ *
+ * These routes are the operator surface: they sit behind the single `API_AUTH_TOKEN` bearer (see
+ * server.ts), the same principal that decides approvals and can stop the system, and that principal
+ * owns the vault. Reading every scope is therefore correct — but it used to happen because the routes
+ * passed no `allowedScopes` and the retriever treated "no grant" as "no filter", which is the same
+ * code path that let an agent with empty `dataScopes` read the whole vault. Stating it here separates
+ * the operator's decision from the agent's containment.
+ */
+const OPERATOR_GRANT: ScopeGrant = { kind: 'operator' };
+
 export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondBrainRouteOptions): void {
   const service = options.secondBrainService;
 
@@ -48,7 +60,8 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
     const notes = service.listDocuments({
       scope: query.scope,
       tag: query.tag,
-      limit
+      limit,
+      grant: OPERATOR_GRANT
     });
 
     return reply.status(200).send({
@@ -61,7 +74,7 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
   // 3. Get Note by ID
   app.get('/api/v1/brain/notes/:id', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const note = service.getDocument(id);
+    const note = service.getDocument(id, OPERATOR_GRANT);
 
     if (!note) {
       return reply.status(404).send({ error: `Note with id '${id}' not found.` });
@@ -163,7 +176,8 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
       query: searchQuery,
       scope: query.scope,
       tag: query.tag,
-      limit
+      limit,
+      grant: OPERATOR_GRANT
     });
 
     return reply.status(200).send({
@@ -185,7 +199,8 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
     try {
       const response = await service.queryGrounded(query, {
         scope,
-        limit: limit || 4
+        limit: limit || 4,
+        grant: OPERATOR_GRANT
       });
 
       return reply.status(200).send({

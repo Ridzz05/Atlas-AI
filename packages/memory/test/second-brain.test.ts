@@ -123,9 +123,14 @@ All outbound messages require explicit human approval token before sending.`
       expect(stats.totalDocuments).toBe(2);
       expect(stats.totalChunks).toBeGreaterThanOrEqual(2);
 
-      // Retrieve campaign note
+      // Retrieve campaign note.
+      //
+      // The principal is stated because containment is now enforced on every path: these notes are in
+      // the `second_brain` scope, and a search with no grant reads global notes only. This test is
+      // about retrieval and citation tracing, so it reads as the vault owner.
       const searchResults = await retriever.search({
-        query: 'fitness outreach celebrity gyms'
+        query: 'fitness outreach celebrity gyms',
+        grant: { kind: 'operator' }
       });
 
       expect(searchResults.length).toBeGreaterThanOrEqual(1);
@@ -227,7 +232,10 @@ Chief enforces a hard maximum delegation depth of 2 turns to prevent infinite re
 Specialists include Ned (Research), Layla (Scoring), Hermes (Content), and Argus (QA).`
       });
 
-      const result = await service.queryGrounded('What is the maximum delegation depth for Chief?');
+      // Same reason as above: the note is scoped, so the query states who is asking.
+      const result = await service.queryGrounded('What is the maximum delegation depth for Chief?', {
+        grant: { kind: 'operator' }
+      });
 
       expect(result.answer).toContain('Chief Orchestrator Blueprint');
       expect(result.answer).toContain('delegation depth of 2');

@@ -3,6 +3,7 @@ import { VaultIngestionService, IngestDocumentInput, IngestVaultResult } from '.
 import { SecondBrainRetriever, SecondBrainQueryOptions } from './second-brain-retriever.js';
 import { VectorEmbeddingService, EmbeddingConfig } from './vector-embedding-service.js';
 import { rootLogger } from '@atlas/observability';
+import { filterByScopeGrant, isScopeReadable, ScopeGrant } from './vault-root.js';
 
 export interface GroundedRAGResponse {
   query: string;
@@ -46,21 +47,29 @@ export class SecondBrainService {
     return this.retriever.search(options);
   }
 
-  public getDocument(id: string): SecondBrainDocument | null {
-    return this.vault.getDocument(id);
+  /**
+   * Read one document, contained by the caller's scope grant.
+   *
+   * These two took no scope argument at all, so `second_brain.read_note` — listed by ceo, chief, cto,
+   * cfo, ned and luna — could read any note in any scope while `search` and `list_notes` refused the
+   * same note. The rule has one owner now: vault-root.ts.
+   */
+  public getDocument(id: string, grant: ScopeGrant): SecondBrainDocument | null {
+    const document = this.vault.getDocument(id);
+    if (!document || !isScopeReadable(document.scope, grant)) return null;
+    return document;
   }
 
-  public getDocumentByPath(filePath: string): SecondBrainDocument | null {
-    return this.vault.getDocumentByPath(filePath);
+  public getDocumentByPath(filePath: string, grant: ScopeGrant): SecondBrainDocument | null {
+    const document = this.vault.getDocumentByPath(filePath);
+    if (!document || !isScopeReadable(document.scope, grant)) return null;
+    return document;
   }
 
-  public listDocuments(options?: { scope?: string; tag?: string; limit?: number; allowedScopes?: string[] }): SecondBrainDocument[] {
+  public listDocuments(options: { scope?: string; tag?: string; limit?: number; grant: ScopeGrant }): SecondBrainDocument[] {
     const documents = this.vault.listDocuments(options);
-    // Same containment as the chunk retriever: omitting the scope must not widen the result set.
-    const allowed = options?.allowedScopes;
-    if (!allowed || allowed.length === 0) return documents;
-    const readable = new Set([...allowed, 'global']);
-    return documents.filter(document => readable.has(document.scope));
+    // Omitting the scope must not widen the result set, and an empty agent grant is global-only.
+    return filterByScopeGrant(documents, options.grant);
   }
 
   public deleteDocument(id: string): boolean {
@@ -80,14 +89,15 @@ export class SecondBrainService {
 
   public async queryGrounded(
     query: string,
-    options: { scope?: string; limit?: number; minScore?: number; allowedScopes?: string[] } = {}
+    options: { scope?: string; limit?: number; minScore?: number; allowedScopes?: string[]; grant?: ScopeGrant } = {}
   ): Promise<GroundedRAGResponse> {
     const results = await this.retriever.search({
       query,
       scope: options.scope,
       limit: options.limit || 4,
       minScore: options.minScore || 0.15,
-      allowedScopes: options.allowedScopes
+      allowedScopes: options.allowedScopes,
+      grant: options.grant
     });
 
     const citations = results.map(r => r.citation);

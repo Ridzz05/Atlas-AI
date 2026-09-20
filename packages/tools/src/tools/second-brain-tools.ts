@@ -1,4 +1,4 @@
-import { SecondBrainService, assertVaultPathAllowed } from '@atlas/memory';
+import { SecondBrainService, agentScopeGrant, assertVaultPathAllowed } from '@atlas/memory';
 import { z } from 'zod';
 import { ToolDefinition } from '../types.js';
 
@@ -41,10 +41,10 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
         scope: input.scope,
         tag: input.tag,
         limit: input.limit,
-        // The agent's granted data scopes, not a model-supplied value. Without this the retriever
-        // returned every scope when `scope` was omitted, so an agent could read notes outside its
-        // grant. The memory tools already passed ctx.grantedScopes; this path did not.
-        allowedScopes: ctx.grantedScopes
+        // The agent's granted data scopes, not a model-supplied value. An empty grant means
+        // global-only — it used to mean "no filter", so an agent with no `dataScopes` (the default)
+        // read the whole vault.
+        grant: agentScopeGrant(ctx.grantedScopes)
       });
 
       return {
@@ -93,14 +93,18 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
     riskLevel: 'read',
     requiresApproval: false,
     timeoutMs: 3000,
-    async execute(_ctx, input) {
+    async execute(ctx, input) {
+      // Containment applies here like everywhere else. This handler used to ignore `ctx` entirely and
+      // call `getDocument`/`getDocumentByPath`, which took no scope argument, so any note in any scope
+      // was readable by the six agents that list this tool.
+      const grant = agentScopeGrant(ctx.grantedScopes);
       let doc = null;
       if (input.id) {
-        doc = secondBrainService.getDocument(input.id);
+        doc = secondBrainService.getDocument(input.id, grant);
       } else if (input.filePath) {
-        doc = secondBrainService.getDocumentByPath(input.filePath);
+        doc = secondBrainService.getDocumentByPath(input.filePath, grant);
       } else if (input.title) {
-        doc = secondBrainService.getDocumentByPath(input.title);
+        doc = secondBrainService.getDocumentByPath(input.title, grant);
       }
 
       if (!doc) {
@@ -153,7 +157,7 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
         scope: input.scope,
         tag: input.tag,
         limit: input.limit,
-        allowedScopes: ctx.grantedScopes
+        grant: agentScopeGrant(ctx.grantedScopes)
       });
 
       return {
@@ -206,7 +210,7 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
       const result = await secondBrainService.queryGrounded(input.query, {
         scope: input.scope,
         limit: input.limit,
-        allowedScopes: ctx.grantedScopes
+        grant: agentScopeGrant(ctx.grantedScopes)
       });
 
       return {
@@ -234,7 +238,19 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
     riskLevel: 'low',
     requiresApproval: false,
     timeoutMs: 15000,
-    async execute(_ctx, input) {
+    async execute(ctx, input) {
+      // The model supplies the scope, and it was written straight through: an agent could index vault
+      // content into a scope it was never granted, widening what every reader of that scope can see.
+      // The memory write tool already refuses a scope outside the agent's grant; this matches it.
+      //
+      // This is checked BEFORE the path, because it is a statement about the caller rather than about
+      // the environment: an agent that asks for a scope it does not have should be told that, not told
+      // that the vault root happens to be unconfigured.
+      const grantedScopes = ctx.grantedScopes ?? [];
+      if (input.scope !== 'global' && !grantedScopes.includes(input.scope)) {
+        throw new Error(`Second Brain scope '${input.scope}' is not granted to this agent.`);
+      }
+
       // The model supplies vaultPath. It used to reach a recursive directory walk unvalidated, so
       // `{"vaultPath":"C:/Windows"}` read every .md/.txt on the host and made the contents
       // retrievable. assertVaultPathAllowed throws unless the path is inside the configured vault
