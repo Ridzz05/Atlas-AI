@@ -372,6 +372,34 @@ kini **wajib** di `packages/tools/src/types.ts`, dan `registry.ts:151` menolak t
 tidak ada di daftar tanpa syarat. Lubang "allowlist tidak diset berarti izinkan semua"
 menjadi error kompilasi, bukan bug runtime.
 
+### 10.2 Sweep seluruh codebase (21 Sep 2026) — sudah diperbaiki
+
+Sweep 9 domain (56 temuan). Yang berikut sudah diperbaiki, masing-masing dengan test yang
+**gagal sebelum** dan lolos sesudah:
+
+| Butir | Anchor | Status |
+| :--- | :--- | :--- |
+| Allowlist Telegram gagal-terbuka: `isUserAllowed` mengembalikan `true` saat daftar kosong, dan `config.ts` hanya menolak di `NODE_ENV=production` — jadi `test`/dev menerima **setiap** pengguna Telegram (kontrol penuh: buat task, emergency stop, approval) | `apps/telegram-bot/src/security/guard.ts` | ✅ diperbaiki: guard gagal-tertutup; keputusan dev dipindah eksplisit ke `config.allowAllUsers` |
+| API tidak punya `setErrorHandler` → `error.message` mentah (nama tabel, host DB, path filesystem) bocor ke klien **tanpa** log | `apps/agent-service/src/server.ts` | ✅ diperbaiki: satu handler, log penuh + request id, 500 generik |
+| `pgcrypto` dibuat tanpa guard di 014/015 → rantai migrasi bisa batal di host tanpa contrib; `uuid_generate_v4()` juga membuat 001 bergantung `uuid-ossp` | `014`/`015`, `001` | ✅ diperbaiki: `gen_random_uuid()` (core sejak PG13) menghapus ketergantungan; ekstensi dalam `DO $$ … EXCEPTION` |
+| `event_outbox` di-index pada `created_at`, padahal **setiap** query memfilter dan mengurut `occurred_at` | `002` + `017` (baru) | ✅ diperbaiki: indeks `(occurred_at, event_id)` |
+| `hasPending(taskId)` memeriksa key yang salah: `enqueue` memakai `runId` bila ada, jadi job ber-key runId tidak terlihat → recovery meng-enqueue job kedua untuk task yang masih jalan | `packages/orchestration/src/queue/*` | ✅ diperbaiki: `primaryJobId`/`probedJobIds` + `hasPending({taskId, runId})` + cek durabel run aktif di worker |
+| `executePlan` di-enter ulang memakai UUID **baru** untuk child yang sudah ada, padahal `taskRepo.create` dilewati → `runs.task_id` melanggar FK dan error aslinya hilang | `packages/orchestration/src/delegator/task-delegator.ts` | ✅ diperbaiki: pakai ulang baris yang sudah ada |
+| `claim()` idempotency tidak pernah melihat `expires_at` → satu crash meracuni key itu **permanen**; `mapRow` mengirim `null` untuk `runId` yang `optional()` | `packages/database/src/repositories/idempotency.repository.ts` | ✅ diperbaiki: `ON CONFLICT DO UPDATE … WHERE expired`, `?? undefined` |
+| Kontrol `idempotency: 'required'` adalah no-op: claim hanya jalan bila store **dan** key ada, dan tak ada pemanggil produksi yang menyediakan keduanya | `packages/tools/src/registry.ts` | ✅ diperbaiki: gagal-tertutup tanpa store, key diturunkan registry, `DatabaseIdempotencyStore` di-wire di worker |
+| Gerbang intake (pause/emergency stop) hanya ada di 1 dari 5 route pembuat task | `apps/agent-service/src/routes/intake-gate.ts` (baru) | ✅ diperbaiki: `preHandler` di kelima route + test inventaris |
+| Run yang kehabisan giliran atau dipotong provider dilaporkan `completed`; tool call tanpa executor dicatat `success` | `packages/orchestration/src/engine/agent-runner.ts` | ✅ diperbaiki: keduanya gagal-tertutup |
+| Voice assistant mematikan `SpeechRecognition`-nya sendiri setelah transkrip pertama (`transcript` ada di dependency array); `onTaskCreated` tak pernah terpanggil (`res.data` padahal route mengembalikan task langsung) | `apps/dashboard/src/components/chief-voice-assistant.tsx` | ✅ diperbaiki: ref untuk nilai yang berubah, deps `[lang]`; respons tidak lagi di-envelope |
+| Command Center menampilkan `$0.00` / `0` untuk metrik yang gagal diambil, dan `WorkflowLiveStream` menelan error fetch menjadi keadaan kosong | `apps/dashboard/src/app/page.tsx`, `workflow-live-stream.tsx` | ✅ diperbaiki: penanda "tidak tersedia" + state error |
+
+Masih terbuka dari sweep yang sama: biaya provider inert (OpenRouter di-hardcode `0`,
+provider non-OpenRouter ditagih tarif gpt-4o-mini), tidak ada jalur produksi yang
+mempromosikan proposal memori ke `verified`, route `POST /messages` dan `POST /brain/notes`
+belum ada padahal UI menampilkan tombolnya, `review.requiredAgent` mati, manifest tool tidak
+divalidasi terhadap `ToolManifestSchema`, `registerLegacy` menyintesis `sideEffects: ['none']`,
+`recordRun` menstempel `last_run_at` saat inisialisasi, dan seeding menimpa riwayat
+`agent_versions` tiap boot.
+
 Rincian ada di [[Policy, Security & Approval Gates]].
 
 ---
