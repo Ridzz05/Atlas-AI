@@ -18,7 +18,15 @@ import { rootLogger } from '@atlas/observability';
  */
 export function createIntakeGate(options: { controlStateRepo?: TelegramStateRepository }): preHandlerHookHandler {
   return async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!options.controlStateRepo) return;
+    // Fail closed. This used to `return` when the repository was absent, which made the emergency
+    // stop a no-op for any caller that did not wire one: intake proceeded as if the operator had
+    // never pressed it. The stop is a safety control, so "I cannot read it" must mean "do not
+    // proceed", not "proceed". The control routes already answer 503 in this situation; this matches
+    // them.
+    if (!options.controlStateRepo) {
+      rootLogger.error('Intake refused: no execution control state source is configured', { url: request.url });
+      return reply.status(503).send({ error: 'Execution control state unavailable' });
+    }
 
     try {
       const controlState = await options.controlStateRepo.getControlState();

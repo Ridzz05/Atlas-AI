@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildServer } from '../src/server.js';
+import { runningControlState } from './support/control-state.js';
 import { EnvConfigSchema } from '@atlas/shared';
 import { MockModelProvider } from '@atlas/providers';
 import { InMemoryTaskQueue } from '@atlas/orchestration';
@@ -102,6 +103,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
 
   const server = buildServer({
     config,
+    controlStateRepo: runningControlState() as any,
     taskRepo: fakeTaskRepo,
     provider,
     taskQueue,
@@ -194,6 +196,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     const taskQueue = { enqueue: vi.fn().mockResolvedValue(task.id), process: vi.fn(), close: vi.fn() } as any;
     const atomicServer = buildServer({
       config,
+      controlStateRepo: runningControlState() as any,
       db: db as any,
       taskRepo,
       messageRepo,
@@ -244,6 +247,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     const taskQueue = { enqueue: vi.fn(), process: vi.fn(), close: vi.fn() } as any;
     const atomicServer = buildServer({
       config,
+      controlStateRepo: runningControlState() as any,
       db: db as any,
       taskRepo: { create: vi.fn().mockResolvedValue(task) } as any,
       messageRepo: { create: vi.fn().mockRejectedValue(new Error('history unavailable')) } as any,
@@ -271,6 +275,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     const invalidTaskRepo: any = { create: vi.fn() };
     const invalidServer = buildServer({
       config,
+      controlStateRepo: runningControlState() as any,
       taskRepo: invalidTaskRepo,
       taskQueue: new InMemoryTaskQueue(),
       eventBus: new InMemoryEventBus(),
@@ -305,6 +310,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     };
     const frozenServer = buildServer({
       config,
+      controlStateRepo: runningControlState() as any,
       taskRepo: frozenTaskRepo,
       taskQueue: new InMemoryTaskQueue(),
       registry: defaultAgentRegistry,
@@ -449,6 +455,7 @@ describe('agent-service Task and Multi-Agent APIs', () => {
     };
     const resumeServer = buildServer({
       config,
+      controlStateRepo: runningControlState() as any,
       taskRepo: resumeTaskRepo,
       taskQueue: resumeQueue,
       approvalRepo: resumeApprovalRepo,

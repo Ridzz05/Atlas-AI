@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { buildServer } from '../src/server.js';
+import { runningControlState } from './support/control-state.js';
 import { EnvConfigSchema } from '@atlas/shared';
 import { InMemoryTaskQueue } from '@atlas/orchestration';
 import { SDLCInitiative, SDLCPhase } from '@atlas/shared';
@@ -89,7 +90,14 @@ describe('agent-service SDLC initiative API', () => {
   it('creates an initiative and enqueues its first phase as a CEO task', async () => {
     const { sdlcRepo, taskRepo, created } = buildSdlcDoubles();
     const taskQueue = new InMemoryTaskQueue();
-    const server = buildServer({ config, sdlcRepo, taskRepo, taskQueue, processQueue: false });
+    const server = buildServer({
+      config,
+      sdlcRepo,
+      taskRepo,
+      taskQueue,
+      controlStateRepo: runningControlState() as any,
+      processQueue: false
+    });
 
     const response = await server.inject({
       method: 'POST',
@@ -111,7 +119,14 @@ describe('agent-service SDLC initiative API', () => {
   it('does not enqueue a second task when the same phase is advanced twice', async () => {
     const { sdlcRepo, taskRepo, created } = buildSdlcDoubles();
     const taskQueue = new InMemoryTaskQueue();
-    const server = buildServer({ config, sdlcRepo, taskRepo, taskQueue, processQueue: false });
+    const server = buildServer({
+      config,
+      sdlcRepo,
+      taskRepo,
+      taskQueue,
+      controlStateRepo: runningControlState() as any,
+      processQueue: false
+    });
 
     const createResponse = await server.inject({
       method: 'POST',
@@ -132,7 +147,14 @@ describe('agent-service SDLC initiative API', () => {
   it('creates an initiative without enqueueing anything when autoAdvance is false', async () => {
     const { sdlcRepo, taskRepo, created } = buildSdlcDoubles();
     const taskQueue = new InMemoryTaskQueue();
-    const server = buildServer({ config, sdlcRepo, taskRepo, taskQueue, processQueue: false });
+    const server = buildServer({
+      config,
+      sdlcRepo,
+      taskRepo,
+      taskQueue,
+      controlStateRepo: runningControlState() as any,
+      processQueue: false
+    });
 
     const response = await server.inject({
       method: 'POST',
@@ -148,7 +170,14 @@ describe('agent-service SDLC initiative API', () => {
   it('rejects an advance on a terminal initiative', async () => {
     const { sdlcRepo, taskRepo } = buildSdlcDoubles();
     const taskQueue = new InMemoryTaskQueue();
-    const server = buildServer({ config, sdlcRepo, taskRepo, taskQueue, processQueue: false });
+    const server = buildServer({
+      config,
+      sdlcRepo,
+      taskRepo,
+      taskQueue,
+      controlStateRepo: runningControlState() as any,
+      processQueue: false
+    });
 
     const createResponse = await server.inject({
       method: 'POST',

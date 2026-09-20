@@ -15,6 +15,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test && node --test scripts/native-dev.test.mjs scripts/dashboard-api-contract.test.mjs",
     "db:verify": "node scripts/verify-migrations.mjs",
+    "api:verify": "node scripts/verify-api-live.mjs",
     "clean": "turbo run clean && rimraf node_modules"
   },
   "devDependencies": {

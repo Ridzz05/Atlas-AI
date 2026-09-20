@@ -104,4 +104,28 @@ describe('intake gate coverage', () => {
 
     expect(response.statusCode).not.toBe(423);
   });
+
+  // The gate used to `return` when no control-state source was configured, so the emergency stop was
+  // a no-op for any caller that did not wire one. A safety control that cannot be read must not be
+  // treated as "not pressed".
+  it('refuses intake when no control state source is configured', async () => {
+    const enqueue = vi.fn();
+    const server = buildServer({
+      config,
+      taskRepo: { create: vi.fn(), list: vi.fn().mockResolvedValue([]), findById: vi.fn() } as any,
+      taskQueue: { enqueue, hasPending: vi.fn(async () => false) } as any,
+      registry: defaultAgentRegistry,
+      processQueue: false
+      // no controlStateRepo
+    });
+
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      payload: { title: 'T', goal: 'G', assignedAgent: 'chief' }
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(enqueue).not.toHaveBeenCalled();
+  });
 });
