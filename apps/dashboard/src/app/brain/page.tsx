@@ -134,12 +134,6 @@ export default function SecondBrainPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [showIngestModal, setShowIngestModal] = useState(false);
-  const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [newNotePath, setNewNotePath] = useState('');
-  const [newNoteContent, setNewNoteContent] = useState('');
-  const [newNoteTags, setNewNoteTags] = useState('');
-  const [ingestPending, setIngestPending] = useState(false);
-  const [ingestError, setIngestError] = useState<string | null>(null);
   const [ingestVaultPath, setIngestVaultPath] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -183,13 +177,10 @@ export default function SecondBrainPage() {
   }, []);
 
   const openIngestDialog = () => {
-    setIngestError(null);
     setShowIngestModal(true);
   };
 
   const closeIngestDialog = () => {
-    if (ingestPending) return;
-    setIngestError(null);
     setShowIngestModal(false);
   };
 
@@ -240,43 +231,6 @@ export default function SecondBrainPage() {
         setChatPending(false);
       }
     });
-  };
-
-  // Handle Ingest Single Note
-  const handleIngestNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNoteTitle.trim() || !newNoteContent.trim() || ingestPending) return;
-
-    setIngestPending(true);
-    setIngestError(null);
-    try {
-      const tags = newNoteTags
-        .split(',')
-        .map(t => t.trim())
-        .filter(Boolean);
-
-      await atlasFetch('/brain/notes', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: newNoteTitle.trim(),
-          filePath: newNotePath.trim() || `vault/${newNoteTitle.trim().toLowerCase().replace(/\s+/g, '-')}.md`,
-          content: newNoteContent.trim(),
-          tags
-        })
-      });
-
-      setSuccessMsg(`Note "${newNoteTitle}" added and indexed for search.`);
-      setShowIngestModal(false);
-      setNewNoteTitle('');
-      setNewNotePath('');
-      setNewNoteContent('');
-      setNewNoteTags('');
-      void loadData();
-    } catch (err) {
-      setIngestError(err instanceof Error ? err.message : 'Failed to add note.');
-    } finally {
-      setIngestPending(false);
-    }
   };
 
   // Handle Vault Directory Sync
@@ -839,82 +793,19 @@ export default function SecondBrainPage() {
           }
         }}
       >
-        <form onSubmit={handleIngestNote} aria-busy={ingestPending}>
-          <DialogTitle sx={{ color: '#201515', fontWeight: 700, px: 3, pt: 3, pb: 1 }}>Add note to Second Brain</DialogTitle>
-          <DialogContent sx={{ px: 3, pt: '16px !important', display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            {ingestError && (
-              <Alert severity="error" role="alert" sx={{ borderRadius: '10px' }}>
-                {ingestError}
-              </Alert>
-            )}
-            <TextField
-              label="Note title"
-              fullWidth
-              required
-              autoFocus
-              disabled={ingestPending}
-              value={newNoteTitle}
-              onChange={e => setNewNoteTitle(e.target.value)}
-              placeholder="e.g. Q1 Architecture Strategy"
-            />
-            <TextField
-              label="File path"
-              fullWidth
-              disabled={ingestPending}
-              value={newNotePath}
-              onChange={e => setNewNotePath(e.target.value)}
-              placeholder="vault/my-note.md"
-              helperText="Optional. A vault path is generated if left blank."
-            />
-            <TextField
-              label="Tags"
-              fullWidth
-              disabled={ingestPending}
-              value={newNoteTags}
-              onChange={e => setNewNoteTags(e.target.value)}
-              placeholder="marketing, strategy, q1"
-              helperText="Separate multiple tags with commas."
-            />
-            <TextField
-              label="Note content"
-              fullWidth
-              multiline
-              rows={6}
-              required
-              disabled={ingestPending}
-              value={newNoteContent}
-              onChange={e => setNewNoteContent(e.target.value)}
-              placeholder="Write your note in Markdown..."
-              helperText="Markdown is supported. The note is indexed for search after saving."
-            />
-          </DialogContent>
-          <DialogActions
-            sx={{
-              p: 3,
-              pt: 2,
-              borderTop: '1px solid rgba(32, 21, 21, 0.08)',
-              flexDirection: { xs: 'column-reverse', sm: 'row' },
-              alignItems: 'stretch',
-              gap: 1.5,
-              '& .MuiButton-root': { minHeight: 44 },
-              '& > :not(style) ~ :not(style)': { ml: 0 }
-            }}
-          >
-            <Button onClick={closeIngestDialog} disabled={ingestPending} sx={{ color: '#666155', width: { xs: '100%', sm: 'auto' } }}>
-              Cancel
-            </Button>
-            <Button type="submit" variant="contained" color="primary" disabled={ingestPending} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-              {ingestPending ? (
-                <>
-                  <CircularProgress size={16} color="inherit" sx={{ mr: 1 }} />
-                  Adding note...
-                </>
-              ) : (
-                'Add note'
-              )}
-            </Button>
-          </DialogActions>
-        </form>
+        <DialogTitle sx={{ color: '#201515', fontWeight: 700, px: 3, pt: 3, pb: 1 }}>Add note to Second Brain</DialogTitle>
+        <DialogContent sx={{ px: 3, pt: '16px !important' }}>
+          <Alert severity="info" sx={{ borderRadius: '10px' }}>
+            This form used to POST /brain/notes, which no route implements. The index is built by scanning the vault (
+            <code>/brain/ingest</code>), so a note that is not written to disk would disappear on the next sync while the UI reported it as
+            saved. Add the note to your vault directly, then run a vault sync.
+          </Alert>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 2, borderTop: '1px solid rgba(32, 21, 21, 0.08)' }}>
+          <Button onClick={closeIngestDialog} variant="contained" color="primary" sx={{ minHeight: 44, width: { xs: '100%', sm: 'auto' } }}>
+            Close
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

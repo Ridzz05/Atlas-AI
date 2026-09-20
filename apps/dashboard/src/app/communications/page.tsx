@@ -183,11 +183,9 @@ function FeedCard({ item }: { item: CommunicationFeedItem }) {
 
 export default function CommunicationsPage() {
   const [feed, setFeed] = useState<CommunicationFeedItem[]>([]);
-  const [inputMsg, setInputMsg] = useState('');
   const [taskIdFilter, setTaskIdFilter] = useState('');
   const [feedFilter, setFeedFilter] = useState<FeedFilter>('all');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [realtime, setRealtime] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadFeedRef = useRef<() => Promise<void>>(async () => undefined);
@@ -248,29 +246,6 @@ export default function CommunicationsPage() {
     if (feedFilter === 'all') return feed;
     return feed.filter(item => item.kind === feedFilter);
   }, [feed, feedFilter]);
-
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputMsg.trim() || submitting) return;
-
-    setSubmitting(true);
-    try {
-      await atlasFetch('/messages', {
-        method: 'POST',
-        body: JSON.stringify({
-          sender: 'human_operator',
-          recipient: 'chief',
-          content: inputMsg.trim()
-        })
-      });
-      setInputMsg('');
-      await loadFeed();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <Box sx={{ maxWidth: 1024, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3.5 }}>
@@ -377,29 +352,32 @@ export default function CommunicationsPage() {
       )}
 
       {/* Operator Broadcast Box */}
+      {/*
+        This control used to POST /messages, which no route implements — so filling it in produced a
+        404. Wiring it to the message repository alone would be worse than the 404: nothing delivers
+        a message to an agent, so the row would show up in this feed as a message Chief never
+        received. Kept visible and disabled so the gap is stated instead of hidden behind a button
+        that always fails.
+      */}
       <Card
-        component="form"
-        onSubmit={handleSend}
-        sx={{ p: 2.5, bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', display: 'flex', gap: 1.5 }}
+        sx={{
+          p: 2.5,
+          bgcolor: '#ffffff',
+          borderRadius: '16px',
+          border: '1px dashed rgba(32, 21, 21, 0.2)',
+          display: 'flex',
+          gap: 1.5,
+          alignItems: 'center'
+        }}
       >
-        <TextField
-          fullWidth
-          size="small"
-          value={inputMsg}
-          onChange={e => setInputMsg(e.target.value)}
-          placeholder="Send operator broadcast or direct message to Chief…"
-          disabled={submitting}
-        />
-        <Button
-          type="submit"
-          variant="contained"
-          color="primary"
-          disabled={submitting || !inputMsg.trim()}
-          startIcon={<CiPaperplane size={18} />}
-        >
+        <TextField fullWidth size="small" placeholder="Direct messaging to an agent is not available yet" disabled />
+        <Button variant="contained" color="primary" disabled startIcon={<CiPaperplane size={18} />}>
           Send
         </Button>
       </Card>
+      <Typography variant="caption" sx={{ color: '#666155', fontWeight: 500, mt: -2.5 }}>
+        No route delivers an operator message to an agent yet, so this box is disabled rather than accepting a message it cannot deliver.
+      </Typography>
     </Box>
   );
 }

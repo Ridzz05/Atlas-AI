@@ -40,12 +40,17 @@ describe('Second Brain UI quality gates', () => {
     expect(brainPage).not.toContain("'/brain/memory?limit=50'");
   });
 
-  it('keeps note submission state and errors inside the dialog', () => {
-    expect(brainPage).toContain('const [ingestPending, setIngestPending]');
-    expect(brainPage).toContain('const [ingestError, setIngestError]');
-    expect(brainPage).toContain('role="alert"');
-    expect(brainPage).toContain('disabled={ingestPending}');
-    expect(brainPage).toContain('Adding note...');
+  // This used to assert the note form's pending/error state. The form posted to POST /brain/notes,
+  // which no route implements, and the index is built by scanning the vault — so a note that was not
+  // written to disk would disappear on the next sync while the dialog reported it as saved. Wiring
+  // the route to the in-memory index would have been worse than the 404 it produced. The dialog now
+  // states the gap, so the invariant to hold is that it offers no such form.
+  it('offers no note form that posts to a route the API does not implement', () => {
+    expect(brainPage).not.toContain('handleIngestNote');
+    expect(brainPage).not.toMatch(/atlasFetch\(\s*'\/brain\/notes'/);
+    expect(brainPage).toContain('Add note to Second Brain');
+    // Point the operator at the path that actually works.
+    expect(brainPage).toContain('/brain/ingest');
   });
 
   it('names icon-only actions for assistive technology', () => {
@@ -53,13 +58,13 @@ describe('Second Brain UI quality gates', () => {
     expect(brainPage).toContain('aria-label={`Delete ${doc.title}`}');
   });
 
-  it('stacks dialog actions on narrow screens and uses one user-facing term', () => {
+  it('keeps the dialog usable on narrow screens and uses one user-facing term', () => {
     const dialog = brainPage.slice(brainPage.indexOf('<Dialog'), brainPage.indexOf('</Dialog>'));
-    expect(dialog).toContain("flexDirection: { xs: 'column-reverse', sm: 'row' }");
+    // The actions row holds one button now, so the column-reverse stacking rule has nothing to
+    // stack; the tap-target and full-width rules still apply to it.
     expect(dialog).toContain("width: { xs: '100%', sm: 'auto' }");
     expect(dialog).toContain('minHeight: 44');
     expect(dialog).toContain('Add note to Second Brain');
-    expect(dialog).toContain('Add note');
     expect(dialog).not.toContain('Ingest & Embed Note');
     expect(dialog).not.toContain('Add Document to Second Brain');
   });
