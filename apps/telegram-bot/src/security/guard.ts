@@ -7,18 +7,31 @@ export interface TelegramUpdateClaimStore {
 export class TelegramSecurityGuard {
   private seenUpdateIds = new Set<number>();
   private maxCacheSize = 10000;
+  private readonly allowAllUsers: boolean;
 
   constructor(
     private allowedUserIds: Set<string>,
-    private updateStore?: TelegramUpdateClaimStore
-  ) {}
+    private updateStore?: TelegramUpdateClaimStore,
+    options: { allowAllUsers?: boolean } = {}
+  ) {
+    this.allowAllUsers = options.allowAllUsers === true;
+  }
 
+  /**
+   * Fail closed. An empty allowlist denies everyone unless the composition explicitly opted in
+   * (`config.allowAllUsers`, granted only in development), because a Telegram user can create
+   * tasks, approve side effects and trigger an emergency stop.
+   */
   public isUserAllowed(userId: number | string): boolean {
     const idStr = String(userId);
-    // If no allowlist configured in local dev, warn and allow, but in production strictly enforce
+
     if (this.allowedUserIds.size === 0) {
-      rootLogger.warn('No TELEGRAM_ALLOWED_USER_IDS configured. Accepting requests for development.');
-      return true;
+      if (this.allowAllUsers) {
+        rootLogger.warn('No TELEGRAM_ALLOWED_USER_IDS configured and allowAllUsers is enabled; accepting every Telegram user.');
+        return true;
+      }
+      rootLogger.error('No TELEGRAM_ALLOWED_USER_IDS configured; refusing every Telegram request.');
+      return false;
     }
 
     const isAllowed = this.allowedUserIds.has(idStr);

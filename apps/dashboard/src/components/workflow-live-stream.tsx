@@ -7,6 +7,7 @@ import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
+import Button from '@mui/material/Button';
 import Collapse from '@mui/material/Collapse';
 import CircularProgress from '@mui/material/CircularProgress';
 import Tooltip from '@mui/material/Tooltip';
@@ -136,6 +137,7 @@ export function WorkflowLiveStream({
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'dialogue' | 'tools'>('all');
   const [expandedTools, setExpandedTools] = useState<Record<string, boolean>>({});
+  const [loadError, setLoadError] = useState<string | null>(null);
   const feedEndRef = useRef<HTMLDivElement | null>(null);
 
   const loadWorkflowData = async () => {
@@ -145,6 +147,7 @@ export function WorkflowLiveStream({
       return;
     }
     setLoading(true);
+    setLoadError(null);
     try {
       const [msgRes, toolRes] = await Promise.all([
         atlasFetch<{ data: WorkflowMessage[] }>(`/messages?taskId=${encodeURIComponent(selectedTaskId)}&limit=100`),
@@ -152,8 +155,12 @@ export function WorkflowLiveStream({
       ]);
       setMessages(msgRes.data || []);
       setToolCalls(toolRes.data || []);
-    } catch {
-      // Graceful fallback
+    } catch (error) {
+      // An empty catch here made a failed fetch indistinguishable from a task with no activity: the
+      // operator was told there was nothing to see when the control plane was actually unreachable.
+      setMessages([]);
+      setToolCalls([]);
+      setLoadError(error instanceof Error ? error.message : 'Failed to load workflow activity.');
     } finally {
       setLoading(false);
     }
@@ -425,6 +432,26 @@ export function WorkflowLiveStream({
             <Typography variant="caption" sx={{ color: '#8c827a' }}>
               Memuat aliran percakapan workflow...
             </Typography>
+          </Box>
+        ) : loadError ? (
+          <Box
+            sx={{
+              p: 6,
+              textAlign: 'center',
+              bgcolor: '#fdf3f0',
+              borderRadius: '14px',
+              border: '1px solid rgba(214, 69, 41, 0.28)'
+            }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#a33218', mb: 0.5 }}>
+              Aktivitas Workflow Tidak Dapat Dimuat
+            </Typography>
+            <Typography variant="caption" sx={{ color: '#8c827a', maxWidth: 420, display: 'block', mx: 'auto', mb: 1.5 }}>
+              {loadError}
+            </Typography>
+            <Button size="small" variant="outlined" onClick={() => void loadWorkflowData()} sx={{ textTransform: 'none' }}>
+              Coba lagi
+            </Button>
           </Box>
         ) : filteredFeed.length === 0 ? (
           <Box

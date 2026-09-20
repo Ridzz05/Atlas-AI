@@ -41,6 +41,16 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
   const isListeningRef = useRef<boolean>(false);
   const stateRef = useRef<AssistantState>('idle');
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // The recognition effect must not depend on state or on callbacks that change identity per render.
+  // React re-runs the effect when a dependency changes, and the cleanup stops recognition and clears
+  // the silence timer — so with `transcript` in the dependency list the FIRST final result tore the
+  // session down before the 3.2s auto-dispatch timer could fire and the mission was never sent.
+  // Toggling mute or the language chip did the same, because playChime/speak change identity with
+  // audioMuted. The effect now depends only on `lang` and reads everything else through these refs.
+  const transcriptRef = useRef<string>('');
+  const playChimeRef = useRef<(type: 'wake' | 'success') => void>(() => {});
+  const speakRef = useRef<(text: string, onDone?: () => void) => void>(() => {});
+  const dispatchVoiceTaskRef = useRef<(text: string) => void>(() => {});
 
   // Keep stateRef in sync for event callbacks
   useEffect(() => {
@@ -136,7 +146,11 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
 
       try {
         const title = cleanGoal.length > 50 ? `${cleanGoal.slice(0, 48)}...` : cleanGoal;
-        const res = await atlasFetch<{ data: { id: string; title: string; status: string } }>('/tasks', {
+        // POST /tasks replies with the bare task object, not a { data } envelope (see
+        // apps/agent-service/src/routes/tasks.ts). Typing it as { data } made `res.data` always
+        // undefined, so onTaskCreated never fired and the console kept showing the previously
+        // selected task while the new one ran.
+        const created = await atlasFetch<{ id: string; title: string; status: string }>('/tasks', {
           method: 'POST',
           body: JSON.stringify({
             title,
@@ -154,8 +168,8 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
           setInterimText('');
         });
 
-        if (onTaskCreated && res.data) {
-          onTaskCreated(res.data);
+        if (onTaskCreated && created?.id) {
+          onTaskCreated(created);
         }
       } catch (err: any) {
         const errStr = err?.message || 'Gagal membuat tugas';
@@ -168,6 +182,13 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
     },
     [playChime, speak, onTaskCreated]
   );
+
+  // Keep the callback refs pointing at the latest closures so the recognition effect never re-runs.
+  useEffect(() => {
+    playChimeRef.current = playChime;
+    speakRef.current = speak;
+    dispatchVoiceTaskRef.current = dispatchVoiceTask;
+  }, [playChime, speak, dispatchVoiceTask]);
 
   // Initialize Speech Recognition
   useEffect(() => {
@@ -201,19 +222,20 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
       }
 
       setInterimText(interim);
-      const combinedText = (transcript + ' ' + finalChunk + ' ' + interim).toLowerCase().trim();
+      const combinedText = (transcriptRef.current + ' ' + finalChunk + ' ' + interim).toLowerCase().trim();
 
       // State: STANDBY - Looking for Wake Word
       if (stateRef.current === 'standby') {
         const detectedWakeWord = WAKE_WORDS.some(w => combinedText.includes(w));
         if (detectedWakeWord) {
-          playChime('wake');
+          playChimeRef.current('wake');
           const greeting = CHIEF_GREETINGS[Math.floor(Math.random() * CHIEF_GREETINGS.length)]!;
+          transcriptRef.current = '';
           setTranscript('');
           setInterimText('');
           setStatusMessage('Chief mendengarkan instruksi Anda...');
 
-          speak(greeting, () => {
+          speakRef.current(greeting, () => {
             setState('listening_command');
             setStatusMessage('Silakan sebutkan tugas atau misi yang ingin dikerjakan...');
           });
@@ -225,19 +247,22 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
       if (stateRef.current === 'listening_command') {
         if (finalChunk) {
           // Remove any accidental wake words from the beginning of prompt
-          let cleaned = (transcript + ' ' + finalChunk).trim();
+          let cleaned = (transcriptRef.current + ' ' + finalChunk).trim();
           for (const w of WAKE_WORDS) {
             if (cleaned.toLowerCase().startsWith(w)) {
               cleaned = cleaned.slice(w.length).trim();
             }
           }
+          // Update the ref immediately as well as the state: effects run after render, so two final
+          // chunks in one turn would otherwise both read the stale value.
+          transcriptRef.current = cleaned;
           setTranscript(cleaned);
 
           // Reset silence timer: auto-dispatch after 3 seconds of silence
           if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
           silenceTimerRef.current = setTimeout(() => {
             if (stateRef.current === 'listening_command' && cleaned.length > 3) {
-              void dispatchVoiceTask(cleaned);
+              void dispatchVoiceTaskRef.current(cleaned);
             }
           }, 3200);
         }
@@ -275,7 +300,7 @@ export function ChiefVoiceAssistant({ onTaskCreated }: ChiefVoiceAssistantProps)
         recognition.stop();
       } catch {}
     };
-  }, [lang, playChime, speak, transcript, dispatchVoiceTask]);
+  }, [lang]);
 
   const toggleListening = () => {
     if (!supported) return;

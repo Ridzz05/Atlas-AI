@@ -131,7 +131,9 @@ export class AtlasTelegramBot {
   private readonly apiClient: TelegramApiClient;
 
   constructor(private options: AtlasTelegramBotOptions) {
-    this.guard = new TelegramSecurityGuard(options.config.allowedUserIds, options.stateRepo);
+    this.guard = new TelegramSecurityGuard(options.config.allowedUserIds, options.stateRepo, {
+      allowAllUsers: options.config.allowAllUsers
+    });
     this.apiClient = options.apiClient || new FetchTelegramApiClient(options.config.botToken);
 
     this.router = new CommandRouter({

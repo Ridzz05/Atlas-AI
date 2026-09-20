@@ -78,6 +78,9 @@ interface ControlResponse {
 }
 type ControlAction = 'pause' | 'resume' | 'emergency-stop';
 
+/** Shown where a metric is unavailable, so a missing value never reads as a measured zero. */
+const UNAVAILABLE = '—';
+
 const toAgentStatus = (tasks: ApiTask[], agentId: string): AgentNodeData['status'] => {
   const assigned = tasks.filter(task => task.assignedAgent === agentId);
   if (assigned.length === 0) return 'IDLE';
@@ -383,12 +386,12 @@ export default function CommandCenterPage() {
             />
             <VanillaMetricCard
               label="COST TODAY"
-              value={costToday == null ? '$0.00' : `$${costToday.toFixed(2)}`}
+              value={costToday == null ? UNAVAILABLE : `$${costToday.toFixed(2)}`}
               icon={<CiDollar size={20} />}
             />
             <VanillaMetricCard
               label="DAILY BUDGET"
-              value={budget ? `$${budget.usedUsd.toFixed(2)} / $${budget.limitUsd.toFixed(2)}` : '$0 / $10'}
+              value={budget ? `$${budget.usedUsd.toFixed(2)} / $${budget.limitUsd.toFixed(2)}` : UNAVAILABLE}
               icon={<CiDollar size={20} />}
             />
           </Box>
@@ -415,22 +418,22 @@ export default function CommandCenterPage() {
           >
             <VanillaMetricCard
               label="ACTIVE LEASES"
-              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.activeLeaseCount)}
+              value={recoveryMetrics == null ? UNAVAILABLE : String(recoveryMetrics.activeLeaseCount)}
               icon={<CiClock2 size={18} />}
             />
             <VanillaMetricCard
               label="EXPIRED LEASES"
-              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.expiredLeaseCount)}
+              value={recoveryMetrics == null ? UNAVAILABLE : String(recoveryMetrics.expiredLeaseCount)}
               icon={<CiCircleAlert size={18} />}
             />
             <VanillaMetricCard
               label="UNLEASED RUNS"
-              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.unleasedExecutableRunCount)}
+              value={recoveryMetrics == null ? UNAVAILABLE : String(recoveryMetrics.unleasedExecutableRunCount)}
               icon={<CiClock2 size={18} />}
             />
             <VanillaMetricCard
               label="CANCEL REQUESTS"
-              value={recoveryMetrics == null ? '0' : String(recoveryMetrics.cancellationRequestedCount)}
+              value={recoveryMetrics == null ? UNAVAILABLE : String(recoveryMetrics.cancellationRequestedCount)}
               icon={<CiRedo size={18} />}
             />
           </Box>
