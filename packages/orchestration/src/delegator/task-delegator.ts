@@ -109,7 +109,8 @@ export class TaskDelegator {
       provider: options.provider,
       argusAgent,
       messageRepo: options.messageRepo,
-      runner: this.stageRunner
+      runner: this.stageRunner,
+      resolveAgent: id => options.registry.get(id)
     });
 
     this.maxConcurrency = options.maxConcurrency || 3;

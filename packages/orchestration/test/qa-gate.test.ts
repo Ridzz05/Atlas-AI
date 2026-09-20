@@ -49,4 +49,54 @@ describe('QAGate', () => {
     expect(result.verdict).toBe('BLOCKED');
     expect(result.passed).toBe(false);
   });
+
+  /**
+   * `review.requiredAgent` is declared by seven agent definitions and read by nothing. The QA gate
+   * always runs Argus, so for the six agents that declare `argus` the declaration agrees with the
+   * pipeline by luck rather than by construction — and `ceo` declares `cfo`, which no stage runs.
+   *
+   * The gate cannot honour an arbitrary reviewer: its prompt is Argus's own checklist, so running
+   * the CFO through it would be theatre. What it can do is stop ignoring the declaration and say, in
+   * the verdict a human reads, that the declared reviewer was not run.
+   */
+  const passResponse = JSON.stringify({ verdict: 'PASS', findings: [], recommendations: [] });
+
+  it('reports a declared reviewer the gate cannot honour', async () => {
+    const ceoTask: Task = { ...task, assignedAgent: 'ceo' };
+    const gate = new QAGate({
+      provider: new MockModelProvider({ cannedResponses: [{ content: passResponse }] }),
+      argusAgent: defaultAgentRegistry.getOrThrow('argus'),
+      resolveAgent: id => defaultAgentRegistry.get(id)
+    });
+
+    const result = await gate.evaluate(ceoTask, new Map());
+
+    expect(result.findings.join(' ')).toContain('cfo');
+    expect(result.findings.join(' ')).toContain('requiredAgent');
+  });
+
+  it('stays quiet when the declared reviewer is the one it ran', async () => {
+    const gate = new QAGate({
+      provider: new MockModelProvider({ cannedResponses: [{ content: passResponse }] }),
+      argusAgent: defaultAgentRegistry.getOrThrow('argus'),
+      resolveAgent: id => defaultAgentRegistry.get(id)
+    });
+
+    // `chief` declares `argus`, which is exactly who the gate runs.
+    const result = await gate.evaluate(task, new Map());
+
+    expect(result.findings.join(' ')).not.toContain('requiredAgent');
+  });
+
+  it('stays quiet when the caller supplies no way to resolve the declaring agent', async () => {
+    const ceoTask: Task = { ...task, assignedAgent: 'ceo' };
+    const gate = new QAGate({
+      provider: new MockModelProvider({ cannedResponses: [{ content: passResponse }] }),
+      argusAgent: defaultAgentRegistry.getOrThrow('argus')
+    });
+
+    const result = await gate.evaluate(ceoTask, new Map());
+
+    expect(result.findings.join(' ')).not.toContain('requiredAgent');
+  });
 });

@@ -393,9 +393,9 @@ Sweep 9 domain (56 temuan). Yang berikut sudah diperbaiki, masing-masing dengan 
 | Command Center menampilkan `$0.00` / `0` untuk metrik yang gagal diambil, dan `WorkflowLiveStream` menelan error fetch menjadi keadaan kosong | `apps/dashboard/src/app/page.tsx`, `workflow-live-stream.tsx` | ✅ diperbaiki: penanda "tidak tersedia" + state error |
 
 Masih terbuka dari sweep yang sama: tidak ada jalur produksi yang mempromosikan proposal memori
-ke `verified`, route `POST /messages` dan `POST /brain/notes` belum ada padahal UI menampilkan
-tombolnya, `review.requiredAgent` mati, dan `IdempotencyRepository.expireStale` tidak pernah
-dipanggil (kini hanya higiene — `claim` menyembuhkan dirinya sendiri).
+ke `verified`, `review.requiredAgent` dideklarasikan tetapi tidak ada tahap yang menegakkannya,
+dan `IdempotencyRepository.expireStale` tidak pernah dipanggil (kini hanya higiene — `claim`
+menyembuhkan dirinya sendiri).
 
 Rincian ada di [[Policy, Security & Approval Gates]].
 
@@ -415,6 +415,8 @@ ditulis seolah-olah hasil pengukuran padahal tidak ada yang mengukurnya.
 | Seeding menimpa riwayat `agent_versions` tiap boot — audit "run X memakai chief v3" tak bisa lagi dipetakan ke prompt v3 yang sebenarnya | `packages/database/src/agent-seeder.ts` | ✅ diperbaiki: `DO NOTHING` (riwayat imutabel) + peringatan saat definisi di disk menyimpang dari versi tersimpan |
 | Manifest tool tidak divalidasi: `riskLevel: 'critcal'` atau side effect karangan lolos ke policy engine | `packages/tools/src/registry.ts` | ✅ diperbaiki: validasi `ToolManifestSchema`, gagal-tertutup dengan path yang salah. Langsung menemukan satu nilai hidup (`'external_write'` vs `'write_external'`) |
 | `registerLegacy` menyintesis `sideEffects: ['none']` untuk tool yang tidak mendeklarasikan apa pun — klaim paling tidak konservatif yang mungkin | `packages/shared/src/schemas/tool-manifest.ts` | ✅ diperbaiki: `'unknown'` ditambahkan ke enum; konsumen mana pun harus gagal-tertutup atas nilai itu |
+| Dua kontrol dashboard mem-POST ke route yang tidak ada (`POST /brain/notes`, `POST /messages`) — gagal hanya saat operator mengisi formulir, dengan 404 polos | `apps/dashboard/src/app/brain/page.tsx`, `communications/page.tsx` | ✅ diperbaiki: kontrol dinyatakan tidak tersedia beserta alasannya (mem-wire ke `ingestDocument` akan membuat catatan yang hilang saat sync sambil melaporkan "tersimpan") |
+| Tidak ada yang memeriksa dashboard dan API satu sama lain — keduanya aplikasi terpisah yang bicara lewat HTTP | `scripts/dashboard-api-contract.test.mjs` (baru) | ✅ diperbaiki: test kontrak membaca kedua sisi dan menuntut setiap `atlasFetch` punya route terdaftar; jalan di `pnpm test` |
 
 ---
 

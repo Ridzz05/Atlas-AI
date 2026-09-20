@@ -18,7 +18,16 @@ export interface QAGateOptions {
   argusAgent: AgentDefinition;
   messageRepo?: MessageRepository;
   runner?: AgentRunner;
+  /**
+   * Resolve an agent definition by id, so the gate can read the declaring agent's review policy.
+   *
+   * Optional only for backwards compatibility with callers that construct the gate directly.
+   */
+  resolveAgent?: (id: string) => AgentDefinition | undefined;
 }
+
+/** The reviewer this gate runs. Its prompt is that agent's own checklist, not a generic template. */
+const GATE_REVIEWER_ID = 'argus';
 
 export class QAGate {
   constructor(private options: QAGateOptions) {}
@@ -107,6 +116,20 @@ RULES:
       const recommendations = Array.isArray(parsed.recommendations) ? (parsed.recommendations as string[]) : [];
       const verdict = parsed.verdict as QAVerdict;
       const passed = verdict === 'PASS' || verdict === 'PASS_WITH_WARNINGS';
+
+      // `review.requiredAgent` is declared by seven agent definitions and read by nothing. Six of them
+      // declare `argus`, which is who this gate happens to run, so the declaration agrees with the
+      // pipeline by luck rather than by construction; `ceo` declares `cfo`, which no stage runs.
+      //
+      // The gate cannot honour an arbitrary reviewer — its prompt is Argus's own checklist, so
+      // running the CFO through it would be theatre — but it can stop ignoring the declaration and
+      // say so in the verdict a human reads.
+      const declaredReviewer = this.options.resolveAgent?.(parentTask.assignedAgent)?.review?.requiredAgent;
+      if (declaredReviewer && declaredReviewer !== GATE_REVIEWER_ID) {
+        findings.push(
+          `Agent '${parentTask.assignedAgent}' declares requiredAgent '${declaredReviewer}', which this gate did not run; the verification below was performed by '${GATE_REVIEWER_ID}'.`
+        );
+      }
 
       if (this.options.messageRepo) {
         const findingsList = findings.length > 0 ? findings.map(f => `• ${f}`).join('\n') : 'Semua komponen memenuhi standar kualifikasi.';
