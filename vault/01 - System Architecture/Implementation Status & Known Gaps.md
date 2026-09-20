@@ -392,15 +392,29 @@ Sweep 9 domain (56 temuan). Yang berikut sudah diperbaiki, masing-masing dengan 
 | Voice assistant mematikan `SpeechRecognition`-nya sendiri setelah transkrip pertama (`transcript` ada di dependency array); `onTaskCreated` tak pernah terpanggil (`res.data` padahal route mengembalikan task langsung) | `apps/dashboard/src/components/chief-voice-assistant.tsx` | ✅ diperbaiki: ref untuk nilai yang berubah, deps `[lang]`; respons tidak lagi di-envelope |
 | Command Center menampilkan `$0.00` / `0` untuk metrik yang gagal diambil, dan `WorkflowLiveStream` menelan error fetch menjadi keadaan kosong | `apps/dashboard/src/app/page.tsx`, `workflow-live-stream.tsx` | ✅ diperbaiki: penanda "tidak tersedia" + state error |
 
-Masih terbuka dari sweep yang sama: biaya provider inert (OpenRouter di-hardcode `0`,
-provider non-OpenRouter ditagih tarif gpt-4o-mini), tidak ada jalur produksi yang
-mempromosikan proposal memori ke `verified`, route `POST /messages` dan `POST /brain/notes`
-belum ada padahal UI menampilkan tombolnya, `review.requiredAgent` mati, manifest tool tidak
-divalidasi terhadap `ToolManifestSchema`, `registerLegacy` menyintesis `sideEffects: ['none']`,
-`recordRun` menstempel `last_run_at` saat inisialisasi, dan seeding menimpa riwayat
-`agent_versions` tiap boot.
+Masih terbuka dari sweep yang sama: tidak ada jalur produksi yang mempromosikan proposal memori
+ke `verified`, route `POST /messages` dan `POST /brain/notes` belum ada padahal UI menampilkan
+tombolnya, `review.requiredAgent` mati, dan `IdempotencyRepository.expireStale` tidak pernah
+dipanggil (kini hanya higiene — `claim` menyembuhkan dirinya sendiri).
 
 Rincian ada di [[Policy, Security & Approval Gates]].
+
+### 10.3 Gelombang lanjutan (21 Sep 2026) — sudah diperbaiki
+
+Kelas bug yang muncul di gelombang ini: **fakta yang tidak pernah diperiksa**. Sebuah nilai
+ditulis seolah-olah hasil pengukuran padahal tidak ada yang mengukurnya.
+
+| Butir | Anchor | Status |
+| :--- | :--- | :--- |
+| Biaya provider: `[OI]CompatibleProvider` memakai tarif gpt-4o-mini untuk **semua** endpoint yang tidak menimpanya, sehingga `ollama` (lokal, gratis) ditagih tarif berbayar dan plafon harian dimakan run gratis; OpenRouter di-hardcode `0` sehingga plafon tak pernah menyala | `packages/providers/src/openai.ts`, `factory.ts`, `openrouter.ts` | ✅ diperbaiki: harga yang tidak dideklarasikan = tidak diketahui; OpenRouter ditanya (`usage.include`) dan memakai biaya yang dilaporkannya; `:free` dideklarasikan nol secara jujur |
+| `ModelRunResult.costUsd` tidak bisa membedakan "gratis" dari "tidak diketahui" | `packages/providers/src/types.ts` | ✅ diperbaiki: `costUsdKnown` wajib; runner memperingatkan sekali per run bahwa plafon tidak bisa ditegakkan |
+| Audit hanya mencatat eksekusi **sukses** — setiap penolakan (allowlist, policy, input tidak sah, token approval) dan setiap kegagalan tidak meninggalkan jejak durabel | `packages/tools/src/registry.ts` | ✅ diperbaiki: audit jadi tanggung jawab satu wrapper; `outcome` = `succeeded`/`denied`/`failed`/`approval_pending` |
+| Tulisan audit berada **di dalam** `try` eksekusi, jadi sink audit yang rusak mengubah tool call yang sudah selesai menjadi `success: false` → runner menandainya gagal dan model mengulang = kirim ganda | `packages/tools/src/registry.ts` | ✅ diperbaiki: kegagalan sink audit dicatat sebagai error, tidak mengubah hasil |
+| `approvals.decided_by` diisi dari header `x-actor-id` yang dikendalikan pemanggil — pembayaran bisa tercatat "approved by cfo" | `apps/agent-service/src/routes/approvals.ts` | ✅ diperbaiki: aktor = principal yang benar-benar terautentikasi; header dicatat sebagai klaim tak terverifikasi |
+| `recordRun` menstempel `last_run_at = NOW()` saat inisialisasi jadwal, jadi job yang belum pernah jalan melaporkan "terakhir jalan: barusan" | `packages/database/src/repositories/scheduled-job.repository.ts` | ✅ diperbaiki: `initializeSchedule` hanya menulis `next_run_at` (CAS) |
+| Seeding menimpa riwayat `agent_versions` tiap boot — audit "run X memakai chief v3" tak bisa lagi dipetakan ke prompt v3 yang sebenarnya | `packages/database/src/agent-seeder.ts` | ✅ diperbaiki: `DO NOTHING` (riwayat imutabel) + peringatan saat definisi di disk menyimpang dari versi tersimpan |
+| Manifest tool tidak divalidasi: `riskLevel: 'critcal'` atau side effect karangan lolos ke policy engine | `packages/tools/src/registry.ts` | ✅ diperbaiki: validasi `ToolManifestSchema`, gagal-tertutup dengan path yang salah. Langsung menemukan satu nilai hidup (`'external_write'` vs `'write_external'`) |
+| `registerLegacy` menyintesis `sideEffects: ['none']` untuk tool yang tidak mendeklarasikan apa pun — klaim paling tidak konservatif yang mungkin | `packages/shared/src/schemas/tool-manifest.ts` | ✅ diperbaiki: `'unknown'` ditambahkan ke enum; konsumen mana pun harus gagal-tertutup atas nilai itu |
 
 ---
 
