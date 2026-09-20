@@ -68,9 +68,10 @@ jobs:
           # Check-run annotations are public, so surface the failing lines there as well. The
           # pattern is deliberately narrow: a loose one matches the structured log lines that
           # tests emit on purpose (level:"error", stdout/stderr banners) and reports noise
-          # instead of the failure. Turbo names the failing package, vitest names the test.
+          # instead of the failure. Turbo names the failing package, vitest names the test,
+          # and `not ok` catches the node:test file that `pnpm test` runs after turbo.
           sed -E 's/\x1b\[[0-9;]*m//g' test-output.log \
-            | grep -aE 'Failed: +@atlas|FAIL |AssertionError|Tests +[0-9]+ failed|✗|❯' \
+            | grep -aE 'Failed: +@atlas|FAIL |AssertionError|Tests +[0-9]+ failed|not ok [0-9]+|✗|❯' \
             | head -n 12 \
             | while IFS= read -r line; do printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-900)"; done || true
           exit 1

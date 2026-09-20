@@ -51,8 +51,12 @@ test('native launcher forwards the API token to the dashboard proxy without prin
   assert.equal(prepared.ATLAS_API_AUTH_TOKEN, 'owner-token');
 });
 
-test('native launcher can spawn the pnpm command on Windows', async () => {
-  const child = spawnCommand('pnpm.cmd', ['--version'], { stdio: 'pipe' });
+test('native launcher spawns the pnpm command on the current platform', async () => {
+  // `pnpm.cmd` is the Windows shim and only exists there; on POSIX the command is `pnpm`.
+  // spawnCommand routes the Windows case through ComSpec, so the .cmd name is the one worth
+  // exercising on Windows — but naming it unconditionally made this test fail on Linux.
+  const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+  const child = spawnCommand(command, ['--version'], { stdio: 'pipe' });
   let output = '';
   child.stdout?.on('data', chunk => {
     output += chunk;
