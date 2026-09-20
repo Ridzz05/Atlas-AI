@@ -14,18 +14,21 @@ export interface ActionPolicy {
  * - Actions in `BLOCKED_ACTIONS` are always denied (critical risk).
  * - Actions in `HUMAN_APPROVAL_REQUIRED_ACTIONS` require human approval and
  *   are blocked when external writes are disabled by configuration.
- * - Actions not in either set fall through to one of two paths:
+ * - Actions in `NO_APPROVAL_ACTIONS` execute without approval (exact match only).
+ * - Anything else falls through:
  *   - If `options.knownActions` is provided and the action is NOT a member,
  *     the action is treated as unknown and blocked at high risk.
- *   - If the action IS a known action but not covered by any explicit rule
- *     and not a safe-prefix match, the matrix returns
+ *   - If the action IS a known action but not covered by any explicit rule,
+ *     the matrix returns
  *     `requiresApproval: true, blocked: false, riskLevel: 'medium'`
  *     so that unknown-but-registered actions still demand human approval.
  *   - If `options.knownActions` is NOT provided, the matrix defaults to
  *     fail-closed for any unrecognized action (blocked: true, high risk).
- * - A small set of read/draft prefixes (`memory.search`, `artifacts.read`,
- *   `tasks.get`, `communication.create_draft`, `artifacts.write`) is allowed
- *   without approval because they are internal, non-side-effecting actions.
+ *
+ * Every match is exact. An earlier version also accepted a *prefix* match
+ * (`action.startsWith('artifacts.write')`), which meant any tool whose name was a
+ * superstring of a safe action — `artifacts.write_production` — was auto-approved.
+ * A naming choice is not an authorization decision, so prefixes are gone.
  *
  * In short: an unknown action NEVER silently executes. Either the registry
  * declares it known and the operator is asked for approval, or it is denied.
@@ -66,8 +69,8 @@ export class ApprovalMatrix {
    * with `approval: 'auto'`, which the registry then used to override this matrix. The
    * result was that a tool author could opt their own action out of approval — including
    * actions on HUMAN_APPROVAL_REQUIRED_ACTIONS. The registry now only lets a manifest
-   * escalate, so any action not listed here and not covered by a safe prefix falls through
-   * to the fail-closed default below and demands human approval.
+   * escalate, so any action not listed here falls through to the fail-closed default below
+   * and demands human approval.
    */
   private static readonly NO_APPROVAL_ACTIONS = new Set([
     'web.search',
@@ -82,6 +85,8 @@ export class ApprovalMatrix {
     'artifacts.read',
     'artifacts.write',
     'communication.create_draft',
+    'tasks.get',
+    'tasks.list',
     'second_brain.search',
     'second_brain.read_note',
     'second_brain.list_notes',
@@ -90,6 +95,13 @@ export class ApprovalMatrix {
   ]);
 
   private static readonly KNOWN_ACTIONS = new Set<string>();
+
+  /**
+   * Safe actions that still WRITE something (a draft, an artifact). This set affects only the
+   * reported `riskLevel` — it is NOT consulted for the approval decision, which belongs to
+   * `NO_APPROVAL_ACTIONS` alone. It exists so an audit record does not label a write as a read.
+   */
+  private static readonly SAFE_WRITE_ACTIONS = new Set(['artifacts.write', 'communication.create_draft']);
 
   public static evaluate(action: string, options?: { externalWritesEnabled?: boolean; knownActions?: ReadonlySet<string> }): ActionPolicy {
     if (this.BLOCKED_ACTIONS.has(action)) {
@@ -123,23 +135,7 @@ export class ApprovalMatrix {
       return {
         requiresApproval: false,
         blocked: false,
-        riskLevel: 'read'
-      };
-    }
-
-    if (action.startsWith('memory.search') || action.startsWith('artifacts.read') || action.startsWith('tasks.get')) {
-      return {
-        requiresApproval: false,
-        blocked: false,
-        riskLevel: 'read'
-      };
-    }
-
-    if (action.startsWith('communication.create_draft') || action.startsWith('artifacts.write')) {
-      return {
-        requiresApproval: false,
-        blocked: false,
-        riskLevel: 'low'
+        riskLevel: this.SAFE_WRITE_ACTIONS.has(action) ? 'low' : 'read'
       };
     }
 

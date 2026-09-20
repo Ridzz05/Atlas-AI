@@ -1,4 +1,4 @@
-import { SecondBrainService } from '@atlas/memory';
+import { SecondBrainService, assertVaultPathAllowed } from '@atlas/memory';
 import { z } from 'zod';
 import { ToolDefinition } from '../types.js';
 
@@ -229,7 +229,13 @@ export function createSecondBrainTools(secondBrainService: SecondBrainService): 
     requiresApproval: false,
     timeoutMs: 15000,
     async execute(_ctx, input) {
-      const result = await secondBrainService.ingestVaultDirectory(input.vaultPath, {
+      // The model supplies vaultPath. It used to reach a recursive directory walk unvalidated, so
+      // `{"vaultPath":"C:/Windows"}` read every .md/.txt on the host and made the contents
+      // retrievable. assertVaultPathAllowed throws unless the path is inside the configured vault
+      // root, so the tool fails closed instead of reading an arbitrary directory.
+      const allowedPath = assertVaultPathAllowed(input.vaultPath);
+
+      const result = await secondBrainService.ingestVaultDirectory(allowedPath, {
         scope: input.scope
       });
 

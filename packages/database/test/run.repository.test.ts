@@ -138,7 +138,9 @@ describe('RunRepository cancellation state', () => {
 
     await expect(repository.requestCancellationForTask('123e4567-e89b-12d3-a456-426614174001', 'emergency stop')).resolves.toBe(2);
 
-    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('WHERE task_id = $2'), [
+    // The parameter binding is the contract; the exact WHERE shape is asserted by the
+    // child-run test below.
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('task_id = $2'), [
       'emergency stop',
       '123e4567-e89b-12d3-a456-426614174001'
     ]);
@@ -277,5 +279,21 @@ describe('RunRepository cancellation state', () => {
 
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining("status = 'failed'"), ['worker lease expired', 900]);
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('lease_expires_at < NOW()'), ['worker lease expired', 900]);
+  });
+
+  it('cancels the child runs of a task, not only runs whose task_id is that task', async () => {
+    // The read side (`isCancellationRequestedForTask`) matches runs of the task OR of its
+    // children, because an orchestrator task drives a whole delegation graph and owns no run
+    // itself. The write side matched only `task_id = $1`, so `/stop <parent-id>` updated zero
+    // rows: the delegator's poll kept answering requested:false and the graph ran to completion
+    // while the operator was told the cancellation had been sent. Write and read must agree.
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 2, rows: [] }) } as any;
+    const repository = new RunRepository(db);
+
+    await expect(repository.requestCancellationForTask('123e4567-e89b-12d3-a456-426614174001', 'stop')).resolves.toBe(2);
+
+    const sql = db.query.mock.calls[0][0] as string;
+    expect(sql).toContain('parent_id');
+    expect(sql).toContain('task_id = $2');
   });
 });

@@ -78,4 +78,24 @@ Celebrity Fitness and Fitness First are leading chains.`
     expect(output.answer).toContain('Indonesian Gym Market');
     expect(output.citations.length).toBeGreaterThan(0);
   });
+
+  // sync_vault passed the model-supplied vaultPath straight to a recursive directory walk and read
+  // every .md/.markdown/.txt it found, with no root confinement — an arbitrary local file-read
+  // primitive that also fed whatever it read into the retrievable knowledge base. Only the
+  // configured vault root is accepted now.
+  it('refuses a vaultPath outside the configured vault root', async () => {
+    const outside = process.platform === 'win32' ? 'C:/Windows' : '/etc';
+
+    const execRes = await registry.execute('second_brain.sync_vault', { vaultPath: outside }, mockContext);
+
+    expect(execRes.success).toBe(false);
+    expect(String(execRes.error)).toMatch(/vault root/i);
+  });
+
+  it('refuses a vaultPath that escapes the root via traversal', async () => {
+    const execRes = await registry.execute('second_brain.sync_vault', { vaultPath: '../../..' }, mockContext);
+
+    expect(execRes.success).toBe(false);
+    expect(String(execRes.error)).toMatch(/vault root/i);
+  });
 });

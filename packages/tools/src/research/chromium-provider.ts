@@ -1,14 +1,17 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { lookup } from 'node:dns/promises';
 import puppeteer, { Browser } from 'puppeteer-core';
 import type { ResearchProvider, ResearchFreshness, ResearchSensitivity } from '../types.js';
-import { isSafePublicWebUrl } from './url-safety.js';
+import { isSafePublicWebUrl, isPublicIpAddress } from './url-safety.js';
 import { rootLogger } from '@atlas/observability';
 
 export interface ChromiumResearchProviderOptions {
   executablePath?: string;
   headless?: boolean;
   timeoutMs?: number;
+  /** Injection point for the DNS lookup so the containment check is testable without a browser. */
+  resolveAddresses?: (hostname: string) => Promise<string[]>;
 }
 
 export function findChromiumPath(): string {
@@ -62,10 +65,71 @@ export function findChromiumPath(): string {
 export class ChromiumResearchProvider implements ResearchProvider {
   private executablePath: string;
   private timeoutMs: number;
+  private resolveAddresses: (hostname: string) => Promise<string[]>;
 
   constructor(options: ChromiumResearchProviderOptions = {}) {
     this.executablePath = options.executablePath || findChromiumPath();
     this.timeoutMs = options.timeoutMs || 25_000;
+    this.resolveAddresses =
+      options.resolveAddresses || (async hostname => (await lookup(hostname, { all: true })).map(entry => entry.address));
+  }
+
+  /**
+   * Containment check for a hostname the browser is about to reach.
+   *
+   * `isSafePublicWebUrl` only inspects the literal string, so a public-looking name that resolves
+   * to a private address — `localtest.me` → 127.0.0.1, or any name the attacker controls —
+   * reached the internal network, and a 302 to the cloud metadata endpoint was followed because
+   * only the initial URL was ever validated. The browser resolves names itself, so the check has
+   * to happen here, before navigation, and again for every request the page makes.
+   *
+   * Fail closed: an unresolvable name, or ANY resolved address in a private/reserved range, is
+   * refused. Checking every address (not just the first) also covers round-robin DNS, where the
+   * validation lookup and the browser's lookup can return different answers.
+   */
+  private async assertPublicHost(hostname: string): Promise<void> {
+    let addresses: string[];
+    try {
+      addresses = await this.resolveAddresses(hostname);
+    } catch (error) {
+      throw new Error(`Target host '${hostname}' could not be resolved: ${String(error)}`);
+    }
+
+    if (addresses.length === 0) {
+      throw new Error(`Target host '${hostname}' could not be resolved: no addresses returned.`);
+    }
+
+    const offending = addresses.find(address => !isPublicIpAddress(address));
+    if (offending) {
+      throw new Error(`Target host '${hostname}' resolves to a private or reserved address (${offending}).`);
+    }
+  }
+
+  /** Validates a URL string, then its resolved address. Returns the parsed URL. */
+  private async assertFetchableUrl(value: string): Promise<URL> {
+    if (!isSafePublicWebUrl(value)) {
+      throw new Error(`Target URL '${value}' is not a permitted public web URL.`);
+    }
+    const parsed = new URL(value);
+    await this.assertPublicHost(parsed.hostname);
+    return parsed;
+  }
+
+  /**
+   * Guards every request the page issues, including redirect hops and subresources, which the
+   * initial-URL check cannot see. A request whose host is unverifiable or private is aborted
+   * rather than continued.
+   */
+  private async guardRequest(url: string): Promise<boolean> {
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+      if (!isSafePublicWebUrl(url)) return false;
+      await this.assertPublicHost(parsed.hostname);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private async launchBrowser(): Promise<Browser> {
@@ -217,9 +281,7 @@ export class ChromiumResearchProvider implements ResearchProvider {
     unresolvedQuestions: string[];
     confidence: number;
   }> {
-    if (!isSafePublicWebUrl(url)) {
-      throw new Error(`Target URL '${url}' is not a permitted public web URL.`);
-    }
+    const targetUrl = await this.assertFetchableUrl(url);
 
     const extractedAt = new Date().toISOString();
     let browser: Browser | null = null;
@@ -236,18 +298,30 @@ export class ChromiumResearchProvider implements ResearchProvider {
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       );
 
-      // Block images, stylesheets, media for speed and safety
+      // Block heavy resources for speed, and re-validate every NAVIGATION request: the initial
+      // URL check cannot see a redirect hop, and the page cannot read a cross-origin subresource
+      // response, so the navigation is the SSRF vector that has to be re-checked.
       await page.setRequestInterception(true);
       page.on('request', req => {
-        const resourceType = req.resourceType();
-        if (['image', 'media', 'font', 'stylesheet'].includes(resourceType)) {
-          req.abort();
-        } else {
-          req.continue();
-        }
+        void (async () => {
+          try {
+            if (['image', 'media', 'font', 'stylesheet'].includes(req.resourceType())) {
+              await req.abort();
+              return;
+            }
+            if (req.isNavigationRequest() && !(await this.guardRequest(req.url()))) {
+              rootLogger.warn('Blocked a browser navigation to a non-public target', { url: req.url() });
+              await req.abort();
+              return;
+            }
+            await req.continue();
+          } catch {
+            // The request may already be handled (redirect/abort race); nothing more to do.
+          }
+        })();
       });
 
-      await page.goto(url, {
+      await page.goto(targetUrl.toString(), {
         waitUntil: 'domcontentloaded',
         timeout: this.timeoutMs
       });

@@ -1,20 +1,13 @@
 import { FastifyInstance } from 'fastify';
-import { SecondBrainService } from '@atlas/memory';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
+import { SecondBrainService, resolveVaultRoot, isInsideVaultRoot } from '@atlas/memory';
 import { z } from 'zod';
 
-export function findVaultPath(): string | null {
-  const candidates = [
-    path.resolve(process.cwd(), 'vault'),
-    path.resolve(process.cwd(), '../../vault'),
-    path.resolve(process.cwd(), '../vault')
-  ];
-  for (const c of candidates) {
-    if (fs.existsSync(c)) return c;
-  }
-  return null;
-}
+/**
+ * @deprecated Use `resolveVaultRoot` from `@atlas/memory`. Kept as a re-export because the server
+ * and the API tests import this name; the implementation moved so the rule has one owner and the
+ * `second_brain.sync_vault` tool can enforce the same containment.
+ */
+export const findVaultPath = resolveVaultRoot;
 
 const IngestBodySchema = z.object({
   title: z.string().optional(),
@@ -101,13 +94,12 @@ export function registerSecondBrainRoutes(app: FastifyInstance, options: SecondB
     // A client-supplied vaultPath used to be passed straight to a recursive directory
     // walk, which turned this route into an unauthenticated arbitrary-file-read primitive:
     // POST {"vaultPath":"C:/Users/<user>"} indexed every .md/.txt under that tree and
-    // GET /api/v1/brain/search returned the contents. Only the configured vault root is
-    // accepted now.
-    const configuredVaultPath = findVaultPath();
+    // GET /api/v1/brain/search returned the contents. Only a path inside the configured vault
+    // root is accepted now, using the same predicate the sync_vault tool uses so the two cannot
+    // drift apart.
+    const configuredVaultPath = resolveVaultRoot();
     if (vaultPath && vaultPath.trim()) {
-      const requested = path.resolve(vaultPath.trim());
-      const configured = configuredVaultPath ? path.resolve(configuredVaultPath) : null;
-      if (!configured || requested !== configured) {
+      if (!configuredVaultPath || !isInsideVaultRoot(vaultPath.trim(), configuredVaultPath)) {
         return reply.status(400).send({
           error: 'vaultPath must resolve to the configured Second Brain vault root.'
         });

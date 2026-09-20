@@ -185,5 +185,32 @@ describe('@atlas/policy tests', () => {
       expect(evaluation.blocked).toBe(false);
       expect(evaluation.riskLevel).toBe('medium');
     });
+
+    // The matrix used to accept `action.startsWith('artifacts.write')` etc. as a safe read/low-risk
+    // action. A tool named `artifacts.write_production` is a superstring of that prefix, so a
+    // one-word naming choice silently converted an approval-required action into an auto-approved
+    // one. Approval is decided by exact membership only.
+    it('does not auto-approve an action that merely starts with a safe prefix', () => {
+      for (const action of [
+        'artifacts.write_production',
+        'artifacts.read_secrets',
+        'memory.search_all_scopes',
+        'tasks.get_secret',
+        'communication.create_draft_external'
+      ]) {
+        const evaluation = ApprovalMatrix.evaluate(action, { knownActions: new Set([action]) });
+        expect(evaluation.requiresApproval, action).toBe(true);
+        expect(evaluation.blocked, action).toBe(false);
+        expect(evaluation.riskLevel, action).toBe('medium');
+      }
+    });
+
+    it('still auto-approves the exact safe actions it declares', () => {
+      for (const action of ['memory.search', 'artifacts.read', 'tasks.get', 'artifacts.write']) {
+        const evaluation = ApprovalMatrix.evaluate(action);
+        expect(evaluation.requiresApproval, action).toBe(false);
+        expect(evaluation.blocked, action).toBe(false);
+      }
+    });
   });
 });

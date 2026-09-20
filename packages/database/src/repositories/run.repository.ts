@@ -401,6 +401,15 @@ export class RunRepository {
     };
   }
 
+  /**
+   * Task-level cancellation write, the counterpart to `isCancellationRequestedForTask`.
+   *
+   * It must match exactly what the read matches. An orchestrator task drives a whole delegation
+   * graph and owns no Run row of its own, so its cancel is carried by the runs of its CHILD
+   * tasks. Matching only `task_id = $2` updated zero rows for such a task: the delegator's poll
+   * kept answering requested:false and the planner, every specialist, the QA gate and the
+   * synthesiser ran to completion while the operator was told the stop had been sent.
+   */
   public async requestCancellationForTask(taskId: string, reason: string): Promise<number> {
     const result = await this.db.query(
       `
@@ -408,7 +417,10 @@ export class RunRepository {
       SET cancel_requested = TRUE,
           cancel_reason = $1,
           updated_at = NOW()
-      WHERE task_id = $2
+      WHERE (
+          task_id = $2
+          OR task_id IN (SELECT id FROM tasks WHERE parent_id = $2)
+        )
         AND status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
         AND cancel_requested = FALSE;
     `,

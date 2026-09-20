@@ -13,11 +13,18 @@ export function isSafePublicWebUrl(value: string): boolean {
     return false;
   }
 
+  // A trailing dot is the FQDN root terminator, so `localhost..` and `localhost.` both name the
+  // same host as `localhost`. Stripping only one of them let `localhost..` through the reserved
+  // check below. Strip them all, and reject a host that is empty or has an empty label once
+  // normalised.
   const hostname = parsed.hostname
     .toLowerCase()
     .replace(/^\[|\]$/g, '')
-    .replace(/\.$/, '');
+    .replace(/\.+$/, '');
   if (!hostname || isIP(hostname) !== 0) {
+    return false;
+  }
+  if (hostname.split('.').some(label => label.length === 0)) {
     return false;
   }
 

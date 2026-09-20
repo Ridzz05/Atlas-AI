@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BraveResearchProvider, createResearchProvider, isPublicIpAddress, SafeWebFetcher } from '../src/index.js';
+import { BraveResearchProvider, createResearchProvider, isPublicIpAddress, isSafePublicWebUrl, SafeWebFetcher } from '../src/index.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -287,5 +287,33 @@ describe('BraveResearchProvider', () => {
     });
 
     await expect(hangingDnsProvider.fetchSafe?.('https://public.example.com/dns-slow')).rejects.toThrow('timed out after 10ms');
+  });
+});
+
+describe('isSafePublicWebUrl', () => {
+  // The hostname normaliser stripped exactly ONE trailing dot, so a name like `localhost..`
+  // became `localhost.` — which is not equal to 'localhost' and does not end with '.localhost',
+  // so the reserved-name check passed. A trailing dot is the FQDN root terminator, so any number
+  // of them must normalise away before the comparison.
+  it('rejects reserved names regardless of how many trailing dots they carry', () => {
+    for (const value of [
+      'http://localhost./admin',
+      'http://localhost../admin',
+      'http://localhost.../admin',
+      'http://x.local./admin',
+      'http://x.internal../admin',
+      'http://x.localhost../admin'
+    ]) {
+      expect(isSafePublicWebUrl(value), value).toBe(false);
+    }
+  });
+
+  it('still accepts a public host and rejects credentials, non-http schemes, and bare IPs', () => {
+    expect(isSafePublicWebUrl('https://example.com/path')).toBe(true);
+    expect(isSafePublicWebUrl('https://example.com./path')).toBe(true);
+    expect(isSafePublicWebUrl('https://user:pw@example.com/')).toBe(false);
+    expect(isSafePublicWebUrl('ftp://example.com/')).toBe(false);
+    expect(isSafePublicWebUrl('http://127.0.0.1/')).toBe(false);
+    expect(isSafePublicWebUrl('http://169.254.169.254/latest/meta-data/')).toBe(false);
   });
 });
