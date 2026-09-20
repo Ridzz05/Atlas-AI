@@ -5,6 +5,19 @@ import { rootLogger, AuditService } from '@atlas/observability';
 import { computeIdempotencyKey, computePayloadHash, IdempotencyKey } from '@atlas/shared/schemas/idempotency';
 import { ToolManifestSchema } from '@atlas/shared';
 
+/** How an execution ended, as recorded in the audit trail. */
+type ToolAuditOutcome = 'succeeded' | 'denied' | 'failed' | 'approval_pending';
+
+/**
+ * Whether the tool actually ran and threw.
+ *
+ * Set only by the catch block, so anything that returns early is a refusal. Passed explicitly rather
+ * than inferred from the error text.
+ */
+interface ToolAuditState {
+  toolFailed: boolean;
+}
+
 /**
  * Minimal local EventBus contract.
  *
@@ -151,7 +164,68 @@ export class ToolRegistry {
     }
   }
 
+  /**
+   * Execute a tool, and record the outcome — every outcome.
+   *
+   * The audit write used to sit on the success path only, so every denial (allowlist, policy block,
+   * invalid input, bad or missing approval token) and every failure returned without a durable
+   * record: `audit_logs` could answer "what did the system do?" but stayed silent on "who tried to
+   * do what, and was refused?", which for a governance layer is the more important question.
+   *
+   * The audit write also used to sit INSIDE the execution try, so a broken sink turned a completed
+   * tool call into `success: false` — and since the side effect had already happened by then, the
+   * runner recorded the call as failed and let the model retry, which for a non-idempotent action
+   * means doing it twice. A missing audit record must be loud, but it must not rewrite what
+   * happened.
+   *
+   * Auditing is therefore the wrapper's single responsibility, and the inner method cannot skip it.
+   */
   public async execute(name: string, input: unknown, context: ToolContext): Promise<ToolExecutionResponse> {
+    const state: ToolAuditState = { toolFailed: false };
+    const result = await this.executeInner(name, input, context, state);
+    await this.recordAudit(name, context, result, state);
+    return result;
+  }
+
+  private async recordAudit(name: string, context: ToolContext, result: ToolExecutionResponse, state: ToolAuditState): Promise<void> {
+    if (!context.auditSink) return;
+
+    const outcome: ToolAuditOutcome = result.success
+      ? 'succeeded'
+      : result.approvalPending
+        ? 'approval_pending'
+        : state.toolFailed
+          ? 'failed'
+          : 'denied';
+
+    const auditRecord = AuditService.format({
+      actor: context.agentId,
+      action: `tool.${name}`,
+      target: name,
+      taskId: context.taskId,
+      runId: context.runId,
+      details: {
+        outcome,
+        durationMs: result.durationMs,
+        riskLevel: result.riskLevel,
+        ...(outcome === 'succeeded' ? {} : { reason: result.error })
+      }
+    });
+
+    try {
+      await context.auditSink.record(auditRecord);
+    } catch (err) {
+      rootLogger.error('Failed to write the audit record for a tool execution', {
+        toolName: name,
+        taskId: context.taskId,
+        runId: context.runId,
+        outcome,
+        error: String((err as Error)?.message || err)
+      });
+    }
+  }
+
+  private async executeInner(name: string, input: unknown, context: ToolContext, state: ToolAuditState): Promise<ToolExecutionResponse> {
     const startTime = Date.now();
     const tool = this.tools.get(name);
 
@@ -458,17 +532,6 @@ export class ToolRegistry {
 
       const durationMs = Date.now() - startTime;
 
-      const auditRecord = AuditService.format({
-        actor: context.agentId,
-        action: `tool.${name}`,
-        taskId: context.taskId,
-        runId: context.runId,
-        details: { durationMs, riskLevel: tool.riskLevel }
-      });
-      if (context.auditSink) {
-        await context.auditSink.record(auditRecord);
-      }
-
       await this.publishEvent('tool.completed', context, {
         toolName: name,
         riskLevel: tool.riskLevel,
@@ -483,6 +546,9 @@ export class ToolRegistry {
         riskLevel: tool.riskLevel
       };
     } catch (err: any) {
+      // The tool ran and threw, which is a failure, not a refusal. Everything that returns early
+      // above refused before executing.
+      state.toolFailed = true;
       const durationMs = Date.now() - startTime;
       if (durableApprovalId && context.approvalExecutionStore) {
         try {

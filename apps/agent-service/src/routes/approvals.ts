@@ -12,6 +12,14 @@ const ApprovalDecisionSchema = z.object({
 });
 const ApprovalIdSchema = z.string().uuid();
 
+/**
+ * The principal behind every decision on this API.
+ *
+ * There is exactly one: the holder of `API_AUTH_TOKEN`. It is a constant on purpose — a per-request
+ * value would be a claim, and `approvals.decided_by` is a record, not a claim field.
+ */
+const API_PRINCIPAL = 'api-owner';
+
 export interface ApprovalRouteOptions {
   approvalRepo: ApprovalRepository;
   taskRepo?: TaskRepository;
@@ -51,9 +59,28 @@ export function registerApprovalRoutes(app: FastifyInstance, options: ApprovalRo
       return reply.status(400).send({ error: 'Invalid approval decision.', details: parsed.error.errors });
     }
 
-    const actor = req.headers['x-actor-id'] || 'api-owner';
-    const decidedBy = Array.isArray(actor) ? actor[0] : actor;
-    let approval = await options.approvalRepo.decide(id, parsed.data.status, decidedBy || 'api-owner', parsed.data.decisionNote);
+    // The approver recorded here must be the principal that actually authenticated. This read
+    // `req.headers['x-actor-id'] || 'api-owner'` and wrote it straight into `approvals.decided_by` —
+    // the column that exists to record who approved, and that the approvals UI shows — so the client
+    // chose the name on the governance record and a payment could be durably recorded as "approved by
+    // cfo". Nothing ever sent the header (the dashboard does not), so its only effect was to let a
+    // caller misattribute a decision.
+    //
+    // This API authenticates exactly one principal, the holder of API_AUTH_TOKEN (see server.ts), so
+    // there is no per-user identity to attribute to. The header is a claim, not an identity: keep it
+    // in the log as a claim, and record the principal that actually authenticated.
+    const claimedActor = req.headers['x-actor-id'];
+    const claimedActorValue = Array.isArray(claimedActor) ? claimedActor[0] : claimedActor;
+    if (claimedActorValue) {
+      rootLogger.info('Approval decision carried a client-claimed actor', {
+        approvalId: id,
+        claimedActor: claimedActorValue,
+        note: 'unverified: the API authenticates one shared token and has no per-user identity'
+      });
+    }
+    const decidedBy = API_PRINCIPAL;
+
+    let approval = await options.approvalRepo.decide(id, parsed.data.status, decidedBy, parsed.data.decisionNote);
 
     // Approved records are intentionally retryable: if queue delivery fails after
     // the decision was stored, the same request can safely re-issue the token.
