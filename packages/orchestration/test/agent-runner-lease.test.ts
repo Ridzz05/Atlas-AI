@@ -22,6 +22,7 @@ class CountingProvider implements ModelProvider {
   public readonly id = 'counting';
   public readonly name = 'Counting Provider';
   public calls = 0;
+  public readonly requests: ModelRunRequest[] = [];
 
   public estimateCost(): number {
     return 0;
@@ -29,6 +30,7 @@ class CountingProvider implements ModelProvider {
 
   public async run(request: ModelRunRequest): Promise<ModelRunResult> {
     this.calls += 1;
+    this.requests.push(request);
     return {
       content: `run ${this.calls}`,
       toolCalls: [],
@@ -258,5 +260,18 @@ describe('AgentRunner run-lease invariants', () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+
+  // modelPolicy was persisted into the agents row and rendered in the dashboard, but no runtime code
+  // read it, so the only model call site sent no temperature and the adapter's default 0.2 applied
+  // to every agent — Argus asked for 0.0 (deterministic QA verdicts) and got 0.2.
+  it('sends the agent declared temperature with the request', async () => {
+    const provider = new CountingProvider();
+    const runner = new AgentRunner({ provider, workerId: 'worker-a' });
+
+    await runner.run({ task, agent, initialPrompt: 'go' });
+
+    expect(provider.requests).toHaveLength(1);
+    expect(provider.requests[0]?.temperature).toBe(0.1);
   });
 });

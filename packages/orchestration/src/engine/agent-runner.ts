@@ -334,6 +334,11 @@ export class AgentRunner {
           agentId,
           messages,
           systemPrompt: input.agent.systemPrompt,
+          // The agent's declared model policy. It was persisted into the agents row and shown in the
+          // dashboard but never reached a request, so every agent ran at the adapter's default 0.2:
+          // Argus asked for 0.0 (deterministic QA verdicts) and Hermes for 0.4 (copy variation) and
+          // both got 0.2. A declared setting that nothing consumes is a lie in the definition.
+          temperature: input.agent.modelPolicy?.temperature,
           tools: availableTools && availableTools.length > 0 ? availableTools : undefined,
           signal: controller.signal
         });

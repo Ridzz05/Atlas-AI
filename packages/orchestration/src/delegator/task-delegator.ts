@@ -231,12 +231,22 @@ export class TaskDelegator {
       rootLogger.info(`Executing delegation batch of ${batch.length} steps: [${batch.map(s => `${s.id} (${s.agent})`).join(', ')}]`);
 
       const batchPromises = batch.map(async step => {
-        // Enforce depth guard
+        // Enforce depth guard. The ceiling is the MINIMUM of the configured global limit and the
+        // delegating agent's own declared limit: every specialist declares a tighter bound than the
+        // default (ned/layla/hermes/argus = 1 against a global 2) and none of them was read, so the
+        // per-agent blast-radius control was decorative.
+        const parentAgentDefinition = this.options.registry.get(parentTask.assignedAgent);
+        const agentDepthLimit = parentAgentDefinition?.limits?.maxDelegationDepth;
+        const effectiveMaxDepth =
+          typeof agentDepthLimit === 'number' && Number.isFinite(agentDepthLimit)
+            ? Math.min(this.options.maxDelegationDepth ?? agentDepthLimit, agentDepthLimit)
+            : this.options.maxDelegationDepth;
+
         const depthValidation = DepthGuard.validateDelegation({
           parentAgentId: parentTask.assignedAgent,
           targetAgentId: step.agent,
           currentDepth: parentTask.depth,
-          maxAllowedDepth: this.options.maxDelegationDepth
+          maxAllowedDepth: effectiveMaxDepth
         });
 
         if (!depthValidation.allowed) {
