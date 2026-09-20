@@ -105,6 +105,30 @@ export class ScheduledJobRepository {
   }
 
   /**
+   * Give a job its first schedule, without claiming it has run.
+   *
+   * Registering a job is not running it. The scheduler used to initialize `next_run_at` by calling
+   * `recordRun`, which also stamps `last_run_at = NOW()` — so a job that had never fired reported a
+   * last run of "just now", and the dashboard field an operator reads to answer "is this automation
+   * actually firing?" said yes for a job that had never executed.
+   *
+   * Only `next_run_at` is written. The CAS on `next_run_at IS NULL` makes a second replica's
+   * concurrent sync a no-op rather than a second write.
+   */
+  public async initializeSchedule(id: string, nextRunAt: Date): Promise<ScheduledJob | null> {
+    const res = await this.db.query(
+      `UPDATE scheduled_jobs
+       SET next_run_at = $2,
+           updated_at = NOW()
+       WHERE id = $1
+         AND next_run_at IS NULL
+       RETURNING *`,
+      [id, nextRunAt]
+    );
+    return res.rows[0] ? this.mapRow(res.rows[0]) : null;
+  }
+
+  /**
    * Atomically claim a due job by advancing its schedule, and only if it is still at the value the
    * caller read.
    *

@@ -3,6 +3,7 @@ import { ToolDefinition, ToolContext, ToolExecutionResponse } from './types.js';
 import { ApprovalMatrix, TokenVerifier } from '@atlas/policy';
 import { rootLogger, AuditService } from '@atlas/observability';
 import { computeIdempotencyKey, computePayloadHash, IdempotencyKey } from '@atlas/shared/schemas/idempotency';
+import { ToolManifestSchema } from '@atlas/shared';
 
 /**
  * Minimal local EventBus contract.
@@ -61,15 +62,29 @@ export class ToolRegistry {
     if (!tool.manifest) {
       throw new Error('Tool must carry a ToolManifest');
     }
-    if (tool.name !== tool.manifest.name) {
-      throw new Error(`Tool manifest name '${tool.manifest.name}' does not match tool name '${tool.name}'`);
+    // A manifest is the declaration the policy engine trusts, so it is validated like any other
+    // input. Only its existence and name were checked before, so every field the gateways act on
+    // (`riskLevel`, `approval`, `idempotency`) and every field a future consumer would act on
+    // (`sideEffects`, `capability`, `requiredConnectionScopes`) was taken on trust: a typo like
+    // `riskLevel: 'critcal'` or an invented side effect like `'external_write'` sailed through, and
+    // the policy engine then evaluated against a value that meant nothing.
+    const parsedManifest = ToolManifestSchema.safeParse(tool.manifest);
+    if (!parsedManifest.success) {
+      const detail = parsedManifest.error.errors.map(e => `${e.path.join('.') || '(root)'}: ${e.message}`).join('; ');
+      throw new Error(`Tool manifest for '${tool.name}' is invalid: ${detail}`);
+    }
+    const manifest = parsedManifest.data;
+    tool.manifest = manifest;
+
+    if (tool.name !== manifest.name) {
+      throw new Error(`Tool manifest name '${manifest.name}' does not match tool name '${tool.name}'`);
     }
     if (!this.loggedRegistration.has(tool.name)) {
       rootLogger.info(`Tool registered: ${tool.name}`, {
-        capability: tool.manifest.capability,
-        riskLevel: tool.manifest.riskLevel,
-        approval: tool.manifest.approval,
-        idempotency: tool.manifest.idempotency
+        capability: manifest.capability,
+        riskLevel: manifest.riskLevel,
+        approval: manifest.approval,
+        idempotency: manifest.idempotency
       });
       this.loggedRegistration.add(tool.name);
     }
@@ -97,7 +112,7 @@ export class ToolRegistry {
         version: 1,
         capability: 'integration',
         description: tool.description,
-        sideEffects: ['none'],
+        sideEffects: ['unknown'],
         riskLevel: tool.riskLevel,
         idempotency: 'none',
         requiredConnectionScopes: [],

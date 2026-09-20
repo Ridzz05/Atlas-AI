@@ -197,12 +197,18 @@ export class ScheduledJobScheduler {
           tz: job.timezone
         });
       }
-      // Initialize nextRunAt for newly enabled jobs that have never been scheduled
+      // Initialize nextRunAt for newly enabled jobs that have never been scheduled.
+      //
+      // This must not go through recordRun: that stamps `last_run_at = NOW()`, so a job that had
+      // never fired reported a last run of "just now" — and `last_run_at` is the field an operator
+      // reads to answer "is this automation actually firing?". Registering a job is not running it.
       if (!job.nextRunAt && !job.lastRunAt) {
         const next = this.nextRunCalculator(job);
         if (next) {
-          await this.scheduledJobRepo.recordRun(job.id, next, undefined).catch(() => undefined);
-          rootLogger.info('Initialized nextRunAt for automation job', { id: job.id, nextRunAt: next.toISOString() });
+          const initialized = await this.scheduledJobRepo.initializeSchedule(job.id, next).catch(() => null);
+          if (initialized) {
+            rootLogger.info('Initialized nextRunAt for automation job', { id: job.id, nextRunAt: next.toISOString() });
+          }
         }
       }
     }

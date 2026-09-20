@@ -157,4 +157,52 @@ describe('ScheduledJobRepository', () => {
     expect(calls[0].params[1]).toBe(next);
     expect(calls[0].params[2]).toBe('queue unavailable');
   });
+
+  // Registering a job is not running it. Initializing the first schedule must not stamp
+  // `last_run_at`, or a job that has never fired reports a last run of "just now".
+  it('initializes a first schedule without recording a run', async () => {
+    const { db, calls } = makeDb([
+      {
+        rows: [
+          {
+            id: 'sj_1',
+            name: 'Daily briefing',
+            job_type: 'daily_briefing',
+            cron_pattern: '0 7 * * *',
+            timezone: 'UTC',
+            payload: {},
+            assigned_agent: 'chief',
+            enabled: true,
+            last_run_at: null,
+            next_run_at: '2026-09-01T00:00:00.000Z',
+            last_error: null,
+            created_by: 'system',
+            created_at: '2026-08-31T00:00:00.000Z',
+            updated_at: '2026-08-31T00:00:00.000Z'
+          }
+        ]
+      }
+    ]);
+    const repo = new ScheduledJobRepository(db);
+    const next = new Date('2026-09-01T00:00:00Z');
+
+    const initialized = await repo.initializeSchedule('sj_1', next);
+
+    expect(calls[0].sql).toContain('next_run_at = $2');
+    expect(calls[0].sql).not.toContain('last_run_at');
+    // CAS, so a second replica's concurrent sync is a no-op instead of a second write.
+    expect(calls[0].sql).toContain('next_run_at IS NULL');
+    expect(calls[0].params).toEqual(['sj_1', next]);
+    expect(initialized?.id).toBe('sj_1');
+    expect(initialized?.lastRunAt).toBeNull();
+  });
+
+  it('reports no initialization when the schedule was already set', async () => {
+    const { db } = makeDb([{ rows: [] }]);
+    const repo = new ScheduledJobRepository(db);
+
+    const initialized = await repo.initializeSchedule('sj_1', new Date('2026-09-01T00:00:00Z'));
+
+    expect(initialized).toBeNull();
+  });
 });

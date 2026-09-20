@@ -60,6 +60,7 @@ interface FakeRepos {
     recordRun: ReturnType<typeof vi.fn>;
     claimRun: ReturnType<typeof vi.fn>;
     recordError: ReturnType<typeof vi.fn>;
+    initializeSchedule: ReturnType<typeof vi.fn>;
   };
   taskRepo: {
     create: ReturnType<typeof vi.fn>;
@@ -90,7 +91,12 @@ function makeRepos(jobs: ReturnType<typeof makeJob>[]): FakeRepos {
         storedNextRun.set(id, nextRunAt.toISOString());
         return { ...(jobs.find(j => j.id === id) as object), nextRunAt: nextRunAt.toISOString() };
       }),
-      recordError: vi.fn(async () => undefined)
+      recordError: vi.fn(async () => undefined),
+      initializeSchedule: vi.fn(async (id: string, nextRunAt: Date) => {
+        if (storedNextRun.get(id) != null) return null;
+        storedNextRun.set(id, nextRunAt.toISOString());
+        return { ...(jobs.find(j => j.id === id) as object), nextRunAt: nextRunAt.toISOString() };
+      })
     },
     taskRepo: {
       create: vi.fn(async (input: any) => ({
@@ -150,6 +156,51 @@ describe('ScheduledJobScheduler', () => {
     repos.scheduledJobRepo.list.mockResolvedValueOnce([]);
     await scheduler.syncOnce();
     expect(scheduler.getTrackedJobIds()).toEqual([]);
+  });
+
+  // Registering a job is not running it. syncOnce() initialized next_run_at by calling recordRun,
+  // which also stamps `last_run_at = NOW()` — so a job that had never fired reported a last run of
+  // "just now", and the dashboard field an operator reads to answer "is this automation actually
+  // firing?" said yes for a job that had never executed.
+  it('initializes a never-scheduled job without recording a run', async () => {
+    const job = makeJob({ nextRunAt: null, lastRunAt: null });
+    repos = makeRepos([job]);
+    handler = vi.fn(async () => undefined);
+    scheduler = new ScheduledJobScheduler({
+      scheduledJobRepo: repos.scheduledJobRepo as any,
+      taskRepo: repos.taskRepo as any,
+      registry: repos.registry as any,
+      triggerHandler: handler,
+      nextRunCalculator
+    });
+
+    await scheduler.syncOnce();
+
+    expect(repos.scheduledJobRepo.recordRun).not.toHaveBeenCalled();
+    expect(repos.scheduledJobRepo.initializeSchedule).toHaveBeenCalledWith('sj_morning', new Date('2026-09-01T00:00:00Z'));
+    // The job was registered, not executed.
+    expect(repos.taskRepo.create).not.toHaveBeenCalled();
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('leaves a job that has already run alone when syncing', async () => {
+    const job = makeJob({
+      nextRunAt: new Date('2026-09-02T00:00:00Z').toISOString(),
+      lastRunAt: new Date('2026-09-01T00:00:00Z').toISOString()
+    });
+    repos = makeRepos([job]);
+    scheduler = new ScheduledJobScheduler({
+      scheduledJobRepo: repos.scheduledJobRepo as any,
+      taskRepo: repos.taskRepo as any,
+      registry: repos.registry as any,
+      triggerHandler: vi.fn(async () => undefined),
+      nextRunCalculator
+    });
+
+    await scheduler.syncOnce();
+
+    expect(repos.scheduledJobRepo.initializeSchedule).not.toHaveBeenCalled();
+    expect(repos.scheduledJobRepo.recordRun).not.toHaveBeenCalled();
   });
 
   it('runJobNow creates a task, invokes handler, and records next run', async () => {

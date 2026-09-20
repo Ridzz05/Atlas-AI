@@ -25,7 +25,7 @@ const toolWithRequiredIdempotency: ToolDefinition = {
     description: 'A tool that demands exactly-once execution',
     riskLevel: 'high',
     approval: 'auto',
-    sideEffects: ['external_write'],
+    sideEffects: ['write_external'],
     requiredConnectionScopes: [],
     idempotency: 'required',
     isIdempotentByDefault: false
