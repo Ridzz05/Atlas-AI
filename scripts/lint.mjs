@@ -1,14 +1,10 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { extname, relative, resolve } from 'node:path';
+import { secretPatterns } from './check-secrets.mjs';
 
 const sourceExtensions = new Set(['.js', '.mjs', '.ts', '.tsx']);
 const ignoredDirectories = new Set(['.next', '.next-dev', '.turbo', 'coverage', 'dist', 'node_modules']);
 const sourceRoots = ['apps', 'packages', 'scripts'];
-const secretPatterns = [
-  { pattern: new RegExp('gsk_' + '[A-Za-z0-9]{20,}'), label: 'Groq API key' },
-  { pattern: new RegExp('8669353' + '401:AA'), label: 'Telegram bot token (hardcoded example)' },
-  { pattern: new RegExp('sk-' + '(proj-)?[A-Za-z0-9]{20,}'), label: 'OpenAI API key' }
-];
 const repositoryRoot = process.cwd();
 const debuggerPattern = new RegExp(`\\b${['debug', 'ger'].join('')}\\b`);
 const consoleLogToken = ['console', '.log'].join('');
