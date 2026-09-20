@@ -77,58 +77,82 @@ RULES:
     }
     onCost?.(costUsd);
 
+    let parsedPlan: TaskPlan;
     try {
       const cleaned = resultContent
         .replace(/```json\s*/g, '')
         .replace(/```\s*$/g, '')
         .trim();
-      const parsed = JSON.parse(cleaned);
-      const plan = TaskPlanSchema.parse(parsed);
-      const validatedPlan = PlanValidator.assertValid(plan, { registry: this.options.registry });
-
-      if (this.options.messageRepo) {
-        await this.options.messageRepo.create({
-          taskId: task.id,
-          senderType: 'user',
-          senderId: 'user',
-          content: task.goal,
-          metadata: { stage: 'intake' }
-        });
-
-        const stepSummary = validatedPlan.steps.map((s, idx) => `${idx + 1}. [${s.agent.toUpperCase()}]: ${s.objective}`).join('\n');
-        const planOverview = `Menerima instruksi dari Operator: "${task.goal}"\n\nMenyusun rencana kerja ${validatedPlan.steps.length} langkah:\n${stepSummary}\n\nMemulai delegasi ke armada spesialis...`;
-
-        await this.options.messageRepo.create({
-          taskId: task.id,
-          senderType: 'agent',
-          senderId: 'chief',
-          content: planOverview,
-          metadata: { stage: 'planning', stepsCount: validatedPlan.steps.length }
-        });
-      }
-
-      return validatedPlan;
+      parsedPlan = TaskPlanSchema.parse(JSON.parse(cleaned));
     } catch (err) {
+      // There is no plan to respect: the model's output was not a plan at all. The fallback applies,
+      // and the disclosure below tells the operator a default plan is running.
       rootLogger.warn(`Failed to parse LLM plan output for task ${task.id}, using fallback plan`, { error: String(err) });
-      const fallbackPlan = this.generateFallbackPlan(task);
-      if (this.options.messageRepo) {
-        await this.options.messageRepo.create({
-          taskId: task.id,
-          senderType: 'user',
-          senderId: 'user',
-          content: task.goal,
-          metadata: { stage: 'intake' }
-        });
-        await this.options.messageRepo.create({
-          taskId: task.id,
-          senderType: 'agent',
-          senderId: 'chief',
-          content: `Menerima instruksi: "${task.goal}". Menjalankan rencana kerja default.`,
-          metadata: { stage: 'planning' }
-        });
-      }
-      return fallbackPlan;
+      return this.useFallbackPlan(task);
     }
+
+    // Past this point the model DID produce a plan, so a rejection here is a decision about that plan
+    // rather than a parse failure. This call used to sit inside the try above, where the catch
+    // swallowed it: a plan rejected for a dependency cycle, an unknown agent, duplicate step ids,
+    // more than eight steps, or a cost over the cap was discarded and the hardcoded fallback ran
+    // instead — the rejection had no effect on what executed. docs/AGENTS.md:8 requires this to stop
+    // the task instead.
+    const validatedPlan = PlanValidator.assertValid(parsedPlan, { registry: this.options.registry });
+
+    if (this.options.messageRepo) {
+      await this.options.messageRepo.create({
+        taskId: task.id,
+        senderType: 'user',
+        senderId: 'user',
+        content: task.goal,
+        metadata: { stage: 'intake' }
+      });
+
+      const stepSummary = validatedPlan.steps.map((s, idx) => `${idx + 1}. [${s.agent.toUpperCase()}]: ${s.objective}`).join('\n');
+      const planOverview = `Menerima instruksi dari Operator: "${task.goal}"\n\nMenyusun rencana kerja ${validatedPlan.steps.length} langkah:\n${stepSummary}\n\nMemulai delegasi ke armada spesialis...`;
+
+      await this.options.messageRepo.create({
+        taskId: task.id,
+        senderType: 'agent',
+        senderId: 'chief',
+        content: planOverview,
+        metadata: { stage: 'planning', stepsCount: validatedPlan.steps.length }
+      });
+    }
+
+    return validatedPlan;
+  }
+
+  /**
+   * The disclosed default plan, for a model response that is not a plan at all.
+   *
+   * The fallback names agents and declares dependencies, so it is held to the same validator as the
+   * model's plan. Without that, an edit to the fallback (a renamed agent, a broken dependency) would
+   * fail later, at delegation time, instead of here.
+   */
+  private async useFallbackPlan(task: Task): Promise<TaskPlan> {
+    const fallbackPlan = PlanValidator.assertValid(this.generateFallbackPlan(task), {
+      registry: this.options.registry
+    });
+
+    if (this.options.messageRepo) {
+      await this.options.messageRepo.create({
+        taskId: task.id,
+        senderType: 'user',
+        senderId: 'user',
+        content: task.goal,
+        metadata: { stage: 'intake' }
+      });
+      await this.options.messageRepo.create({
+        taskId: task.id,
+        senderType: 'agent',
+        senderId: 'chief',
+        content: `Menerima instruksi: "${task.goal}". Menjalankan rencana kerja default.`,
+        metadata: { stage: 'planning' }
+      });
+    }
+
+    return fallbackPlan;
   }
 
   public generateFallbackPlan(task: Task): TaskPlan {
