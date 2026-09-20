@@ -89,6 +89,40 @@ export function buildServer(options: ServerOptions): FastifyInstance {
         }));
   const ownsRateLimiter = !options.rateLimiter;
 
+  /**
+   * One place where an unhandled route error becomes a response.
+   *
+   * Without this, Fastify's default handler serialised `error.message` straight into the 500 body
+   * and, because the server runs with `logger: false`, wrote no server-side log line at all. A
+   * failing repository therefore handed the caller the table name, the database host and port, or
+   * an absolute filesystem path, while the operator had nothing to correlate with the response's
+   * `x-request-id`.
+   *
+   * A deliberate 4xx (a validation rejection, a 404 from a route) keeps its status and its message:
+   * those are the caller's to act on. Anything else is logged in full, server-side, and answered
+   * generically.
+   */
+  app.setErrorHandler((error: unknown, req, reply) => {
+    const failure = error as { statusCode?: number; message?: string; stack?: string };
+    const statusCode = failure.statusCode && failure.statusCode >= 400 && failure.statusCode < 500 ? failure.statusCode : 500;
+    const requestId = reply.getHeader('x-request-id');
+    const message = failure.message || 'Unexpected error';
+
+    if (statusCode < 500) {
+      return reply.status(statusCode).send({ error: message });
+    }
+
+    rootLogger.error('Unhandled API error', {
+      requestId,
+      method: req.method,
+      url: req.url,
+      error: message,
+      stack: failure.stack
+    });
+
+    return reply.status(500).send({ error: 'Internal server error. Use the x-request-id header to correlate with server logs.' });
+  });
+
   app.addHook('onClose', async () => {
     if (ownsRateLimiter) {
       await rateLimiter.close();

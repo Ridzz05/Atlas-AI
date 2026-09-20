@@ -1,11 +1,20 @@
 -- 015_sdlc_initiatives.sql
 -- Enterprise SDLC Initiatives & Executive Lifecycle Tracking
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+EXCEPTION WHEN OTHERS THEN
+    -- Optional contrib extension. The schema does not depend on it: every uuid default uses
+    -- gen_random_uuid(), which is core since PostgreSQL 13. Creating it here is a convenience for
+    -- operators, and an unguarded CREATE EXTENSION aborts the whole migration chain on a host
+    -- without contrib or without extension rights — migrator.ts rethrows, so every later file
+    -- never applies and the database is left half-built while the process still boots.
+    NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS sdlc_initiatives (
-    id                  UUID PRIMARY KEY DEFAULT COALESCE(uuid_generate_v4(), gen_random_uuid()),
+    id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title               TEXT NOT NULL,
     intent              TEXT NOT NULL,
     status              TEXT NOT NULL DEFAULT 'active',

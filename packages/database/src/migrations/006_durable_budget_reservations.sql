@@ -4,7 +4,7 @@ ALTER TABLE budgets
     ADD COLUMN IF NOT EXISTS reserved_usd NUMERIC(10, 4) NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS budget_reservations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id UUID NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
     task_id UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
     agent_id VARCHAR(64) NOT NULL REFERENCES agents(id),
