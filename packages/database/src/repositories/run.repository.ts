@@ -1,5 +1,6 @@
 import { DatabaseClient } from '../client.js';
 import { Run, RunStatus } from '@atlas/shared';
+import { runIsAliveSql, runIsRecoverableSql } from './run-liveness.js';
 
 export interface CreateRunInput {
   taskId: string;
@@ -237,7 +238,8 @@ export class RunRepository {
           heartbeat_at = NULL,
           lease_expires_at = NULL,
           updated_at = NOW()
-      WHERE status IN ('created', 'active', 'waiting_tool', 'waiting_child')
+      WHERE ${runIsRecoverableSql('runs')}
+        AND NOT ${runIsAliveSql('runs')}
         AND (
           (lease_expires_at IS NOT NULL AND lease_expires_at < NOW())
           OR (lease_expires_at IS NULL AND updated_at < NOW() - ($2 * INTERVAL '1 second'))
@@ -260,7 +262,7 @@ export class RunRepository {
         AND NOT EXISTS (
           SELECT 1 FROM runs
           WHERE runs.task_id = tasks.id
-            AND runs.status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
+            AND ${runIsAliveSql('runs')}
         )
     `,
       [staleAfterSeconds]

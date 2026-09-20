@@ -1,4 +1,5 @@
 import { DatabaseClient } from '../client.js';
+import { runIsAliveSql } from './run-liveness.js';
 
 export type BudgetReservationStatus = 'reserved' | 'committed' | 'released';
 
@@ -80,8 +81,43 @@ export class BudgetRepository {
         states.push(await this.getOrCreateBudget(client, scope));
       }
 
-      const exceedsLimit = states.some(state => state.usedUsd + state.reservedUsd + input.amountUsd > state.limitUsd + Number.EPSILON);
+      // A run may hold at most one live reservation. This used to insert unconditionally, so the
+      // approval-resume path — which reaches reserve() a second time for the same runId — left two live
+      // rows for one run. Only the newest id is ever settled, so the stale one held its amount in
+      // reserved_usd for up to 15 minutes and reserve() returned null for unrelated runs, which the
+      // runner reports as BUDGET_EXCEEDED while nothing had been spent.
+      const existing = await client.query(
+        `
+        SELECT * FROM budget_reservations
+        WHERE run_id = $1 AND status = 'reserved'
+        ORDER BY created_at DESC
+        LIMIT 1
+        FOR UPDATE`,
+        [input.runId]
+      );
+      const existingRow = existing.rows[0];
+
+      // Only the part of the cap that is not already reserved is new demand on the scopes.
+      const alreadyReservedUsd = existingRow ? Number(existingRow.amount_usd || 0) : 0;
+      const additionalUsd = Math.max(0, input.amountUsd - alreadyReservedUsd);
+
+      const exceedsLimit = states.some(state => state.usedUsd + state.reservedUsd + additionalUsd > state.limitUsd + Number.EPSILON);
       if (exceedsLimit) return null;
+
+      if (existingRow) {
+        if (additionalUsd > 0) {
+          for (const state of states) {
+            await this.adjustReservation(client, state, additionalUsd, 0);
+          }
+          const toppedUp = await client.query(
+            `UPDATE budget_reservations SET amount_usd = amount_usd + $2, updated_at = NOW() WHERE id = $1 RETURNING *`,
+            [existingRow.id, additionalUsd]
+          );
+          return this.mapReservation(toppedUp.rows[0]);
+        }
+
+        return this.mapReservation(existingRow);
+      }
 
       const reservationId = crypto.randomUUID();
       for (const state of states) {
@@ -151,8 +187,7 @@ export class BudgetRepository {
           AND NOT EXISTS (
             SELECT 1 FROM runs r
             WHERE r.id = budget_reservations.run_id
-              AND r.status IN ('created', 'active', 'waiting_tool', 'waiting_child', 'waiting_approval')
-              AND (r.lease_expires_at IS NULL OR r.lease_expires_at > NOW())
+              AND ${runIsAliveSql('r')}
           )
         FOR UPDATE SKIP LOCKED`,
         [cutoff.toISOString()]
