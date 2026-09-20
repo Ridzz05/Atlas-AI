@@ -1,20 +1,24 @@
 import { FastifyInstance } from 'fastify';
 import { CreateSDLCInitiativeInputSchema } from '@atlas/shared';
-import { SDLCRepository } from '@atlas/database';
+import { SDLCRepository, TelegramStateRepository } from '@atlas/database';
 import { SDLCEngine } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
 import { z } from 'zod';
+import { createIntakeGate } from './intake-gate.js';
 
 const InitiativeIdSchema = z.string().uuid();
 
 export interface SDLCRouteOptions {
   sdlcRepo: SDLCRepository;
   sdlcEngine: SDLCEngine;
+  controlStateRepo?: TelegramStateRepository;
 }
 
 export function registerSDLCRoutes(app: FastifyInstance, options: SDLCRouteOptions): void {
+  const intakeGate = createIntakeGate(options);
+
   // Create New SDLC Initiative
-  app.post('/api/v1/sdlc/initiatives', async (req, reply) => {
+  app.post('/api/v1/sdlc/initiatives', { preHandler: intakeGate }, async (req, reply) => {
     const parseResult = CreateSDLCInitiativeInputSchema.safeParse(req.body);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -102,7 +106,7 @@ export function registerSDLCRoutes(app: FastifyInstance, options: SDLCRouteOptio
    * retry: if a phase task is already open, the compare-and-set inside startPhase rejects
    * the duplicate and the response reports the phase that is already running.
    */
-  app.post('/api/v1/sdlc/initiatives/:id/advance', async (req, reply) => {
+  app.post('/api/v1/sdlc/initiatives/:id/advance', { preHandler: intakeGate }, async (req, reply) => {
     const params = req.params as { id: string };
     const idValidation = InitiativeIdSchema.safeParse(params.id);
     if (!idValidation.success) {

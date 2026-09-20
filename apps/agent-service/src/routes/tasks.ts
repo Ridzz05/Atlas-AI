@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { createIntakeGate } from './intake-gate.js';
 import { CreateTaskInputSchema, TaskStatusSchema, AgentDefinition, Task } from '@atlas/shared';
 import { DatabaseClient, MessageRepository, TaskRepository, TelegramStateRepository } from '@atlas/database';
 import { TaskQueue } from '@atlas/orchestration';
@@ -28,8 +29,10 @@ export interface TaskRouteOptions {
 }
 
 export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptions): void {
+  const intakeGate = createIntakeGate(options);
+
   // Create Task
-  app.post('/api/v1/tasks', async (req, reply) => {
+  app.post('/api/v1/tasks', { preHandler: intakeGate }, async (req, reply) => {
     const parseResult = CreateTaskInputSchema.safeParse(req.body);
     if (!parseResult.success) {
       return reply.status(400).send({
@@ -45,21 +48,6 @@ export function registerTaskRoutes(app: FastifyInstance, options: TaskRouteOptio
       agent = options.getAgentDefinition(input.assignedAgent);
     } catch {
       return reply.status(400).send({ error: `Unknown assigned agent: ${input.assignedAgent}` });
-    }
-
-    if (options.controlStateRepo) {
-      try {
-        const controlState = await options.controlStateRepo.getControlState();
-        if (controlState.emergencyStop || controlState.paused) {
-          return reply.status(423).send({
-            error: controlState.emergencyStop ? 'Task intake is locked by emergency stop' : 'Task intake is paused',
-            state: controlState.emergencyStop ? 'emergency_stop' : 'paused'
-          });
-        }
-      } catch (err) {
-        rootLogger.error('Failed to read execution control state', { error: String(err) });
-        return reply.status(503).send({ error: 'Execution control state unavailable' });
-      }
     }
 
     try {

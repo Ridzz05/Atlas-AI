@@ -370,7 +370,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     if (sdlcEngine) {
       registerSDLCRoutes(app, {
         sdlcRepo: options.sdlcRepo,
-        sdlcEngine
+        sdlcEngine,
+        controlStateRepo: options.controlStateRepo
       });
     }
   }
@@ -414,7 +415,8 @@ export function buildServer(options: ServerOptions): FastifyInstance {
     taskQueue,
     registry,
     scheduledJobRepo: options.scheduledJobRepo,
-    workflowCheckpointRepo: options.workflowCheckpointRepo
+    workflowCheckpointRepo: options.workflowCheckpointRepo,
+    controlStateRepo: options.controlStateRepo
   });
 
   app.get('/api/v1/settings', async (_req, reply) => {

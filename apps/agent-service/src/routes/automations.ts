@@ -6,6 +6,8 @@ import { TaskQueue } from '@atlas/orchestration';
 import { AgentRegistry } from '@atlas/agents';
 import { AutomationEngine } from '@atlas/orchestration';
 import { rootLogger } from '@atlas/observability';
+import { TelegramStateRepository } from '@atlas/database';
+import { createIntakeGate } from './intake-gate.js';
 
 const TriggerSchema = z.object({
   type: z.enum(['cron', 'event', 'webhook', 'manual']).default('manual'),
@@ -30,11 +32,14 @@ export interface AutomationRouteOptions {
   registry?: AgentRegistry;
   scheduledJobRepo?: ScheduledJobRepository;
   workflowCheckpointRepo?: WorkflowCheckpointRepository;
+  controlStateRepo?: TelegramStateRepository;
 }
 
 export function registerAutomationRoutes(app: FastifyInstance, options: AutomationRouteOptions): void {
+  const intakeGate = createIntakeGate(options);
+
   // POST /api/v1/automations/trigger — full AI Automation entry point (follows task workflow: TaskRepo -> Queue -> Delegator)
-  app.post('/api/v1/automations/trigger', async (req, reply) => {
+  app.post('/api/v1/automations/trigger', { preHandler: intakeGate }, async (req, reply) => {
     if (!options.taskRepo || !options.taskQueue || !options.registry) {
       return reply.status(503).send({ error: 'Automation engine not available (missing taskRepo/queue/registry)' });
     }
@@ -88,7 +93,7 @@ export function registerAutomationRoutes(app: FastifyInstance, options: Automati
     }
   });
 
-  app.post('/api/v1/automations/scheduled-jobs/:id/run', async (req, reply) => {
+  app.post('/api/v1/automations/scheduled-jobs/:id/run', { preHandler: intakeGate }, async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!options.scheduledJobRepo || !options.taskRepo || !options.registry) {
       return reply.status(503).send({ error: 'Automation dependencies unavailable' });
