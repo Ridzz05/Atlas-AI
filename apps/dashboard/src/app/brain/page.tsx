@@ -265,6 +265,16 @@ export default function SecondBrainPage() {
     }
   };
 
+  const handleMemoryStatus = async (id: string, action: 'verify' | 'deprecate') => {
+    try {
+      await atlasFetch(`/memory/${id}/${action}`, { method: 'POST' });
+      setSuccessMsg(action === 'verify' ? 'Memory item promoted to verified canonical fact.' : 'Memory item deprecated.');
+      void loadData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${action} the memory item.`);
+    }
+  };
+
   const allTags = Array.from(new Set(documents.flatMap(d => d.tags))).sort();
 
   const filteredDocuments = documents.filter(doc => {
@@ -748,22 +758,51 @@ export default function SecondBrainPage() {
           </Typography>
           {rawMemoryItems.length === 0 ? (
             <Typography variant="caption" sx={{ color: '#71685f' }}>
-              No learned memories recorded yet. Memories are automatically saved when agents complete tasks.
+              No learned memories recorded yet. Memory is written only when an agent calls <code>memory.propose_write</code>, which no agent
+              is currently permitted to do — and a proposal stays unreadable by agents until an operator verifies it here.
             </Typography>
           ) : (
             <Stack spacing={2} divider={<Divider sx={{ borderColor: 'rgba(32, 21, 21, 0.06)' }} />}>
               {rawMemoryItems.map(item => (
                 <Box key={item.id} sx={{ py: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 0.5, flexWrap: 'wrap' }}>
                     <Chip
                       label={item.type}
                       size="small"
                       variant="outlined"
                       sx={{ bgcolor: '#f5efe6', color: '#201515', fontWeight: 650, fontSize: '0.75rem', textTransform: 'capitalize' }}
                     />
+                    {/*
+                      The status is what decides whether any agent can read this item: agent reads
+                      are verified-only. It was in the payload but never rendered, so the operator
+                      could not tell a canonical fact from an unreviewed proposal.
+                    */}
+                    <Chip
+                      label={item.status}
+                      size="small"
+                      sx={{
+                        bgcolor: item.status === 'verified' ? '#dcfce7' : '#fef3c7',
+                        color: item.status === 'verified' ? '#166534' : '#92400e',
+                        fontWeight: 650,
+                        fontSize: '0.75rem',
+                        textTransform: 'capitalize'
+                      }}
+                    />
                     <Typography variant="caption" sx={{ color: '#71685f' }}>
-                      Source: {item.source} · Confidence: {Math.round(item.confidence * 100)}%
+                      Source: {item.source} · Confidence: {Math.round(item.confidence * 100)}% · Scope: {item.scope}
                     </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, ml: 'auto' }}>
+                      {item.status !== 'verified' && (
+                        <Button size="small" variant="outlined" onClick={() => void handleMemoryStatus(item.id, 'verify')}>
+                          Verify
+                        </Button>
+                      )}
+                      {item.status !== 'deprecated' && (
+                        <Button size="small" variant="outlined" color="error" onClick={() => void handleMemoryStatus(item.id, 'deprecate')}>
+                          Deprecate
+                        </Button>
+                      )}
+                    </Box>
                   </Box>
                   <Typography variant="body2" sx={{ color: '#201515', fontWeight: 500 }}>
                     {item.content}

@@ -1,4 +1,4 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import {
   ArtifactRepository,
   AuditRepository,
@@ -8,6 +8,7 @@ import {
   ToolCallRepository
 } from '@atlas/database';
 import type { MemoryStore } from '@atlas/memory';
+import { MemoryProposalService } from '@atlas/memory';
 import { MemoryStatusSchema, MemoryTypeSchema } from '@atlas/shared';
 import { z } from 'zod';
 
@@ -180,4 +181,44 @@ export function registerMetadataRoutes(app: FastifyInstance, options: MetadataRo
     if (!item) return reply.status(404).send({ error: 'Memory item not found.' });
     return reply.status(200).send({ item, durable: true });
   });
+
+  /**
+   * The memory loop's missing step.
+   *
+   * Agents write through `memory.propose_write`, which always creates an item as `unverified`, and
+   * their reads are verified-only — a rule enforced on every agent-facing route. `verify()` and
+   * `deprecate()` implement the promotion and audit it, but nothing reachable called either one, so
+   * every proposal stayed `unverified` forever and every agent read returned nothing. The only way to
+   * change a status was to edit the database by hand, bypassing the audit trail these methods exist
+   * to write.
+   *
+   * These are operator routes, and the operator is the bearer of `API_AUTH_TOKEN` — the same
+   * principal that decides approvals and can pause or stop the system. Promotion is that kind of act.
+   */
+  const memoryGovernanceService = (): MemoryProposalService | null =>
+    options.memoryStore
+      ? new MemoryProposalService(
+          options.memoryStore,
+          options.auditRepo ? { record: event => options.auditRepo!.create(event) } : undefined
+        )
+      : null;
+
+  const applyMemoryStatus = async (req: { params: { id: string } }, reply: FastifyReply, action: 'verify' | 'deprecate') => {
+    const service = memoryGovernanceService();
+    if (!service) return reply.status(503).send({ error: 'Memory governance is unavailable: no memory store is configured.' });
+
+    const { id } = req.params;
+    if (!MemoryIdSchema.safeParse(id).success) return reply.status(400).send({ error: 'Memory id must be a UUID.' });
+
+    const item = action === 'verify' ? await service.verify(id) : await service.deprecate(id);
+    // The service refuses an item it cannot read back, which covers both an unknown id and an expired
+    // one — every read path in this system treats an expired item as gone, so the message says so
+    // rather than implying the id was wrong.
+    if (!item) return reply.status(404).send({ error: 'Memory item not found or already expired.' });
+    return reply.status(200).send({ item, durable: true });
+  };
+
+  // The route generic types `req.params.id`, so the shared handler takes a plain params shape.
+  app.post<{ Params: { id: string } }>('/api/v1/memory/:id/verify', async (req, reply) => applyMemoryStatus(req, reply, 'verify'));
+  app.post<{ Params: { id: string } }>('/api/v1/memory/:id/deprecate', async (req, reply) => applyMemoryStatus(req, reply, 'deprecate'));
 }

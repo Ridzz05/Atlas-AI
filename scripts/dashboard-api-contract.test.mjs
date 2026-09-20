@@ -32,6 +32,14 @@ const DYNAMIC_PATH_ALLOWLIST = [
       { method: 'POST', path: '/api/v1/control/resume' }
     ],
     reason: '`action` is one of pause | emergency-stop | resume; all three routes are registered'
+  },
+  {
+    path: '/memory/${id}/${action}',
+    resolvesTo: [
+      { method: 'POST', path: '/api/v1/memory/:id/verify' },
+      { method: 'POST', path: '/api/v1/memory/:id/deprecate' }
+    ],
+    reason: '`action` is one of verify | deprecate; both routes are registered'
   }
 ];
 
@@ -72,7 +80,8 @@ function registeredRoutes() {
   const routes = new Set();
   for (const file of walk(API_SRC)) {
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/app\.(get|post|put|patch|delete)\(\s*'([^']+)'/g)) {
+    // Allow a type argument between the method and the call: `app.post<{ Params: ... }>('/path', ...)`.
+    for (const match of source.matchAll(/app\.(get|post|put|patch|delete)\s*(?:<[^>]*>)?\(\s*'([^']+)'/g)) {
       routes.add(`${match[1].toUpperCase()} ${match[2]}`);
     }
   }

@@ -181,7 +181,8 @@ describe('@atlas/memory tests', () => {
       confidence: 0.85
     });
 
-    expect(proposed.status).toBe('unverified');
+    expect(proposed.item.status).toBe('unverified');
+    expect(proposed.duplicate).toBe(false);
 
     // 2. Exact duplicate proposal returns existing item
     const duplicate = await proposalService.propose({
@@ -191,25 +192,27 @@ describe('@atlas/memory tests', () => {
       scope: 'approved_research'
     });
 
-    expect(duplicate.id).toBe(proposed.id);
+    // A duplicate is reported as one, and returns the item it matched.
+    expect(duplicate.duplicate).toBe(true);
+    expect(duplicate.item.id).toBe(proposed.item.id);
 
     // 3. Promote to verified
-    const verified = await proposalService.verify(proposed.id);
+    const verified = await proposalService.verify(proposed.item.id);
     expect(verified?.status).toBe('verified');
 
     // 4. Deprecate
-    const deprecated = await proposalService.deprecate(proposed.id);
+    const deprecated = await proposalService.deprecate(proposed.item.id);
     expect(deprecated?.status).toBe('deprecated');
     expect(auditSink.record).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'memory.verified',
-        target: proposed.id
+        target: proposed.item.id
       })
     );
     expect(auditSink.record).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'memory.deprecated',
-        target: proposed.id
+        target: proposed.item.id
       })
     );
   });
@@ -319,7 +322,7 @@ describe('@atlas/memory tests', () => {
       author: 'ned'
     });
 
-    expect(proposal.status).toBe('unverified');
+    expect(proposal.item.status).toBe('unverified');
   });
 
   it('maintains expired memory and audits canonical lifecycle changes', async () => {

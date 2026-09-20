@@ -69,9 +69,9 @@ export class MemoryTools {
 
     const saved = await this.proposalService.propose(input);
     return {
-      id: saved.id,
-      status: saved.status,
-      duplicate: false
+      id: saved.item.id,
+      status: saved.item.status,
+      duplicate: saved.duplicate
     };
   }
 }
