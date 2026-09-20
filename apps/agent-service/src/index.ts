@@ -43,7 +43,10 @@ async function main() {
     processQueue: false
   });
 
-  const port = config.PORT || 4000;
+  // The schema guarantees a whole positive number, so there is nothing to paper over. The old
+  // `config.PORT || 4000` silently listened on 4000 for a PORT that coerced to 0, which is how a
+  // blank PORT went unnoticed: the operator's value was reported by the schema and ignored by the server.
+  const port = config.PORT;
   const host = '0.0.0.0';
 
   try {
