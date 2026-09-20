@@ -52,9 +52,9 @@ jobs:
       - name: Run Tests
         run: |
           set -o pipefail
-          # Tee the run so a failure can be published to the job summary. Turbo collapses
-          # per-package output, and the raw step log is not readable without repo credentials,
-          # so the summary is the only place a failing test name is visible from outside.
+          # Tee the run so a failure can be reported through channels that are readable without
+          # repository credentials. Turbo collapses the per-package output and the raw step log
+          # needs auth to fetch, so a red run otherwise says nothing but "exit code 1".
           if pnpm test 2>&1 | tee test-output.log; then
             exit 0
           fi
@@ -64,7 +64,12 @@ jobs:
             echo '```text'
             tail -n 300 test-output.log | sed -E 's/\x1b\[[0-9;]*m//g'
             echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          } >> "$GITHUB_STEP_SUMMARY" || true
+          # Check-run annotations are public, so surface the failing lines there as well.
+          sed -E 's/\x1b\[[0-9;]*m//g' test-output.log \
+            | grep -aE 'FAIL|AssertionError|Error:|failed|not ok|✗|×' \
+            | head -n 10 \
+            | while IFS= read -r line; do printf '::error::%s\n' "$(printf '%s' "$line" | cut -c1-900)"; done || true
           exit 1
 
       - name: Production Build
