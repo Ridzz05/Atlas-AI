@@ -4,13 +4,38 @@ import { DatabaseClient } from '../client.js';
 export class IdempotencyRepository {
   constructor(private db: DatabaseClient) {}
 
+  /**
+   * Claim a key, taking over one that a dead process left `in_flight` past its expiry.
+   *
+   * The previous form was `ON CONFLICT (key) DO NOTHING`, which never consulted `expires_at`. A
+   * process that died between claim and recordSuccess/recordFailure therefore left a row
+   * `in_flight` forever: the tool gateway answers that outcome with 'Idempotent action is still in
+   * flight.', only the `expired` outcome releases the key, and `expireStale` had no caller anywhere
+   * — so that (taskId, runId, action, payload) could never execute again.
+   *
+   * The upsert is conditional: it only overwrites a row that is still `in_flight` AND past its
+   * expiry. A live claim, or any terminal outcome, returns no row, which the caller reads as
+   * "someone else owns this".
+   */
   public async claim(input: IdempotencyKey): Promise<IdempotencyRecord | null> {
     const result = await this.db.query(
       `
       INSERT INTO idempotency_keys (
         key, task_id, run_id, action_name, payload_hash
       ) VALUES ($1, $2, $3, $4, $5)
-      ON CONFLICT (key) DO NOTHING
+      ON CONFLICT (key) DO UPDATE
+        SET run_id = EXCLUDED.run_id,
+            outcome = 'in_flight',
+            provider = NULL,
+            remote_id = NULL,
+            result = NULL,
+            error = NULL,
+            created_at = NOW(),
+            updated_at = NOW(),
+            expires_at = NOW() + INTERVAL '1 hour'
+        WHERE idempotency_keys.outcome = 'in_flight'
+          AND idempotency_keys.expires_at IS NOT NULL
+          AND idempotency_keys.expires_at < NOW()
       RETURNING *
     `,
       [input.key, input.taskId, input.runId ?? null, input.actionName, input.payloadHash]
@@ -88,7 +113,10 @@ export class IdempotencyRepository {
     return IdempotencyRecordSchema.parse({
       key: row.key,
       taskId: row.task_id,
-      runId: row.run_id,
+      // `runId` is optional in the schema, not nullable, so a NULL column has to become undefined.
+      // Passing the raw null made every row without a run_id throw on parse — including the ones
+      // `claim` writes for a key that has no run.
+      runId: row.run_id ?? undefined,
       actionName: row.action_name,
       payloadHash: row.payload_hash,
       provider: row.provider || null,
