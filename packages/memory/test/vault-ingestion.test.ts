@@ -150,3 +150,44 @@ describe('vault re-scoping', () => {
     expect(rescoped.document.scope).toBe('financials');
   });
 });
+
+describe('embedding provider reporting', () => {
+  /**
+   * The index reported *what was configured* and never *what happened*.
+   *
+   * `embed()` catches every failure and substitutes a deterministic hash vector, so a provider that
+   * is not reachable — no local Ollama, a gateway with no embeddings endpoint — fills the vault index
+   * with vectors that answer nothing like a semantic search, while `getStats()` reports
+   * `embeddingProvider: 'ollama'` as if that provider had answered. zRouter is the live example: its
+   * `/embeddings` answers 404, so every note is indexed by hashing and the dashboard says the
+   * embedding provider is whatever was configured.
+   */
+  it('says when the index was built by the fallback rather than the configured provider', async () => {
+    // A closed port is what a provider that is not running looks like: connection refused, no wait.
+    const service = new VectorEmbeddingService({
+      provider: 'ollama',
+      ollamaBaseUrl: 'http://127.0.0.1:1',
+      dimension: 64
+    });
+    const vault = new VaultIngestionService(service);
+
+    await vault.ingestDocument({ filePath: 'notes/a.md', content: '# A\nFirst version.' });
+    const stats = vault.getStats();
+
+    expect(stats.embeddingProvider).toBe('ollama');
+    expect(stats.embeddingDegraded).toBe(true);
+    expect(stats.embeddingFallbackCount).toBeGreaterThan(0);
+    expect(stats.embeddingLastError).toBeTruthy();
+  });
+
+  it('does not report degradation when the provider answered', async () => {
+    const vault = makeVault();
+
+    await vault.ingestDocument({ filePath: 'notes/b.md', content: '# B\nContent.' });
+    const stats = vault.getStats();
+
+    expect(stats.embeddingDegraded).toBe(false);
+    expect(stats.embeddingFallbackCount).toBe(0);
+    expect(stats.embeddingLastError).toBeNull();
+  });
+});

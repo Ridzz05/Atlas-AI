@@ -44,6 +44,16 @@ interface SecondBrainStats {
   embeddingProvider: string;
   embeddingModel: string;
   vectorDimension: number;
+  /**
+   * Whether the vectors in the index came from that provider or from the local fallback.
+   *
+   * The index reports its configured provider either way, and `embed()` never throws — a provider
+   * that is down fills the index with deterministic hash vectors and search quietly becomes lexical.
+   * These fields are what make that visible.
+   */
+  embeddingDegraded: boolean;
+  embeddingFallbackCount: number;
+  embeddingLastError: string | null;
   lastSyncAt: string | null;
 }
 
@@ -372,6 +382,14 @@ export default function SecondBrainPage() {
         <MetricCard label="Vector embeddings" value={stats ? String(stats.totalEmbeddings) : '—'} icon={<CiDatabase size={22} />} />
         <MetricCard label="Embedding model" value={stats?.embeddingModel?.split('/')[1] || '—'} icon={<CiMicrochip size={22} />} />
       </Box>
+
+      {stats?.embeddingDegraded && (
+        <Alert severity="warning" sx={{ borderRadius: '12px' }}>
+          Embedding provider <strong>{stats.embeddingProvider}</strong> tidak menjawab ({stats.embeddingLastError}). Seluruh vektor di
+          indeks ini dibuat oleh fallback lokal, jadi pencarian masih mengembalikan hasil tetapi dicocokkan dengan hashing, bukan makna.
+          Sudah {stats.embeddingFallbackCount} panggilan embedding yang jatuh ke fallback sejak service ini hidup.
+        </Alert>
+      )}
 
       {/* Navigation Tabs */}
       <Card sx={{ bgcolor: '#ffffff', borderRadius: '16px', border: '1px solid rgba(32, 21, 21, 0.08)', p: 0.5 }}>

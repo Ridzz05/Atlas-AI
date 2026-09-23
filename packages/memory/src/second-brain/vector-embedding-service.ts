@@ -20,6 +20,17 @@ export class VectorEmbeddingService {
   private model: string;
   private dimension: number;
   private cache = new Map<string, number[]>();
+  /**
+   * What actually happened, as opposed to what was configured.
+   *
+   * `embed()` never throws: a provider failure is caught and answered with a deterministic hash
+   * vector, so an unreachable provider still produces an index. That is the right fallback, but it
+   * made the failure invisible — the vault reported the configured provider's name while every vector
+   * in it came from hashing. These counters are the missing half of that report.
+   */
+  private fallbackCount = 0;
+  private lastFallbackReason: string | null = null;
+  private lastAttemptUsedFallback = false;
 
   constructor(config: EmbeddingConfig = {}) {
     this.ollamaBaseUrl = config.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
@@ -38,11 +49,23 @@ export class VectorEmbeddingService {
     }
   }
 
-  public getProviderInfo(): { provider: string; model: string; dimension: number } {
+  public getProviderInfo(): {
+    provider: string;
+    model: string;
+    dimension: number;
+    degraded: boolean;
+    fallbackCount: number;
+    lastError: string | null;
+  } {
     return {
       provider: this.provider,
       model: this.provider === 'ollama' ? this.ollamaModel : this.model,
-      dimension: this.dimension
+      dimension: this.dimension,
+      // "Degraded" describes the last attempt, not the whole history: a provider that came back
+      // should stop being reported as broken, while `fallbackCount` keeps the record that it was.
+      degraded: this.lastAttemptUsedFallback,
+      fallbackCount: this.fallbackCount,
+      lastError: this.lastFallbackReason
     };
   }
 
@@ -69,9 +92,15 @@ export class VectorEmbeddingService {
       } else {
         vector = this.generateDeterministicVector(trimmed, this.dimension);
       }
+      // A provider that answered is not degraded, whatever the previous attempt did. The count keeps
+      // the record that it once was.
+      this.lastAttemptUsedFallback = false;
     } catch (err) {
+      this.fallbackCount += 1;
+      this.lastFallbackReason = err instanceof Error ? err.message : String(err);
+      this.lastAttemptUsedFallback = true;
       rootLogger.warn('External embedding failed, using semantic fallback', {
-        error: err instanceof Error ? err.message : String(err),
+        error: this.lastFallbackReason,
         text: trimmed.slice(0, 50)
       });
       vector = this.generateDeterministicVector(trimmed, this.dimension);

@@ -93,6 +93,18 @@ export const SecondBrainStatsSchema = z.object({
   embeddingProvider: z.string(),
   embeddingModel: z.string(),
   vectorDimension: z.number().int(),
+  /**
+   * Whether the embeddings in the index came from that provider or from the local fallback.
+   *
+   * `embeddingProvider` describes what was *configured*; these three describe what *happened*. The
+   * distinction matters because `embed()` catches every provider failure and substitutes a
+   * deterministic hash vector, so an unreachable provider (no local Ollama, a gateway without an
+   * embeddings endpoint) still fills the index and still reports its own name — the search quietly
+   * becomes lexical hashing and nothing on any surface says so.
+   */
+  embeddingDegraded: z.boolean(),
+  embeddingFallbackCount: z.number().int(),
+  embeddingLastError: z.string().nullable(),
   lastSyncAt: z.string().nullable()
 });
 export type SecondBrainStats = z.infer<typeof SecondBrainStatsSchema>;

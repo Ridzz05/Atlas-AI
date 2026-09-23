@@ -226,6 +226,11 @@ export class VaultIngestionService {
       embeddingProvider: providerInfo.provider,
       embeddingModel: providerInfo.model,
       vectorDimension: providerInfo.dimension,
+      // The provider name alone described the configuration. These say whether the index in front of
+      // you was actually built by it, or by the local fallback after every call failed.
+      embeddingDegraded: providerInfo.degraded,
+      embeddingFallbackCount: providerInfo.fallbackCount,
+      embeddingLastError: providerInfo.lastError,
       lastSyncAt: this.lastSyncAt
     };
   }
