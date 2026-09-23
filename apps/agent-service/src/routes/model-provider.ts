@@ -231,7 +231,10 @@ export function registerModelProviderRoutes(app: FastifyInstance, options: Model
         runId: 'settings-probe',
         agentId: 'operator',
         messages: [{ role: 'user', content: 'Reply with the single word: pong' }],
-        maxTokens: 16,
+        // A reasoning model spends its first tokens on reasoning_content, so a 16-token budget can be
+        // consumed before `content` is written and the probe answers with an empty reply that looks
+        // like a broken connection. 64 leaves room for a one-word answer either way.
+        maxTokens: 64,
         signal: AbortSignal.timeout(30_000)
       });
 
@@ -243,6 +246,8 @@ export function registerModelProviderRoutes(app: FastifyInstance, options: Model
           credentialSource,
           latencyMs: Date.now() - startedAt,
           reply: result.content.trim().slice(0, 200),
+          // `length` explains an empty reply: the connection works, the budget was spent elsewhere.
+          finishReason: result.finishReason,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           costUsd: result.costUsd,

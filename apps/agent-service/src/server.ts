@@ -69,6 +69,15 @@ export interface ServerOptions {
   redisUrl?: string;
   rateLimiter?: RateLimiter;
   processQueue?: boolean;
+  /**
+   * Whether to index the local vault at startup.
+   *
+   * The ingest is fire-and-forget, so it never blocks a response — but it runs in the same process,
+   * and in a test that shares that process it competes with the assertions. A test that does not care
+   * about the vault turns it off rather than paying for a whole-vault ingest (with its embedding
+   * attempts) behind a five-second default timeout.
+   */
+  autoIngestVault?: boolean;
 }
 
 export function buildServer(options: ServerOptions): FastifyInstance {
@@ -402,7 +411,7 @@ export function buildServer(options: ServerOptions): FastifyInstance {
   });
 
   // Auto-ingest local Obsidian vault on startup so Second Brain is immediately populated
-  const defaultVaultPath = findVaultPath();
+  const defaultVaultPath = options.autoIngestVault === false ? undefined : findVaultPath();
   if (defaultVaultPath) {
     rootLogger.info(`Auto-ingesting Second Brain vault from: ${defaultVaultPath}`);
     void secondBrainService

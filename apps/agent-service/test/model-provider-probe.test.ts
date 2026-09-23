@@ -51,7 +51,10 @@ function createServer(options: { settingsRepo?: unknown; config?: unknown } = {}
     config: (options.config ?? testConfig) as never,
     modelProviderSettingsRepo: options.settingsRepo as never,
     auditRepo: auditRepo as never,
-    processQueue: false
+    processQueue: false,
+    // These tests are about the probe, not the vault: a fire-and-forget whole-vault ingest in this
+    // process competes with the assertions and can push the first one past vitest's 5s default.
+    autoIngestVault: false
   });
   return { server, auditRepo };
 }
@@ -84,6 +87,7 @@ describe('model provider connection probe', () => {
       model: 'deepseek-v4.1-flash',
       credentialSource: 'request',
       reply: 'pong',
+      finishReason: 'stop',
       inputTokens: 9,
       outputTokens: 2,
       error: null

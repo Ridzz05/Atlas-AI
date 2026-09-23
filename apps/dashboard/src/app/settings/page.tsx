@@ -69,6 +69,8 @@ interface ProbeResult {
   credentialSource: 'request' | 'database' | 'environment' | 'none';
   latencyMs: number;
   reply: string | null;
+  /** Why the model stopped. `length` explains an empty reply on a reasoning model. */
+  finishReason?: string;
   inputTokens?: number;
   outputTokens?: number;
   error: string | null;
@@ -774,7 +776,11 @@ export default function SettingsPage() {
                       wordBreak: 'break-word'
                     }}
                   >
-                    {probeResult.ok ? `Balasan model: ${probeResult.reply}` : probeResult.error}
+                    {probeResult.ok
+                      ? probeResult.reply
+                        ? `Balasan model: ${probeResult.reply}`
+                        : `Provider menjawab, tetapi tidak ada konten (finish_reason: ${probeResult.finishReason ?? 'tidak diketahui'}).`
+                      : probeResult.error}
                   </Typography>
                 </Box>
               )}
