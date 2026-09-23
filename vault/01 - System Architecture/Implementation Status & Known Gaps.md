@@ -4,7 +4,7 @@ scope: "second_brain"
 category: "architecture"
 author: "Chief"
 tags: [atlas, status, gaps, defects, audit, verification]
-updated: "2026-09-20"
+updated: "2026-09-23"
 ---
 
 # 🚧 Implementation Status & Known Gaps
@@ -457,6 +457,38 @@ Dua kelas bug yang muncul di gelombang ini, keduanya sudah dikenal tetapi belum 
 
 ---
 
+### 10.5 Gelombang integrasi zRouter (23 Sep 2026) — sudah diperbaiki
+
+Pemicu: laporan pemilik sistem — *"model deepseek V4.1 Flash yang aku integrasikan tidak terhubung
+ke sistemnya, backendnya kek gada respons sama sekali … ketika di submit keknya di backend gada
+status sama sekali kalau api key dari zrouter.dev tadi terhubung atau belum"*.
+
+Tiga cacat, satu kelas yang sama: **nilai yang tidak pernah diukur dilaporkan seolah-olah diukur.**
+
+| Butir | Anchor | Status |
+| :--- | :--- | :--- |
+| **Nama tool ber-titik ditolak gateway sebelum model dicapai.** ATLAS mengalamati tool dengan titik (`web.search`, `memory.propose_write`), sedangkan format wire [OI] hanya mengizinkan `[a-zA-Z0-9_-]` di `function.name`. Adapter meneruskan nama apa adanya, dan gateway menolak **seluruh permintaan**, bukan field-nya: zRouter menjawab HTTP 400 `{"error":{"message":"Invalid request. Check your request parameters."}}` tanpa menyebut sebabnya. Akibatnya setiap agen yang mendeklarasikan satu tool pun mati sebelum model dilihat — persis seperti "backend tidak merespons" | `packages/providers/src/tool-names.ts` (baru), `openai.ts` | ✅ diperbaiki: `ToolNameCodec` memiliki penerjemahan dua arah (transport adalah satu-satunya lapisan yang tahu batasan format ini), dan nama yang diserahkan ke Tool Gateway adalah nama registry, bukan ejaan wire. Encoding bersifat bijeksi per-permintaan, jadi `web.search` dan `web_search` tetap dua tool berbeda |
+| **Pengaturan provider menjawab tentang provider lain.** Nama model kosong selalu diisi model default OpenRouter untuk provider apa pun (memilih zRouter dengan field kosong menyimpan `minimax/minimax-m3:free` di bawah `zrouter`); catatan audit dan respons `DELETE` selalu menulis `openrouter`; kolom `provider` menerima string apa pun sehingga provider yang tidak bisa dibangun tersimpan mulus lalu menggagalkan setiap run; dan `mock` yang ditolak schema environment di produksi tetap bisa disimpan lewat API operator | `apps/agent-service/src/routes/model-provider.ts`, `packages/shared/src/model.ts`, `packages/shared/src/schemas/config.ts` | ✅ diperbaiki: daftar provider, model default per provider, dan aturan "boleh di lingkungan ini?" punya satu pemilik di `model.ts`; schema environment dan route membacanya. `DELETE` membaca ulang barisnya dan melaporkan provider yang benar-benar masih terkonfigurasi |
+| **"Tersimpan" bukan "berfungsi", dan tidak ada cara mengujinya.** Kartu pengaturan hanya bisa menjawab "sudah ditulis?", lalu menampilkan KEY CONFIGURED; apakah endpoint menerima kredensial itu hanya bisa diketahui dengan menonton sebuah task gagal | `POST /api/v1/settings/model-provider/test` (baru), `apps/dashboard/src/app/settings/page.tsx` | ✅ diperbaiki: probe melakukan satu panggilan model nyata dengan kredensial yang akan dipakai run berikutnya (dari request → database → environment, dan **menyebutkan sumbernya**), lalu melaporkan latensi, balasan, atau pesan error endpoint. Kredensial yang sudah dibersihkan tetap kosong (`''` dari repository) — environment tidak boleh menghidupkannya kembali diam-diam, dan probe melaporkan "tidak ada kredensial" alih-alih provider yang berfungsi. Dashboard menguji otomatis setelah menyimpan, plus tombol "Test Koneksi" untuk kunci di form |
+| **Indeks vault dibangun fallback hashing tanpa satu pun laporan.** `embed()` tidak pernah melempar: kegagalan provider ditangkap dan diganti vektor hash deterministik. Fallback-nya benar, tetapi tidak terlihat — indeks melaporkan nama provider yang dikonfigurasi sementara seluruh vektornya hasil hashing, jadi pencarian semantik diam-diam menjadi pencocokan leksikal | `packages/memory/src/second-brain/vector-embedding-service.ts`, `vault-ingestion-service.ts`, `apps/dashboard/src/app/brain/page.tsx` | ✅ diperbaiki: service mengukur apa yang terjadi (`degraded` untuk percobaan terakhir, `fallbackCount`, `lastError`), `getStats()` meneruskannya, dan halaman Brain menampilkan peringatan berisi provider, error, dan jumlah fallback |
+
+**Yang diukur, bukan diasumsikan** (semuanya terhadap gateway yang benar-benar dikonfigurasi):
+
+| Percobaan | Hasil |
+| :--- | :--- |
+| `POST /v1/chat/completions` dengan `function.name = "web.search"` | HTTP 400 `Invalid request. Check your request parameters.` |
+| permintaan yang sama dengan `"web_search"` | HTTP 200, `content: "pong"` |
+| permintaan lewat adapter dengan nama `web.search` | HTTP 200, `finish_reason: tool_calls`, `toolCalls[0].name = "web.search"`, `arguments {"query":"gyms in Palembang"}` |
+| `GET /v1/models` di gateway itu | 22 model, **tidak ada** model embedding |
+| `POST /v1/embeddings` | HTTP 404 — endpoint tidak ada |
+
+**Tersisa (keputusan, bukan bug):** karena gateway yang dipakai tidak punya endpoint embeddings,
+pencarian semantik tidak bisa dihidupkan lewat provider yang sama. Sekarang keadaannya jujur
+dilaporkan; untuk pencarian semantik sungguhan perlu endpoint embeddings (Ollama lokal atau provider
+lain), dan `EmbeddingConfig` belum membaca pengaturan provider runtime — memilih model embedding
+adalah keputusan pemilik sistem, bukan sesuatu yang pantas ditebak kode.
+
+---
 
 ## 11. 🔵 Kebersihan Dokumentasi Repositori
 
