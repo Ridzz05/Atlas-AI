@@ -34,7 +34,9 @@ const EXEMPT: Record<string, string> = {
   '/api/v1/memory/:id/verify': 'Promotes an already-proposed memory item; it admits no new work.',
   '/api/v1/memory/:id/deprecate': 'Deprecates an existing memory item; it admits no new work.',
   '/api/v1/rubrics': 'Registers a scoring rubric version; it creates no task and spends no budget.',
-  '/api/v1/rubrics/:version/activate': 'Switches the active rubric; it creates no task and spends no budget.'
+  '/api/v1/rubrics/:version/activate': 'Switches the active rubric; it creates no task and spends no budget.',
+  '/api/v1/settings/model-provider/test':
+    'Probes the configured provider credential; it creates no task, holds no run and reserves no budget.'
 };
 
 interface RouteFact {

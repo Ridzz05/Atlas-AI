@@ -356,7 +356,12 @@ export function buildServer(options: ServerOptions): FastifyInstance {
 
   registerModelProviderRoutes(app, {
     modelProviderSettingsRepo: options.modelProviderSettingsRepo,
-    auditRepo: options.auditRepo
+    auditRepo: options.auditRepo,
+    // The route needs the same runtime view the worker has: which provider and model are configured,
+    // what the environment's credential is, and which providers this environment refuses. Without it
+    // the connection probe can only see the request and the database, and would test a credential the
+    // agent runs would not use.
+    config: options.config
   });
 
   // The SDLC engine coordinates phases as ordinary tasks, so it needs the same task

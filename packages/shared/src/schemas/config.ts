@@ -1,7 +1,8 @@
 import { z } from 'zod';
+import { MODEL_PROVIDER_IDS, isModelProviderAllowedInEnvironment } from '../model.js';
 
 const DEFAULT_ENCRYPTION_KEY = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-const ModelProviderSchema = z.enum(['mock', 'openai', 'openai-compatible', 'openrouter', 'groq', 'ollama', 'deepseek', 'zrouter']);
+const ModelProviderSchema = z.enum(MODEL_PROVIDER_IDS);
 const ResearchProviderSchema = z.enum(['none', 'brave', 'chromium']);
 
 /**
@@ -118,7 +119,7 @@ export const EnvConfigSchema = z
         message: 'ENCRYPTION_KEY must be explicitly configured in production.'
       });
     }
-    if (config.NODE_ENV === 'production' && config.MODEL_PROVIDER.toLowerCase() === 'mock') {
+    if (config.NODE_ENV === 'production' && !isModelProviderAllowedInEnvironment(config.MODEL_PROVIDER.toLowerCase(), config.NODE_ENV)) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['MODEL_PROVIDER'],

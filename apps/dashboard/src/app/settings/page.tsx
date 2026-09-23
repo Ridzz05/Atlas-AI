@@ -25,6 +25,7 @@ import {
   CiCircleAlert,
   CiBoxes,
   CiMobile3,
+  CiPlay1,
   CiCircleInfo
 } from 'react-icons/ci';
 import { atlasFetch } from '../../lib/atlas-api';
@@ -52,6 +53,33 @@ interface RuntimeSettings {
 interface SettingsResponse {
   data: RuntimeSettings;
 }
+
+/**
+ * What the connection probe answered.
+ *
+ * "Saved" and "working" are different facts: the credential can be stored, encrypted and reported as
+ * KEY CONFIGURED while the endpoint rejects it — which is how the zRouter integration stayed broken
+ * behind a green card. The probe is a real model call made with the credential the next agent run
+ * would use, so this is the only status on this page that means "the fleet can actually run".
+ */
+interface ProbeResult {
+  ok: boolean;
+  provider: string;
+  model: string;
+  credentialSource: 'request' | 'database' | 'environment' | 'none';
+  latencyMs: number;
+  reply: string | null;
+  inputTokens?: number;
+  outputTokens?: number;
+  error: string | null;
+}
+
+const CREDENTIAL_SOURCE_LABEL: Record<ProbeResult['credentialSource'], string> = {
+  request: 'dari form ini',
+  database: 'tersimpan di database',
+  environment: 'dari environment (.env)',
+  none: 'tidak ada'
+};
 
 const SUPPORTED_PROVIDERS = [
   {
@@ -122,6 +150,8 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState('');
   const [savingKey, setSavingKey] = useState(false);
   const [keyMessage, setKeyMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [probing, setProbing] = useState(false);
+  const [probeResult, setProbeResult] = useState<ProbeResult | null>(null);
 
   // Telegram Form
   const [telegramToken, setTelegramToken] = useState('');
@@ -179,14 +209,54 @@ export default function SettingsPage() {
       });
       setApiKey('');
       setKeyMessage({
-        text: `Kredensial ${selectedProvider.toUpperCase()} (${modelName}) berhasil disimpan terenkripsi di database!`,
+        text: `Kredensial ${selectedProvider.toUpperCase()} (${modelName}) tersimpan terenkripsi di database. Menguji koneksi ke provider…`,
         type: 'success'
       });
       await loadSettings();
+      // Submitting the form answered "was it stored?" and nothing else — the operator could not tell
+      // a working credential from one the endpoint rejects. The next question is whether the fleet can
+      // actually run with it, so ask it now instead of leaving it to be discovered by a failing run.
+      await runProbe({ useTypedKey: false });
     } catch (err) {
       setKeyMessage({ text: err instanceof Error ? err.message : 'Gagal menyimpan kredensial model.', type: 'error' });
     } finally {
       setSavingKey(false);
+    }
+  };
+
+  /**
+   * Ask the API to make one real model call and report what happened.
+   *
+   * With a key in the form, that key is what gets tested; otherwise the probe falls back to the
+   * stored credential and then to the environment, and says which one it used — so "no key" and "a
+   * key that the endpoint rejects" are distinguishable on screen instead of both looking like
+   * nothing happening.
+   */
+  const runProbe = async (options: { useTypedKey: boolean }) => {
+    setProbing(true);
+    setProbeResult(null);
+    try {
+      const response = await atlasFetch<{ data: ProbeResult }>('/settings/model-provider/test', {
+        method: 'POST',
+        body: JSON.stringify({
+          provider: selectedProvider,
+          modelName: modelName.trim() || undefined,
+          apiKey: options.useTypedKey ? apiKey.trim() || undefined : undefined
+        })
+      });
+      setProbeResult(response.data);
+    } catch (err) {
+      setProbeResult({
+        ok: false,
+        provider: selectedProvider,
+        model: modelName.trim(),
+        credentialSource: 'none',
+        latencyMs: 0,
+        reply: null,
+        error: err instanceof Error ? err.message : 'Gagal menghubungi provider.'
+      });
+    } finally {
+      setProbing(false);
     }
   };
 
@@ -198,6 +268,7 @@ export default function SettingsPage() {
     try {
       await atlasFetch('/settings/model-provider', { method: 'DELETE' });
       setKeyMessage({ text: 'Kredensial model provider sudah dibersihkan.', type: 'success' });
+      setProbeResult(null);
       await loadSettings();
     } catch (err) {
       setKeyMessage({ text: err instanceof Error ? err.message : 'Gagal menghapus API key.', type: 'error' });
@@ -653,16 +724,60 @@ export default function SettingsPage() {
                 )}
 
                 <Button
+                  variant="outlined"
+                  disabled={probing || savingKey}
+                  onClick={() => void runProbe({ useTypedKey: true })}
+                  startIcon={probing ? <CircularProgress size={14} /> : <CiPlay1 size={18} />}
+                  sx={{ borderRadius: '10px', mr: 1.5, textTransform: 'none' }}
+                >
+                  {probing ? 'Menguji…' : 'Test Koneksi'}
+                </Button>
+
+                <Button
                   type="submit"
                   variant="contained"
                   color="primary"
-                  disabled={savingKey || (selectedProvider !== 'ollama' && !apiKey.trim() && !settings?.modelConfigured)}
+                  disabled={savingKey || probing || (selectedProvider !== 'ollama' && !apiKey.trim() && !settings?.modelConfigured)}
                   startIcon={<CiFloppyDisk size={18} />}
                   sx={{ px: 3, borderRadius: '10px' }}
                 >
                   {savingKey ? 'Menyimpan…' : 'Simpan Kredensial Provider'}
                 </Button>
               </Box>
+
+              {probeResult && (
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: '12px',
+                    bgcolor: probeResult.ok ? '#f0fdf4' : '#fef2f2',
+                    border: probeResult.ok ? '1px solid rgba(22, 163, 74, 0.3)' : '1px solid rgba(220, 38, 38, 0.3)'
+                  }}
+                >
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                    {probeResult.ok ? <CiCircleCheck size={16} color="#16a34a" /> : <CiCircleAlert size={16} color="#dc2626" />}
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: probeResult.ok ? '#16a34a' : '#dc2626' }}>
+                      {probeResult.ok ? `KONEKSI OK · ${probeResult.latencyMs} ms` : 'KONEKSI GAGAL'}
+                    </Typography>
+                  </Box>
+                  <Typography variant="caption" sx={{ color: '#666155', display: 'block', fontFamily: 'monospace', fontSize: '0.72rem' }}>
+                    {probeResult.provider} · {probeResult.model} · kredensial: {CREDENTIAL_SOURCE_LABEL[probeResult.credentialSource]}
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: probeResult.ok ? '#166534' : '#991b1b',
+                      display: 'block',
+                      mt: 0.5,
+                      fontFamily: 'monospace',
+                      fontSize: '0.72rem',
+                      wordBreak: 'break-word'
+                    }}
+                  >
+                    {probeResult.ok ? `Balasan model: ${probeResult.reply}` : probeResult.error}
+                  </Typography>
+                </Box>
+              )}
             </Box>
           </Card>
 

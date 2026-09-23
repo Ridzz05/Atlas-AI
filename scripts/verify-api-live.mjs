@@ -205,6 +205,22 @@ try {
     headers: auth
   });
   check('an unknown memory id answers 404', notFound.statusCode === 404, `status ${notFound.statusCode}`);
+
+  // --- the model provider probe ----------------------------------------------
+  // The dashboard's "is this credential working?" button posts here. A route that exists in the
+  // source but is not registered by the real composition root is exactly the wiring gap this harness
+  // exists to catch, and an unknown provider answers without touching the network.
+  const probeUnknown = await server.inject({
+    method: 'POST',
+    url: '/api/v1/settings/model-provider/test',
+    headers: json,
+    payload: { provider: 'not-a-provider' }
+  });
+  check(
+    'the provider probe is registered and refuses a provider this system cannot build',
+    probeUnknown.statusCode === 400 && JSON.parse(probeUnknown.body).supportedProviders.includes('zrouter'),
+    `status ${probeUnknown.statusCode}`
+  );
 } finally {
   if (server) await server.close().catch(() => undefined);
   await db.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
