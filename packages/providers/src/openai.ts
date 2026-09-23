@@ -1,4 +1,5 @@
 import { ModelProvider, ModelRunRequest, ModelRunResult, ToolCallRequest } from './types.js';
+import { ToolNameCodec } from './tool-names.js';
 
 export interface OpenAICompatibleOptions {
   apiKey?: string;
@@ -69,6 +70,14 @@ export class OpenAICompatibleProvider implements ModelProvider {
     }
 
     const messages = [];
+    // Tool names are addressed with a dot internally and only `[a-zA-Z0-9_-]` is allowed on the
+    // wire, so the adapter translates in both directions. Declarations are registered first: they
+    // are the authoritative list for this request, so a name carried by an earlier turn resolves to
+    // the same wire name the model was shown.
+    const toolNames = new ToolNameCodec();
+    for (const tool of request.tools || []) {
+      toolNames.toWire(tool.name);
+    }
 
     if (request.systemPrompt) {
       messages.push({ role: 'system', content: request.systemPrompt });
@@ -78,13 +87,13 @@ export class OpenAICompatibleProvider implements ModelProvider {
       messages.push({
         role: msg.role,
         content: msg.content,
-        name: msg.name,
+        name: msg.name ? toolNames.toWire(msg.name) : undefined,
         tool_call_id: msg.toolCallId,
         tool_calls: msg.toolCalls?.map(tc => ({
           id: tc.id,
           type: 'function',
           function: {
-            name: tc.name,
+            name: toolNames.toWire(tc.name),
             arguments: JSON.stringify(tc.arguments)
           }
         }))
@@ -106,7 +115,7 @@ export class OpenAICompatibleProvider implements ModelProvider {
       payload.tools = request.tools.map(t => ({
         type: 'function',
         function: {
-          name: t.name,
+          name: toolNames.toWire(t.name),
           description: t.description,
           parameters: t.parameters
         }
@@ -188,7 +197,8 @@ export class OpenAICompatibleProvider implements ModelProvider {
           }
           toolCalls.push({
             id: tc.id,
-            name: tc.function.name,
+            // Back to the name the Tool Gateway is keyed by, never the wire spelling.
+            name: toolNames.toRegistry(tc.function.name),
             arguments: args
           });
         }
