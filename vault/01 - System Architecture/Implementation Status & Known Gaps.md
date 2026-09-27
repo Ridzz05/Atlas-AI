@@ -345,9 +345,9 @@ indikasi deskripsi tool perlu dipertegas.
 | `PUT /api/v1/settings/telegram` menulis nilai klien ke `.env` tanpa menolak newline → injeksi baris env (mis. `API_AUTH_TOKEN=` untuk mematikan autentikasi) | `apps/agent-service/src/server.ts:421-463` | ✅ diperbaiki: schema menolak `\r`/`\n` + test |
 | `POST /api/v1/brain/ingest` menerima `vaultPath` absolut sembarang → pembacaan berkas arbitrer yang bisa dibaca balik via `/brain/search` | `apps/agent-service/src/routes/second-brain.ts:93-141` | ✅ diperbaiki: `vaultPath` wajib resolve ke root vault terkonfigurasi + test |
 
-Masih terbuka dari temuan yang sama: `x-actor-id` pada approval dikendalikan pemanggil,
-proxy dashboard tidak punya autentikasi pemanggil (kini digerbangi basic auth di Caddy),
-dan Chromium tetap menggunakan `--no-sandbox` sebagai trade-off kompatibilitas deployment.
+Masih terbuka dari temuan yang sama: proxy dashboard tidak punya autentikasi pemanggil
+(kini digerbangi basic auth di Caddy), dan Chromium tetap menggunakan `--no-sandbox`
+sebagai trade-off kompatibilitas deployment.
 
 ✅ **Allowlist gagal-terbuka sudah diperbaiki** (20 Sep 2026): `ToolContext.allowedTools`
 kini **wajib** di `packages/tools/src/types.ts`, dan `registry.ts:151` menolak tool yang
