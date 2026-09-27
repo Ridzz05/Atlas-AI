@@ -1,8 +1,9 @@
 import { rootLogger } from '@atlas/observability';
 import crypto from 'node:crypto';
 
+export type EmbeddingProvider = 'ollama' | 'openai' | 'openrouter' | 'mock';
 export interface EmbeddingConfig {
-  provider?: 'ollama' | 'openai' | 'openrouter' | 'mock' | 'auto';
+  provider?: EmbeddingProvider | 'auto';
   ollamaBaseUrl?: string;
   ollamaModel?: string;
   apiKey?: string;
@@ -34,19 +35,26 @@ export class VectorEmbeddingService {
 
   constructor(config: EmbeddingConfig = {}) {
     this.ollamaBaseUrl = config.ollamaBaseUrl || process.env.OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
-    this.ollamaModel = config.ollamaModel || 'nomic-embed-text';
-    this.apiKey = config.apiKey || process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY || '';
-    this.apiBaseUrl = config.apiBaseUrl || (process.env.OPENROUTER_API_KEY ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
-    this.model = config.model || 'text-embedding-3-small';
+    this.ollamaModel = config.ollamaModel || process.env.EMBEDDING_MODEL || 'nomic-embed-text';
+    // Embeddings have their own credential. Chat provider keys are never used implicitly.
+    this.apiKey = config.apiKey || process.env.EMBEDDING_API_KEY || '';
+    const configuredProvider = config.provider || process.env.EMBEDDING_PROVIDER;
+    const selectedProvider: EmbeddingProvider =
+      configuredProvider === 'ollama' ||
+      configuredProvider === 'openai' ||
+      configuredProvider === 'openrouter' ||
+      configuredProvider === 'mock'
+        ? configuredProvider
+        : this.apiKey
+          ? 'openai'
+          : 'ollama';
+    this.provider = selectedProvider;
+    this.apiBaseUrl =
+      config.apiBaseUrl ||
+      process.env.EMBEDDING_BASE_URL ||
+      (this.provider === 'openrouter' ? 'https://openrouter.ai/api/v1' : 'https://api.openai.com/v1');
+    this.model = config.model || process.env.EMBEDDING_MODEL || 'text-embedding-3-small';
     this.dimension = config.dimension || 1536;
-
-    if (config.provider && config.provider !== 'auto') {
-      this.provider = config.provider;
-    } else if (this.apiKey) {
-      this.provider = process.env.OPENROUTER_API_KEY ? 'openrouter' : 'openai';
-    } else {
-      this.provider = 'ollama';
-    }
   }
 
   public getProviderInfo(): {
