@@ -113,6 +113,7 @@ export class AgentWorkerRunner {
         model: options.config.MODEL_NAME
       });
     const toolRegistry = new ToolRegistry({
+      eventBus,
       // Give the registry the durable store, so a tool that declares `idempotency: 'required'`
       // (communication.send_approved) has an exactly-once control that actually holds. The registry
       // fails such a tool closed when no store is configured, and derives the key itself.
@@ -567,6 +568,7 @@ export class AgentWorkerRunner {
     this.queueRecoveryInFlight = true;
     try {
       await this.recoverQueuedTasks();
+      await this.expireStaleApprovals();
       await this.recoverStaleWork();
       await this.recoverStaleBudgetReservations();
     } catch (error) {
@@ -607,6 +609,15 @@ export class AgentWorkerRunner {
     const released = await budgetRepo.recoverStaleReservations();
     if (released > 0) {
       rootLogger.warn('Released stale budget reservations', { count: released });
+    }
+  }
+  private async expireStaleApprovals(): Promise<void> {
+    const approvalRepo = this.options.approvalRepo;
+    if (!approvalRepo || typeof (approvalRepo as any).expireStale !== 'function') return;
+
+    const expired = await approvalRepo.expireStale();
+    if (expired > 0) {
+      rootLogger.warn('Expired approval requests with no decision', { count: expired });
     }
   }
 }

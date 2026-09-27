@@ -471,4 +471,28 @@ describe('worker lifecycle and task execution tests', () => {
       vi.useRealTimers();
     }
   });
+
+  it('expires stale approvals on the recovery interval', async () => {
+    vi.useFakeTimers();
+    try {
+      const taskRepo = { list: vi.fn().mockResolvedValue([]) } as any;
+      const approvalRepo = { expireStale: vi.fn().mockResolvedValue(2) } as any;
+      const taskQueue = {
+        enqueue: vi.fn().mockResolvedValue('job-1'),
+        process: vi.fn(),
+        close: vi.fn().mockResolvedValue(undefined)
+      } as any;
+
+      const runner = new AgentWorkerRunner({ config, taskRepo, approvalRepo, taskQueue });
+      await runner.start();
+      const intervalMs = (config.QUEUE_RECOVERY_INTERVAL_SECONDS ?? 30) * 1000;
+
+      await vi.advanceTimersByTimeAsync(intervalMs);
+      expect(approvalRepo.expireStale).toHaveBeenCalledTimes(1);
+
+      await runner.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -11,6 +11,8 @@ export const EventTypeSchema = z.enum([
   'run.completed',
   'run.failed',
   'run.cancelled',
+  'tool.requested',
+  'tool.started',
   'tool.called',
   'tool.completed',
   'tool.failed',

@@ -248,16 +248,16 @@ export class RunRepository {
       [reason, staleAfterSeconds]
     );
 
-    // Also update any orphaned tasks that are stuck in 'running' or 'planning'
-    // with no active runs
+    // An expired approval makes its waiting run non-live. Include approval_pending tasks in the
+    // orphan sweep so the task does not remain visible as waiting forever after the run is failed.
     await this.db.query(
       `
       UPDATE tasks
       SET status = 'failed',
-          error = COALESCE(error, 'Execution terminated: worker lease expired or abandoned'),
+          error = COALESCE(error, 'Execution terminated: approval request expired or was abandoned'),
           updated_at = NOW(),
           completed_at = NOW()
-      WHERE status IN ('running', 'planning')
+      WHERE status IN ('running', 'planning', 'approval_pending')
         AND updated_at < NOW() - ($1 * INTERVAL '1 second')
         AND NOT EXISTS (
           SELECT 1 FROM runs

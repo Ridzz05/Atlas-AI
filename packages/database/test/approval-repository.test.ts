@@ -33,6 +33,15 @@ describe('ApprovalRepository', () => {
     expect(approvals[0]?.payload).toEqual(row.payload);
   });
 
+  it('expires pending, approved, and executing requests atomically', async () => {
+    const db = { query: vi.fn().mockResolvedValue({ rowCount: 3, rows: [] }) } as any;
+    const repository = new ApprovalRepository(db);
+
+    await expect(repository.expireStale()).resolves.toBe(3);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("status IN ('pending', 'approved', 'executing')"));
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('expires_at <= NOW()'));
+  });
+
   it('atomically records only a still-pending decision', async () => {
     const db = { query: vi.fn().mockResolvedValue({ rows: [{ ...row, status: 'approved', decided_by: 'owner' }] }) } as any;
     const repository = new ApprovalRepository(db);

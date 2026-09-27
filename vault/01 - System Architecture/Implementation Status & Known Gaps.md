@@ -190,28 +190,11 @@ itu tidak ada di kode. Lihat [[Observability & Audit Trail]].
 
 ---
 
-## 5. 🟠 Cacat Integrasi: Agent Tidak Dapat Mengakses Second Brain
+## 5. 🟠 Cacat Integrasi: Indeks Second Brain Belum Shared Antarproses
 
-Tiga fakta yang saling mengunci:
+Indeks Second Brain kini sudah diinstansiasi dan tool `second_brain.*` sudah didaftarkan di worker (`apps/worker/src/worker.ts:99-152`). Namun indeks masih disimpan di `Map` **in-process** (`packages/memory/src/second-brain/vault-ingestion-service.ts:25-26`), sehingga indeks yang dibangun oleh agent-service belum otomatis terlihat oleh worker dan hilang ketika proses pemiliknya dimatikan.
 
-1. Indeks Second Brain disimpan di `Map` **in-process**
-   (`packages/memory/src/second-brain/vault-ingestion-service.ts:25-26`).
-2. `SecondBrainService` hanya diinstansiasi di agent-service
-   (`apps/agent-service/src/server.ts:324-326`) dan di test — **tidak pernah di worker**.
-3. Tool `second_brain.*`
-   (`packages/tools/src/tools/second-brain-tools.ts:7,67,123,170,215`)
-   **tidak didaftarkan** di `apps/worker/src/worker.ts:100-129`.
-
-Agent berjalan di worker, indeks hidup di agent-service. Karena itu `pnpm brain:sync` tidak
-pernah terlihat oleh agent, dan indeks itu hilang setiap proses dimatikan.
-
-Ditambah lagi: **pgvector tidak pernah aktif.** Verifikasi DB: 0 kolom bertipe `vector`,
-ekstensi hanya `plpgsql, uuid-ossp`, `memory_embeddings.embedding` bertipe `jsonb`, dan
-`memory_items` 0 baris. Penyebabnya `001_initial_schema.sql:6-12` membungkus
-`CREATE EXTENSION vector` dalam blok yang menelan semua exception.
-
-Sementara itu `GET /api/v1/brain/stats` mengembalikan `durable: true` secara hardcoded
-(`apps/agent-service/src/routes/second-brain.ts:44,64,77`).
+`GET /api/v1/brain/stats` tetap harus dibaca sebagai statistik proses pemilik indeks, bukan bukti bahwa seluruh worker melihat indeks yang sama. `memory_embeddings.embedding` juga masih `JSONB`, bukan kolom `vector`; pgvector belum aktif.
 
 Lihat [[Second Brain & Grounded RAG]].
 
@@ -283,22 +266,21 @@ berjalan untuk **pertama kali** — boot compose, readiness, serta backup/restor
 
 ## 7. 🟠 Tool yang Dideklarasikan di Allowlist Agent Tetapi Tidak Terdaftar
 
-Didaftarkan worker (`apps/worker/src/worker.ts:100-129`):
+Didaftarkan worker (`apps/worker/src/worker.ts:121-152`):
 `web.search`, `web.fetch_safe`, `company.lookup`, `lead.enrich`, `lead.score`,
 `policy.verify`, `communication.create_draft`, `communication.send_approved`, tool memory
 (`memory.search`, `memory.get`, `memory.propose_write`), tool artefak
-(`artifacts.read`, `artifacts.write`).
+(`artifacts.read`, `artifacts.write`), dan seluruh `second_brain.*`.
 
-Tidak terdaftar, sehingga pemanggilannya gagal dengan
-`Tool '<x>' not found in Tool Gateway registry.`:
+Yang masih tidak terdaftar dan perlu keputusan kapabilitas:
 
-- seluruh `second_brain.*` (dideklarasikan untuk Chief, Ned, Luna, Argus),
 - seluruh `tasks.*` (dideklarasikan untuk Chief),
 - `approvals.request` (Chief),
 - `brand.get_voice` (Hermes).
 
-Bukti pendukung: sepanjang 106 run hanya tercatat **5** pemanggilan tool, dan **tidak satu
-pun** berupa `web.*`, `lead.*`, `company.*`, atau `communication.*`.
+`communication.send_approved` tetap dicatat sebagai keputusan izin terpisah: ia dideklarasikan di `humanApprovalFor`, bukan sebagai tool yang boleh dipanggil langsung oleh Chief/Hermes.
+
+Bukti keterjangkauan dijaga oleh `apps/worker/test/tool-reachability.test.ts`.
 
 ---
 
@@ -306,16 +288,16 @@ pun** berupa `web.*`, `lead.*`, `company.*`, atau `communication.*`.
 
 | Fitur | Mengapa inert |
 | :--- | :--- |
-| Tahap planner / QA / synthesizer | `stageRunner` dibangun **tanpa `toolExecutor`** (`packages/orchestration/src/delegator/task-delegator.ts:72-81`) → tidak dapat memanggil tool apa pun, termasuk `policy.verify` milik Argus |
-| Tool call dari agent-service | `AgentRunner`/`TaskDelegator` di agent-service dibangun tanpa `toolExecutor` (`apps/agent-service/src/server.ts:156-181`); karena `processQueue: false`, jalur itu tidak dieksekusi |
-| Idempotensi komunikasi | Dideklarasikan (`packages/tools/src/tools/communication-tools.ts:20-33`, `idempotency: 'required'`), tetapi tidak ada `IdempotencyStore` di `ToolContext`; `idempotency_keys` 0 baris |
-| Pengiriman komunikasi | `communicationSender` tidak pernah diisi → `send_approved` gagal dengan `No outbound communication connector configured.` |
-| `workflow_checkpoints` (migrasi 014) | 0 baris. `WorkflowRuntime.start` — satu-satunya jalur yang **membuat** checkpoint — tidak dipanggil kode produksi mana pun (hanya test); `ResumeDriver` memang dijalankan worker, tetapi tidak menemukan apa pun untuk di-resume |
-| `revision_requested` | Tidak punya kelanjutan — status buntu |
-| Pemulihan task `running` yatim | `recoverQueuedTasks` hanya memulihkan status `queued` → **5 task macet `running`** permanen |
-| Event `tool.*` dan `artifact.created` | Registry tool di worker dibangun **tanpa `eventBus`** → tidak pernah dipublikasikan |
+| Tahap planner / QA / synthesizer | ✅ **DIPERBAIKI** — `stageRunner` menerima `toolExecutor`, `cancellationStore`, dan store approval/tool-call dari worker |
+| Tool call dari agent-service | Jalur agent-service tetap tidak memproses queue (`processQueue: false`); eksekusi produksi berlangsung di worker |
+| Idempotensi komunikasi | ✅ **DIPERBAIKI** — registry gagal-tertutup tanpa store dan worker me-wire `DatabaseIdempotencyStore` |
+| Pengiriman komunikasi | `communicationSender` belum dikonfigurasi → `send_approved` tetap gagal dengan `No outbound communication connector configured.` |
+| `workflow_checkpoints` (migrasi 014) | Resume driver aktif, tetapi produksi belum membuat checkpoint baru secara otomatis |
+| `revision_requested` | Belum punya kelanjutan otomatis; status tetap menunggu keputusan/operator |
+| Pemulihan task `running` yatim | ✅ **DIPERBAIKI** — sweep `recoverStaleRuns` berjalan saat boot dan pada interval recovery |
+| Event `tool.*` dan `artifact.created` | ✅ **DIPERBAIKI** — worker meneruskan `eventBus` ke `ToolRegistry`, sehingga event tool dapat masuk ke alur event durabel |
 | Notifikasi approval | `ApprovalCardRenderer` hanya dipakai di test; `sendMessage` tanpa `reply_markup` |
-| Kedaluwarsa approval | Lazy saja, tanpa sweeper → task bisa menggantung selamanya |
+| Kedaluwarsa approval | ✅ **DIPERBAIKI** — worker menyapu approval `pending`/`approved`/`executing` yang melewati `expires_at` pada interval recovery; run `waiting_approval` lalu dapat dipulihkan oleh sweep stale-run |
 
 ---
 
@@ -346,10 +328,10 @@ indikasi deskripsi tool perlu dipertegas.
 
 | Butir | Anchor |
 | :--- | :--- |
-| `x-actor-id` pada approval dikendalikan pemanggil → audit tidak tepercaya | `apps/agent-service/src/routes/approvals.ts:54-56` |
+| Aktor approval | ✅ **DIPERBAIKI** — route memakai principal `api-owner` hasil autentikasi; `x-actor-id` hanya dicatat sebagai klaim tak terverifikasi (`apps/agent-service/src/routes/approvals.ts:15-21,52-83`) |
 | `PUT /api/v1/settings/telegram` menulis ulang `.env` di disk | `apps/agent-service/src/server.ts:422-440` |
 | Allowlist Telegram fail-open bila `TELEGRAM_ALLOWED_USER_IDS` kosong | `apps/telegram-bot/src/security/guard.ts:19-22` — guard sendiri tanpa cek `NODE_ENV`; yang mencegahnya di produksi adalah `apps/telegram-bot/src/config.ts:20-21` yang menolak boot |
-| Jalur Chromium hanya memvalidasi bentuk URL, tanpa cek DNS, dan berjalan `--no-sandbox` | `packages/tools/src/research/chromium-provider.ts:220-222` (validasi) vs `packages/tools/src/research/safe-web-fetcher.ts:142-144` (cek DNS yang **tidak** ada di Chromium), `:76-77` (`--no-sandbox`, `--disable-setuid-sandbox`) |
+| Jalur Chromium memvalidasi URL dan hasil DNS, tetapi tetap berjalan `--no-sandbox` | `packages/tools/src/research/chromium-provider.ts:90-148` — host awal dan setiap request diperiksa terhadap alamat privat/reserved; `--no-sandbox` masih trade-off deployment |
 | `registerLegacy` menandai tool jaringan sebagai `sideEffects: ['none']` | `packages/tools/src/registry.ts:86-110` |
 | Redaksi log berbasis nama kunci saja | `packages/observability/src/logger.ts:11` |
 
@@ -365,7 +347,7 @@ indikasi deskripsi tool perlu dipertegas.
 
 Masih terbuka dari temuan yang sama: `x-actor-id` pada approval dikendalikan pemanggil,
 proxy dashboard tidak punya autentikasi pemanggil (kini digerbangi basic auth di Caddy),
-dan SSRF jalur Chromium tidak memeriksa hasil DNS.
+dan Chromium tetap menggunakan `--no-sandbox` sebagai trade-off kompatibilitas deployment.
 
 ✅ **Allowlist gagal-terbuka sudah diperbaiki** (20 Sep 2026): `ToolContext.allowedTools`
 kini **wajib** di `packages/tools/src/types.ts`, dan `registry.ts:151` menolak tool yang
@@ -549,8 +531,8 @@ Agar penilaian tetap seimbang, ini daftar yang **benar-benar berfungsi**:
 | ~~2~~ | ~~Ganti `(0, eval)('require')` dengan import statis di scheduler~~ | ✅ selesai (lihat §3) |
 | 3 | Isi tarif OpenRouter yang sebenarnya | 🟡 tanpa ini pengaman anggaran tidak berarti |
 | ~~4~~ | ~~Persistensi `depth` pada `taskRepo.create`~~ | ✅ selesai (lihat §6) |
-| 5 | Pindahkan indeks Second Brain ke penyimpanan bersama + daftarkan toolnya di worker | 🟠 mewujudkan grounding |
-| 6 | Tambahkan sweeper approval kedaluwarsa + pemulihan task `running` yatim | 🟠 pemulihan task `running` yatim ✅ selesai 20 Sep 2026 (lihat §6.1); sweeper approval kedaluwarsa belum |
+| 5 | Pindahkan indeks Second Brain ke penyimpanan bersama | 🟠 tool worker sudah didaftarkan; indeks masih in-process dan belum shared |
+| 6 | ~~Tambahkan sweeper approval kedaluwarsa + pemulihan task `running` yatim~~ | ✅ sweeper approval selesai; pemulihan task `running` selesai 20 Sep 2026 (lihat §6.1) |
 | 7 | Teruskan `temperature`/`model` ke provider, atau hapus dari definisi agent | 🔵 hilangkan konfigurasi palsu |
 | 8 | Buat notifikasi approval keluar (Telegram) | 🔵 hilangkan kebutuhan polling |
 | 9 | ~~jadikan `ToolContext.allowedTools` wajib lalu gagal-tertutup di `registry.ts:151`~~ | ✅ selesai 20 Sep 2026 (lihat §10.1) |

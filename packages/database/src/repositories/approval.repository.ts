@@ -18,6 +18,22 @@ export class ApprovalRepository {
     return result.rows.map(row => this.mapRow(row));
   }
 
+  /**
+   * Close approval requests whose decision window elapsed. The run recovery sweep can then
+   * distinguish a parked run with a live human decision from one that must fail closed.
+   */
+  public async expireStale(): Promise<number> {
+    const result = await this.db.query(
+      `UPDATE approvals
+       SET status = 'expired',
+           decided_at = COALESCE(decided_at, NOW()),
+           decision_note = COALESCE(decision_note, 'Approval request expired before a decision was recorded.')
+       WHERE status IN ('pending', 'approved', 'executing')
+         AND expires_at <= NOW()`
+    );
+    return result.rowCount || 0;
+  }
+
   public async decide(
     id: string,
     status: Extract<ApprovalStatus, 'approved' | 'rejected' | 'revision_requested'>,

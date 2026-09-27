@@ -237,12 +237,12 @@ describe('RunRepository cancellation state', () => {
     await repository.recoverStaleRuns();
 
     const runSweep = db.query.mock.calls[0][0] as string;
+    const taskSweep = db.query.mock.calls[1][0] as string;
     expect(runSweep).toContain('lease_expires_at < NOW()');
     expect(runSweep).toContain('lease_expires_at IS NULL');
     expect(runSweep).toContain('updated_at < NOW()');
 
-    const taskSweep = db.query.mock.calls[1][0] as string;
-    expect(taskSweep).toContain("status IN ('running', 'planning')");
+    expect(taskSweep).toContain("status IN ('running', 'planning', 'approval_pending')");
     expect(taskSweep).toContain('NOT EXISTS');
     expect(taskSweep).toContain('updated_at < NOW()');
   });

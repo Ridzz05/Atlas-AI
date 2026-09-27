@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { ToolDefinition, ToolContext, ToolExecutionResponse } from './types.js';
+import type { EventType } from '@atlas/shared';
 import { ApprovalMatrix, TokenVerifier } from '@atlas/policy';
 import { rootLogger, AuditService } from '@atlas/observability';
 import { computeIdempotencyKey, computePayloadHash, IdempotencyKey } from '@atlas/shared/schemas/idempotency';
@@ -29,11 +30,11 @@ interface ToolAuditState {
 type EventBus = {
   publish(event: {
     id: string;
-    type: string;
+    type: EventType;
     taskId?: string;
     runId?: string;
     agentId?: string;
-    payload?: Record<string, unknown>;
+    payload: Record<string, unknown>;
     timestamp: string;
   }): Promise<void>;
 };
@@ -146,7 +147,7 @@ export class ToolRegistry {
     return Array.from(this.tools.values());
   }
 
-  private async publishEvent(type: string, context: ToolContext, payload: Record<string, unknown>): Promise<void> {
+  private async publishEvent(type: EventType, context: ToolContext, payload: Record<string, unknown>): Promise<void> {
     if (!this.eventBus) return;
     const event = {
       id: randomUUID(),
