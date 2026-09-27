@@ -32,13 +32,9 @@ CORE OPERATIONAL RULES:
       'second_brain.list_notes',
       'second_brain.query',
       'second_brain.sync_vault',
-      'tasks.create_child',
-      'tasks.update_status',
-      'tasks.get',
-      'tasks.list',
+      'memory.propose_write',
       'artifacts.read',
-      'artifacts.write',
-      'approvals.request'
+      'artifacts.write'
     ],
     dataScopes: ['global', 'business_knowledge', 'approved_research', 'second_brain'],
     externalWrites: false

@@ -29,7 +29,7 @@ CONSTRAINTS & RULES:
     maxCostUsd: 0.5
   },
   permissions: {
-    tools: ['memory.search', 'artifacts.read', 'artifacts.write', 'brand.get_voice', 'communication.create_draft'],
+    tools: ['memory.search', 'artifacts.read', 'artifacts.write', 'communication.create_draft'],
     dataScopes: ['approved_research', 'business_knowledge'],
     externalWrites: false
   },

@@ -13,7 +13,16 @@ import {
   BudgetRepository,
   WorkflowCheckpointRepository
 } from '@atlas/database';
-import { MemoryAuditSink, MemoryMaintenanceService, MemoryProposalService, MemoryRetriever, MemoryStore, MemoryTools } from '@atlas/memory';
+import {
+  MemoryAuditSink,
+  MemoryMaintenanceService,
+  MemoryProposalService,
+  MemoryRetriever,
+  MemoryStore,
+  MemoryTools,
+  SecondBrainService,
+  resolveVaultRoot
+} from '@atlas/memory';
 import { EventBus, InMemoryEventBus } from '@atlas/events';
 import { createModelProvider, ModelProvider } from '@atlas/providers';
 import { defaultAgentRegistry, AgentRegistry } from '@atlas/agents';
@@ -29,7 +38,8 @@ import {
   WebSearchTool,
   WebFetchTool,
   createArtifactTools,
-  createMemoryTools
+  createMemoryTools,
+  createSecondBrainTools
 } from '@atlas/tools';
 import type { ResearchProvider } from '@atlas/tools';
 import {
@@ -86,9 +96,11 @@ export class AgentWorkerRunner {
   private taskQueue: TaskQueue;
   private readonly registry: AgentRegistry;
   private readonly workerId: string;
+  private readonly secondBrainService: SecondBrainService;
 
   constructor(private options: WorkerRunnerOptions) {
     this.workerId = options.workerId || `${process.env.HOSTNAME || 'atlas-worker'}:${process.pid}`;
+    this.secondBrainService = new SecondBrainService();
     const eventBus = options.eventBus || new InMemoryEventBus();
     this.registry = options.registry || defaultAgentRegistry;
     const registry = this.registry;
@@ -133,6 +145,9 @@ export class AgentWorkerRunner {
       options.artifactRepo ? { record: input => options.artifactRepo!.create(input) } : undefined
     );
     for (const tool of createArtifactTools(artifactService)) {
+      toolRegistry.registerLegacy(tool);
+    }
+    for (const tool of createSecondBrainTools(this.secondBrainService)) {
       toolRegistry.registerLegacy(tool);
     }
     const toolExecutor = new ToolGatewayExecutor({
@@ -203,7 +218,6 @@ export class AgentWorkerRunner {
         rootLogger.warn('Recovered stale runs from expired worker leases', { recovered });
       }
     }
-
     await this.recoverQueuedTasks();
 
     if (this.memoryMaintenance) {

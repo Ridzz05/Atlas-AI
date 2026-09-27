@@ -46,8 +46,10 @@ async function main() {
   // The schema guarantees a whole positive number, so there is nothing to paper over. The old
   // `config.PORT || 4000` silently listened on 4000 for a PORT that coerced to 0, which is how a
   // blank PORT went unnoticed: the operator's value was reported by the schema and ignored by the server.
-  const port = config.PORT;
-  const host = '0.0.0.0';
+  const host = config.API_AUTH_TOKEN ? '0.0.0.0' : '127.0.0.1';
+  if (!config.API_AUTH_TOKEN) {
+    rootLogger.warn('API_AUTH_TOKEN is not configured; binding agent-service to localhost only');
+  }
 
   try {
     await server.listen({ port, host });

@@ -221,10 +221,10 @@ Lihat [[Second Brain & Grounded RAG]].
 
 | Item | Kenyataan |
 | :--- | :--- |
-| `modelPolicy.temperature` | Tidak pernah diteruskan ke provider; semua agent efektif memakai default provider 0.2 |
-| `modelPolicy.fallbackTier` | Tidak dibaca kode mana pun — **tidak ada rantai fallback antar model/provider** |
-| `modelPolicy.preferredTier` hasil seeding | Dipersistensi ke kolom `model_policy` (`packages/database/src/agent-seeder.ts:7`), tetapi tidak dibaca saat eksekusi. `ModelPolicySchema` hanya punya `preferredTier`, `fallbackTier`, `temperature` — tidak ada field `model` (`packages/shared/src/schemas/agent.ts:6-10`) |
-| `MAX_DELEGATION_DEPTH` | ✅ **DIPERBAIKI** — `task.repository.ts:24-33` sekarang menulis `input.depth ?? 0` dan `task-delegator.ts:222-223` menghitung `depth = parent.depth + 1`, jadi `DepthGuard` punya nilai nyata untuk ditegakkan. (Catatan terpisah: limit per-agen `limits.maxDelegationDepth` masih tidak pernah dibaca — delegator memakai env global.) |
+| `modelPolicy.temperature` | ✅ **DIPERBAIKI** — diteruskan ke provider pada `packages/orchestration/src/engine/agent-runner.ts:342-353`. |
+| `modelPolicy.fallbackTier` | ⚠️ Belum dikonsumsi — tidak ada rantai fallback antar model/provider. |
+| `modelPolicy.preferredTier` hasil seeding | ⚠️ Dipersistensi ke kolom `model_policy`, tetapi belum menjadi routing model nyata. `ModelPolicySchema` tidak memiliki field model langsung. |
+| `MAX_DELEGATION_DEPTH` | ✅ **DIPERBAIKI** — depth task dipersistensi dan delegator sekarang membatasi dengan nilai minimum antara global `MAX_DELEGATION_DEPTH` dan `limits.maxDelegationDepth` agent parent (`packages/orchestration/src/delegator/task-delegator.ts:235-251`). |
 
 ### 6.1 Invariant orkestrasi yang sudah diperbaiki (20 Sep 2026)
 

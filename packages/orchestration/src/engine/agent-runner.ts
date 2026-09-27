@@ -373,19 +373,19 @@ export class AgentRunner {
         totalOutputTokens += modelResult.outputTokens;
         totalCostUsd += modelResult.costUsd;
 
-        // A provider that neither declares a price nor reports one returns 0, which is
-        // indistinguishable from a genuinely free run. The per-run ceiling below and the durable
-        // daily reservation are both checked against this number, so an unknown price means the caps
-        // exist, are checked, and cannot fire. Say so once rather than let the operator believe the
-        // budget is in force.
         if (!modelResult.costUsdKnown && !this.unknownCostWarningLogged) {
           this.unknownCostWarningLogged = true;
-          rootLogger.warn('Model provider did not report a cost: the budget caps cannot be enforced for this run', {
+          rootLogger.warn('Model provider did not report a cost: refusing to continue while budget enforcement is active', {
             runId,
             taskId,
             providerId: this.options.provider.id,
             providerName: this.options.provider.name
           });
+        }
+        if (!modelResult.costUsdKnown && this.options.budgetRepo && this.options.globalDailyBudgetUsd) {
+          throw new Error(
+            `UNKNOWN_MODEL_COST: provider ${this.options.provider.id} did not report a cost and no configured price is available; refusing to continue while budget enforcement is active.`
+          );
         }
         finalContent = modelResult.content;
         if (modelResult.finishReason === 'length') {

@@ -4,6 +4,7 @@ import { AgentRunner } from '../src/engine/agent-runner.js';
 import { InMemoryEventBus } from '@atlas/events';
 import { AgentDefinition, Task } from '@atlas/shared';
 import { ModelProvider, ModelRunRequest, ModelRunResult } from '@atlas/providers';
+import type { BudgetRepository, RunRepository, TaskRepository } from '@atlas/database';
 
 /**
  * When a provider cannot say what a run cost, the operator must be told the cap is not in force.
@@ -71,7 +72,10 @@ class CostReportingProvider implements ModelProvider {
 
 function buildRunner(provider: ModelProvider) {
   const runRepo = {
-    create: vi.fn(async (input: any) => ({ id: input.id || 'run-1', ...input, status: 'active' })),
+    create: vi.fn(async (input: unknown) => {
+      const record = typeof input === 'object' && input !== null ? input : {};
+      return { ...record, id: 'run-1', status: 'active' };
+    }),
     updateStatus: vi.fn(async () => null),
     acquireLease: vi.fn(async () => ({ id: 'run-1' })),
     heartbeat: vi.fn(async () => true),
@@ -82,24 +86,45 @@ function buildRunner(provider: ModelProvider) {
   return new AgentRunner({
     provider,
     eventBus: new InMemoryEventBus(),
-    runRepo: runRepo as any,
-    taskRepo: taskRepo as any,
+    runRepo: runRepo as unknown as RunRepository,
+    taskRepo: taskRepo as unknown as TaskRepository,
     workerId: 'worker-a'
   });
 }
 
 describe('AgentRunner unknown-cost reporting', () => {
-  it('warns once when a turn reports an unknown cost', async () => {
+  it('fails safely when budget enforcement is active and cost is unknown', async () => {
     const warnSpy = vi.spyOn(rootLogger, 'warn').mockImplementation(() => undefined);
 
     try {
-      const runner = buildRunner(new CostReportingProvider(false));
+      const runner = new AgentRunner({
+        provider: new CostReportingProvider(false),
+        eventBus: new InMemoryEventBus(),
+        runRepo: {
+          create: vi.fn(async (input: unknown) => {
+            const record = typeof input === 'object' && input !== null ? input : {};
+            return { ...record, id: 'run-1', status: 'active' };
+          }),
+          updateStatus: vi.fn(async () => null),
+          acquireLease: vi.fn(async () => ({ id: 'run-1' })),
+          heartbeat: vi.fn(async () => true),
+          recordTurn: vi.fn(async () => undefined)
+        } as unknown as RunRepository,
+        taskRepo: { updateStatus: vi.fn(async () => undefined) } as unknown as TaskRepository,
+        budgetRepo: {
+          reserve: vi.fn(async () => ({ id: 'reservation-1' })),
+          commit: vi.fn(async () => true)
+        } as unknown as BudgetRepository,
+        globalDailyBudgetUsd: 5,
+        workerId: 'worker-a'
+      });
+
       const summary = await runner.run({ task, agent, initialPrompt: 'go' });
 
-      expect(summary.status).toBe('completed');
+      expect(summary.status).toBe('failed');
+      expect(summary.error).toMatch(/UNKNOWN_MODEL_COST/);
       const costWarnings = warnSpy.mock.calls.filter(call => (call[1] as Record<string, unknown>)?.providerId === 'probe');
       expect(costWarnings).toHaveLength(1);
-      expect(String(costWarnings[0]?.[0])).toMatch(/cost/i);
     } finally {
       warnSpy.mockRestore();
     }
